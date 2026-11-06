@@ -1,0 +1,48 @@
+Meniscus Annotator 0.1.0 - third-party notices and source locations
+
+The Windows wrapper preserves the official 3D Slicer 5.12.4 r34645 runtime.
+The original runtime's Python .dist-info licences, notices, DLLs and resources
+remain present. This directory adds the application and major native-library
+licence/notice files. LICENSE_SOURCES.json records the source URL and SHA256 of
+newly collected notices; it is an inventory of those copies, not a change to
+any upstream licence.
+
+Application source:
+  https://github.com/mssai0303/meniscus-annotator (authorised private repository)
+  Application licence: MeniscusAnnotator-Apache-2.0.txt
+
+Slicer source and pinned third-party build recipes:
+  https://github.com/Slicer/Slicer/tree/4e21c19d8360242d88d6ca2490bf52400441b8e1
+  https://github.com/Slicer/Slicer/tree/4e21c19d8360242d88d6ca2490bf52400441b8e1/SuperBuild
+
+Qt 5.15.2 corresponding open-source source trees and release archive:
+  https://github.com/qt/qtbase/tree/v5.15.2
+  https://github.com/qt/qtwebengine/tree/v5.15.2
+  https://download.qt.io/archive/qt/5.15/5.15.2/single/qt-everywhere-src-5.15.2.tar.xz
+  https://github.com/qt/qtwebengine-chromium/tree/fb6ab5e483876298235be1c6a6013b426c82b759
+  Qt WebEngine's Chromium and third-party source notices are in that source tree
+  and the full Qt source release. Qt shared libraries remain dynamically linked
+  in the preserved runtime; this wrapper does not replace them or remove their
+  resource files. See the supplied Qt licence texts for their terms.
+
+Major native component source revisions:
+  VTK: https://github.com/Slicer/VTK/tree/c9cd17a377cbc7e488329e882a35b70c7f37fe76
+  ITK: https://github.com/Slicer/ITK/tree/5bfed9195aa26be10b0c4df533b9685bcc10cefe
+  CTK: https://github.com/commontk/CTK/tree/5056664a20a3d0a393bb6d91f040525581e0dcdf
+  Teem: https://github.com/Slicer/teem/tree/43395a690351cd98235de84775a8747d0bdae106
+  DCMTK: https://github.com/DCMTK/DCMTK/tree/2dd54ca1c28100b820ccf1383a0948e889246f96
+  Windows OpenSSL: https://github.com/openssl/openssl/tree/OpenSSL_1_1_1g
+  Python: https://github.com/python/cpython/tree/v3.12.10
+
+Additional wrapper dependency:
+  NiBabel 5.3.2: https://github.com/nipy/nibabel/tree/5.3.2
+  Its MIT licence and attribution are included. The typing_extensions notice is
+  supplied separately; its existing runtime distribution is retained unchanged.
+
+NSIS installer:
+  https://nsis.sourceforge.io/Download
+  NSIS-3.13-COPYING.txt contains its component notices and licence terms.
+
+Sources are referenced for inspection and licence/source availability. Jeff's
+routine installed annotation workflow needs no source download or build tools.
+The original third-party authors retain their copyrights and licences.

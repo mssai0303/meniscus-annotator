@@ -37,10 +37,11 @@ first locks the runtime files to reject running applications before any deletion
 then removes known files individually; unrelated files and
 work outside the installation directory are preserved.
 
-Original runtime dependency licence files are retained, with application,
-Slicer, nibabel, typing_extensions and NSIS notices supplied separately. An
-artifact-level third-party/Qt licence inventory remains a distribution review
-item; the build does not imply that legal review or anatomical acceptance passed.
+Original runtime dependency licence files are retained. The package also supplies
+application, Slicer, nibabel, typing_extensions, NSIS, Qt LGPL/GPL/Chromium and
+major native-library notices, with copied-notice hashes and exact source pointers
+in its licences directory. This packaging evidence does not establish anatomical
+acceptance.
 
 ## Reproduce on a Windows maintainer host
 

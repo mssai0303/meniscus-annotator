@@ -1,0 +1,80 @@
+[
+  {
+    "file": "VTK-9.6.2-Copyright.txt",
+    "source": "https://raw.githubusercontent.com/Slicer/VTK/c9cd17a377cbc7e488329e882a35b70c7f37fe76/Copyright.txt",
+    "sha256": "11232448be82e0ea2c2c66219c2e36389f42249894070ee10c549ff182fc08b6",
+    "bytes": 1761
+  },
+  {
+    "file": "ITK-LICENSE.txt",
+    "source": "https://raw.githubusercontent.com/Slicer/ITK/5bfed9195aa26be10b0c4df533b9685bcc10cefe/LICENSE",
+    "sha256": "aac73b3148f6d1d7111dbca32099f68d26c644c6813ae1e4f05f6579aa2663fe",
+    "bytes": 11360
+  },
+  {
+    "file": "ITK-NOTICE.txt",
+    "source": "https://raw.githubusercontent.com/Slicer/ITK/5bfed9195aa26be10b0c4df533b9685bcc10cefe/NOTICE",
+    "sha256": "3bb4f458523ef5a5df0dedf461638cab5d4416f3b91837b2e81c4067ea628807",
+    "bytes": 472
+  },
+  {
+    "file": "CTK-LICENSE.txt",
+    "source": "https://raw.githubusercontent.com/commontk/CTK/5056664a20a3d0a393bb6d91f040525581e0dcdf/LICENSE",
+    "sha256": "2be14537abf3b54a93c7a78b8a8abee377f48106f9d3bc8f82ad061dc3fe67bf",
+    "bytes": 11368
+  },
+  {
+    "file": "CTK-NOTICE.txt",
+    "source": "https://raw.githubusercontent.com/commontk/CTK/5056664a20a3d0a393bb6d91f040525581e0dcdf/NOTICE",
+    "sha256": "f18f978a3d18f4042a37cbf74d0c56f4782bd8eb881da3cba16c5ae4e4d62ae3",
+    "bytes": 736
+  },
+  {
+    "file": "Teem-LICENSE.txt",
+    "source": "https://raw.githubusercontent.com/Slicer/teem/43395a690351cd98235de84775a8747d0bdae106/LICENSE.txt",
+    "sha256": "1790758ddefbbc3c03bdd704d7360f6707fe5f43935fc9f57ea1d2d53ea6e500",
+    "bytes": 29321
+  },
+  {
+    "file": "DCMTK-COPYRIGHT.txt",
+    "source": "https://raw.githubusercontent.com/DCMTK/DCMTK/2dd54ca1c28100b820ccf1383a0948e889246f96/COPYRIGHT",
+    "sha256": "6c8ade56fa8742607397cf1652ce18d04a94c97b2d7d68fe69ebd407b1f214a0",
+    "bytes": 61523
+  },
+  {
+    "file": "OpenSSL-1.1.1g-LICENSE.txt",
+    "source": "https://raw.githubusercontent.com/openssl/openssl/OpenSSL_1_1_1g/LICENSE",
+    "sha256": "c32913b33252e71190af2066f08115c69bc9fddadf3bf29296e20c835389841c",
+    "bytes": 6121
+  },
+  {
+    "file": "Qt-5.15.2-LICENSE.LGPL3.txt",
+    "source": "https://raw.githubusercontent.com/qt/qtbase/v5.15.2/LICENSE.LGPL3",
+    "sha256": "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768",
+    "bytes": 7651
+  },
+  {
+    "file": "Qt-5.15.2-LICENSE.GPL3.txt",
+    "source": "https://raw.githubusercontent.com/qt/qtbase/v5.15.2/LICENSE.GPL3",
+    "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+    "bytes": 35147
+  },
+  {
+    "file": "Qt-5.15.2-LICENSE.GPL2.txt",
+    "source": "https://raw.githubusercontent.com/qt/qtbase/v5.15.2/LICENSE.GPL2",
+    "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+    "bytes": 18092
+  },
+  {
+    "file": "Qt-5.15.2-LICENSE.GPL3-EXCEPT.txt",
+    "source": "https://raw.githubusercontent.com/qt/qtbase/v5.15.2/LICENSE.GPL3-EXCEPT",
+    "sha256": "0dbe024961f6ab5c52689cbd036c977975d0d0f6a67ff97762d96cb819dd5652",
+    "bytes": 36363
+  },
+  {
+    "file": "Qt-5.15.2-LICENSE.Chromium.txt",
+    "source": "https://raw.githubusercontent.com/qt/qtwebengine/v5.15.2/LICENSE.Chromium",
+    "sha256": "f34787ef0342c614b667186a6ec2f5d6b9d650e30142a2788a589a89743e88e9",
+    "bytes": 1481
+  }
+]
