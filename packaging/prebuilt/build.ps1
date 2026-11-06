@@ -14,11 +14,25 @@ function Checked([string]$Exe, [string[]]$Arguments) {
   if ($LASTEXITCODE -ne 0) { throw "$Exe failed with exit $LASTEXITCODE" }
 }
 function Download-Locked($Item, [string]$File, [string]$Algorithm = 'SHA256') {
-  if (-not (Test-Path $File)) {
-    Invoke-WebRequest -Uri $Item.url -OutFile $File -MaximumRetryCount 3 -RetryIntervalSec 2
-  }
   $expected = if ($Algorithm -eq 'SHA512') { $Item.sha512 } else { $Item.sha256 }
-  if ((Get-FileHash $File -Algorithm $Algorithm).Hash.ToLower() -ne $expected) { throw "Checksum mismatch: $File" }
+  if ((Test-Path $File) -and (Get-FileHash $File -Algorithm $Algorithm).Hash.ToLower() -eq $expected) { return }
+  $urls = @($Item.url)
+  if ($Item.PSObject.Properties.Name -contains 'fallback_urls') { $urls += $Item.fallback_urls }
+  $Curl = (Get-Command curl.exe -ErrorAction Stop).Source
+  foreach ($url in $urls) {
+    $pending = "$File.pending"
+    & $Curl --fail --location --silent --show-error --retry 3 --connect-timeout 30 --max-time 300 --output $pending --url $url
+    $downloadExit = $LASTEXITCODE
+    $actual = if (Test-Path $pending) { (Get-FileHash $pending -Algorithm $Algorithm).Hash.ToLower() } else { 'no-file' }
+    $bytes = if (Test-Path $pending) { (Get-Item $pending).Length } else { 0 }
+    $accepted = $downloadExit -eq 0 -and $actual -eq $expected
+    $record = [ordered]@{file=(Split-Path -Leaf $File);url=$url;exit=$downloadExit;bytes=$bytes;algorithm=$Algorithm;actual=$actual;expected=$expected;accepted=$accepted}
+    Add-Content -Encoding UTF8 -Path (Join-Path $BuildRoot 'download-receipts.jsonl') -Value ($record | ConvertTo-Json -Compress)
+    if ($accepted) { Move-Item -Force $pending $File; return }
+    Write-Warning "Rejected dependency $(Split-Path -Leaf $File): bytes=$bytes, actual=$actual; expected=$expected. Trying the next locked source, if available."
+    if (Test-Path $pending) { Remove-Item -LiteralPath $pending }
+  }
+  throw "No verified download obtained for $(Split-Path -Leaf $File). Check download-receipts.jsonl; the hash requirement was not relaxed."
 }
 if (Test-Path (Join-Path $BuildRoot 'Payload')) { throw 'Choose a fresh build folder; existing payloads are preserved.' }
 New-Item -ItemType Directory -Force $BuildRoot | Out-Null

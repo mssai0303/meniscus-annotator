@@ -40,6 +40,7 @@ jobs:
           path: |
             C:\D\MP\MeniscusAnnotator-0.1.0-Windows-x64.exe
             C:\D\MP\installer-build.json
+            C:\D\MP\download-receipts.jsonl
             C:\D\MP\installed-runtime-check.json
             C:\D\MP\synthetic-integration\slicer-workflow.json
             C:\D\MP\synthetic-integration\synthetic-application.png

@@ -53,7 +53,9 @@ Use a fresh build folder without spaces; the installation check deliberately
 uses spaces in its installation path. Upstream Slicer requires an ASCII-only
 installation path; the installer rejects unsupported Unicode paths with a clear
 message. Dataset/work Unicode handling remains a separate application test. The script downloads only
-locked inputs, extracts the runtime, assembles the payload, compiles the NSIS
+locked inputs using native curl, retries official mirror alternatives and rejects
+any response that fails the same pinned hash (including download HTML pages).
+`download-receipts.jsonl` records each result for diagnosing mirror failures. It extracts the runtime, assembles the payload, compiles the NSIS
 installer, then optionally installs it, checks every installed hash and launches
 its actual installed runtime without a main window to check imports/identity.
 It also checks uninstall preservation using an unrelated synthetic text file.
