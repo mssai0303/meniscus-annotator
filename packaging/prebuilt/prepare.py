@@ -129,6 +129,7 @@ def prepare(runtime, installer, output, cache):
     names = sorted([*files, 'distribution.json'], reverse=True)
     commands = ['Delete "$INSTDIR\\' + nsis_literal(name.replace('/', '\\')) + '"' for name in names]
     directories = sorted({str(f.relative_to(output)).replace('\\', '/') for f in output.rglob('*') if f.is_dir()}, key=lambda n: (n.count('/'), n), reverse=True)
+    commands += ['Call un.ReleaseRuntimeGuards']
     commands += ['RMDir "$INSTDIR\\' + nsis_literal(name.replace('/', '\\')) + '"' for name in directories]
     (output.parent / 'uninstall-files.nsh').write_text('\n'.join(commands) + '\n', encoding="utf-8")
     return {'files': len(files) + 1, 'bytes': sum(f.stat().st_size for f in output.rglob('*') if f.is_file()), 'original_runtime_files_unchanged': len(original_files)}

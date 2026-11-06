@@ -34,7 +34,17 @@ UninstallIcon "${PAYLOAD}\MeniscusAnnotator.ico"
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "English"
+Var RuntimeGuard1
+Var RuntimeGuard2
+Var RuntimeGuard3
+Var RuntimeGuard4
+Var RuntimeGuard5
 Function .onInit
+  ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.1.0" "InstallLocation"
+  StrCmp $0 "" no_registered_install
+    MessageBox MB_ICONSTOP "Meniscus Annotator 0.1.0 is already registered at $0. Close it and use its uninstaller before installing another copy of this fixed version. Saved work is outside the installation folder." /SD IDOK
+    Abort
+  no_registered_install:
   ${IfNot} ${RunningX64}
     MessageBox MB_ICONSTOP "This application requires Windows x64."
     Abort
@@ -80,13 +90,60 @@ Section "Application" SEC_APP
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.1.0" "NoModify" 1
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.1.0" "NoRepair" 1
 SectionEnd
+# Obtain exclusive write guards before deleting anything. Existing executable/DLL
+# mappings reject these opens; new application launches are blocked until removal.
+Function un.LockRuntimeFile
+  Pop $0
+  IfFileExists "$0" 0 missing_runtime_file
+  System::Call 'kernel32::CreateFileW(w r0, i 0x40000000, i 4, p 0, i 3, i 0, p 0) p.r1'
+  IntCmp $1 -1 runtime_file_busy
+  Push $1
+  Return
+  runtime_file_busy:
+    MessageBox MB_ICONSTOP "Close Meniscus Annotator, Slicer and any Python process using this installation, then retry uninstalling. No application files have been removed. If it is already closed, check file permissions." /SD IDOK
+    Abort
+  missing_runtime_file:
+    Push 0
+FunctionEnd
+Function un.ReleaseRuntimeGuards
+  StrCmp $RuntimeGuard1 0 +2
+    System::Call 'kernel32::CloseHandle(p $RuntimeGuard1)'
+  StrCmp $RuntimeGuard2 0 +2
+    System::Call 'kernel32::CloseHandle(p $RuntimeGuard2)'
+  StrCmp $RuntimeGuard3 0 +2
+    System::Call 'kernel32::CloseHandle(p $RuntimeGuard3)'
+  StrCmp $RuntimeGuard4 0 +2
+    System::Call 'kernel32::CloseHandle(p $RuntimeGuard4)'
+  StrCmp $RuntimeGuard5 0 +2
+    System::Call 'kernel32::CloseHandle(p $RuntimeGuard5)'
+FunctionEnd
+Function un.onInit
+  Push "$INSTDIR\MeniscusAnnotator.exe"
+  Call un.LockRuntimeFile
+  Pop $RuntimeGuard1
+  Push "$INSTDIR\bin\MeniscusAnnotatorApp-real.exe"
+  Call un.LockRuntimeFile
+  Pop $RuntimeGuard2
+  Push "$INSTDIR\Slicer.exe"
+  Call un.LockRuntimeFile
+  Pop $RuntimeGuard3
+  Push "$INSTDIR\bin\SlicerApp-real.exe"
+  Call un.LockRuntimeFile
+  Pop $RuntimeGuard4
+  Push "$INSTDIR\bin\python312.dll"
+  Call un.LockRuntimeFile
+  Pop $RuntimeGuard5
+FunctionEnd
 Section "Uninstall"
   !include "${UNINSTALL_FILES}"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir "$INSTDIR"
+  ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.1.0" "InstallLocation"
+  StrCmp $0 "$INSTDIR" 0 uninstall_registration_done
   Delete "$SMPROGRAMS\Meniscus Annotator 0.1.0\Meniscus Annotator.lnk"
   Delete "$SMPROGRAMS\Meniscus Annotator 0.1.0\User guide.lnk"
   Delete "$SMPROGRAMS\Meniscus Annotator 0.1.0\Uninstall.lnk"
   RMDir "$SMPROGRAMS\Meniscus Annotator 0.1.0"
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.1.0"
+  uninstall_registration_done:
 SectionEnd

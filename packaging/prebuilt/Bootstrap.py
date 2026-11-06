@@ -1,5 +1,7 @@
 """Installed focused workflow. No downloads and no source-data access at launch."""
 import os
+import json
+import traceback
 from pathlib import Path
 import runpy
 import qt
@@ -20,5 +22,11 @@ def start():
         window = slicer.util.mainWindow()
         window.setWindowTitle('Meniscus Annotator 0.1.0 | 3D Slicer 5.12.4')
     except Exception:
+        if os.environ.get('MENISCUS_PACKAGE_CHECK'):
+            try:
+                Path(os.environ['MENISCUS_PACKAGE_CHECK']).write_text(json.dumps({'passed': False, 'error': traceback.format_exc()}), encoding='utf-8')
+            finally:
+                slicer.app.exit(1)
+            return
         slicer.util.errorDisplay('The annotation workflow could not start. Reinstall this fixed application version or contact the study maintainer. Your saved work is outside the installation folder.')
 qt.QTimer.singleShot(0, start)

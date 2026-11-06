@@ -32,7 +32,9 @@ The startup file is selected through the documented `SLICERRC` environment
 variable, avoiding unsafe command-line parsing of paths containing spaces.
 Automatic application/extension update checks are disabled in this separate
 settings profile to keep batches on one version. The installer only accepts an
-empty destination and uninstalls known files individually; unrelated files and
+empty destination and one registered copy of the fixed version per user. Uninstall
+first locks the runtime files to reject running applications before any deletion,
+then removes known files individually; unrelated files and
 work outside the installation directory are preserved.
 
 Original runtime dependency licence files are retained, with application,
@@ -58,7 +60,9 @@ any response that fails the same pinned hash (including download HTML pages).
 `download-receipts.jsonl` records each result for diagnosing mirror failures. It extracts the runtime, assembles the payload, compiles the NSIS
 installer, then optionally installs it, checks every installed hash and launches
 its actual installed runtime without a main window to check imports/identity.
-It also checks uninstall preservation using an unrelated synthetic text file.
+It also checks duplicate-install rejection, safe refusal while a runtime file is
+locked, and uninstall preservation using an unrelated synthetic text file. The
+headless runtime import check has a bounded two-minute timeout.
 `-RunIntegration` additionally attempts the existing native Slicer synthetic
 rendering workflow; Windows11 interaction acceptance is still separate.
 

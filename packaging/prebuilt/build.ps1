@@ -78,9 +78,15 @@ if ($TestInstall) {
   if ($process.ExitCode -ne 0) { throw 'Installer execution failed.' }
   Checked $Python @((Join-Path $PSScriptRoot 'verify-installed.py'),$Installed)
   $receipt['install_test']='PASSED: installed bytes match the complete payload manifest'
+  $SecondInstalled = Join-Path $BuildRoot 'Duplicate installation attempt'
+  $second = Start-Process -FilePath $Output -ArgumentList @('/S',"/D=$SecondInstalled") -Wait -PassThru
+  if (Test-Path (Join-Path $SecondInstalled 'MeniscusAnnotator.exe')) { throw 'A duplicate fixed-version installation was incorrectly accepted.' }
+  Checked $Python @((Join-Path $PSScriptRoot 'verify-installed.py'),$Installed)
+  $receipt['duplicate_install_test']='PASSED: second registered installation rejected; original installed files retained'
   $env:MENISCUS_PACKAGE_CHECK = Join-Path $BuildRoot 'installed-runtime-check.json'
   $env:PYTHONDONTWRITEBYTECODE = '1'
-  $app = Start-Process -FilePath (Join-Path $Installed 'MeniscusAnnotator.exe') -ArgumentList @('--no-main-window') -Wait -PassThru
+  $app = Start-Process -FilePath (Join-Path $Installed 'MeniscusAnnotator.exe') -ArgumentList @('--no-main-window') -PassThru
+  if (-not $app.WaitForExit(120000)) { $app.Kill($true); throw 'Installed runtime import check exceeded 120 seconds; its process tree was stopped.' }
   if ($app.ExitCode -ne 0 -or -not (Test-Path $env:MENISCUS_PACKAGE_CHECK)) { throw 'Installed runtime failed to start or produce its import-check receipt.' }
   $health = Get-Content -Raw $env:MENISCUS_PACKAGE_CHECK | ConvertFrom-Json
   if (-not $health.passed) { throw 'Installed runtime import/identity check failed.' }
@@ -94,6 +100,13 @@ if ($TestInstall) {
     if (-not $report.passed) { throw 'Synthetic desktop integration reported failure.' }
     $receipt['synthetic_desktop_test']='PASSED on this runner; still not Windows11 interactive acceptance'
   }
+  # Simulate a runtime dependency still held open; uninstall must fail before deletion.
+  $HeldRuntime = [IO.File]::Open((Join-Path $Installed 'bin\python312.dll'), [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+  try {
+    $locked = Start-Process -FilePath (Join-Path $Installed 'Uninstall.exe') -ArgumentList @('/S') -Wait -PassThru
+    Checked $Python @((Join-Path $PSScriptRoot 'verify-installed.py'),$Installed)
+    $receipt['locked_runtime_uninstall_test']='PASSED: locked runtime prevented all known-file deletion'
+  } finally { $HeldRuntime.Dispose() }
   # Verify uninstall only removes known installed files, preserving unrelated files.
   $Sentinel = Join-Path $Installed 'unrelated-synthetic-sentinel.txt'
   'Keep this unrelated file' | Set-Content $Sentinel
