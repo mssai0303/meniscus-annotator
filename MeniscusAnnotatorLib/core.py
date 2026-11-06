@@ -106,6 +106,25 @@ def safe_relative(root, name):
     return path
 
 
+def case_folder_options(metadata):
+    """Canonical source layouts; identities stay in unchanged case metadata.
+
+    Do not infer identity by splitting underscores in a participant ID. Match the
+    entire canonical name generated from the explicit metadata instead.
+    """
+    for field in ('participant_id', 'source_series_key'):
+        value = metadata[field]
+        need(isinstance(value, str) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}', value)
+             and not value.endswith('.'), 'Case source identity contains an unsafe path component.')
+    month = metadata['visit_month']
+    need(type(month) is int and 0 <= month <= 999, 'Case visit must be a three-digit nonnegative month.')
+    side = {'L': 'LEFT', 'R': 'RIGHT'}.get(metadata['knee_side'])
+    need(side is not None, 'Knee side must be explicit in the source metadata.')
+    flat = 'Cases/OAI_%s_M%03d_%s' % (metadata['participant_id'], month, side)
+    legacy = 'Cases/OAI_%s/M%03d/%s/series_%s' % (metadata['participant_id'], month, side, metadata['source_series_key'])
+    return flat, legacy
+
+
 def max_corner_error(a, b, shape):
     import itertools
     corners = np.array([(*p, 1.) for p in itertools.product(*[(0, n-1) for n in shape])])
@@ -182,8 +201,7 @@ class Case:
         for k in ('participant_id', 'knee_side', 'case_key', 'image_sha256', 'annotation_status'):
             need(str(m[k]) == str(row[k]), 'Case index and metadata disagree: ' + k)
         need(int(row['visit_month']) == m['visit_month'] and int(row['expected_slice_count']) == self.n_slices, 'Case index visit or slice count differs.')
-        expected_folder = 'Cases/OAI_%s/M%03d/%s/series_%s' % (m['participant_id'], m['visit_month'], 'LEFT' if m['knee_side'] == 'L' else 'RIGHT', m['source_series_key'])
-        need(row['relative_folder'] == expected_folder, 'Case folder does not match its explicit source identity.')
+        need(row['relative_folder'] in case_folder_options(m), 'Case folder does not match its explicit source identity.')
         self.verify_source()
         with (self.folder / 'slice_review.csv').open(encoding='utf-8', newline='') as stream:
             reader = csv.DictReader(stream)
@@ -222,6 +240,7 @@ class Dataset:
                     raise ValidationError('Case %s: %s' % (row.get('case_key', '(unknown)'), exc)) from exc
             need(len({c.key for c in self.cases}) == len(self.cases), 'Dataset has duplicate case identities.')
             need(len({c.metadata['series_instance_uid'] for c in self.cases}) == len(self.cases), 'Dataset repeats a source series.')
+            need(len({c.metadata['source_series_key'] for c in self.cases}) == len(self.cases), 'Dataset repeats a source-series key.')
             versions = {c.metadata['dataset_version'] for c in self.cases}
             need(len(versions) == 1, 'Dataset contains conflicting version identifiers.')
             self.version = versions.pop()

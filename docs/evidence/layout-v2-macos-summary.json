@@ -1,0 +1,35 @@
+{
+  "platform": "macOS",
+  "runtime": "Slicer5.12.4 r34645 x86_64",
+  "core_synthetic_tests": {
+    "passed": 86,
+    "failed": 0
+  },
+  "native_workflows": {
+    "legacy-isolated": {
+      "passed": true,
+      "checks": 142,
+      "evidence": "layout-v2-legacy-isolated-macos.json"
+    },
+    "flat-isolated": {
+      "passed": true,
+      "checks": 142,
+      "evidence": "layout-v2-flat-isolated-macos.json"
+    },
+    "legacy-restart": {
+      "passed": true,
+      "checks": 4,
+      "evidence": "layout-v2-legacy-restart-macos.json"
+    },
+    "flat-restart": {
+      "passed": true,
+      "checks": 4,
+      "evidence": "layout-v2-flat-restart-macos.json"
+    }
+  },
+  "windows": {
+    "executed": false,
+    "reason": "No direct Windows runtime available to this session; Mac results are not Windows acceptance."
+  },
+  "scope": "Folder adapter compatibility and synthetic persistence/export only; no real annotations edited or approved."
+}

@@ -1,0 +1,771 @@
+{
+  "platform": "darwin",
+  "os": "macOS-27.2-x86_64-i386-64bit",
+  "machine": "x86_64",
+  "slicer_version": "5.12.4",
+  "slicer_revision": "4e21c19",
+  "checks": [
+    {
+      "name": "synthetic cases available",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 every acquired slice maps to native plane",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 blank mode ignores nearby prediction",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 prediction-free scene contains source MRI only",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 empty annotation exports full native dimensions",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 empty annotation exports native physical grid",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 completely empty segmentation saves and reopens",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 secondary reformats reject editing",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 notes accept shortcut letters",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 notes typing does not navigate or switch tools",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 native Paint changes voxels",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 Paint affects intended acquired slice only",
+      "passed": true,
+      "detail": "[8]"
+    },
+    {
+      "name": "SYNTHETIC_01 known voxel painted medial",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 undo restores blank",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 redo restores paint",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 Reviewed next records explicit review",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 Reviewed next advances one acquired slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 edit invalidates reviewed slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 lateral replaces medial with fixed value 2",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 compartment overwrite undo restores prior anatomy",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 compartment overwrite redo restores replacement",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 erase removes lateral",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 erase undo restores label",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 undo survives switching uncertainty label",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 separate uncertainty exists",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 uncertainty overlaps anatomy without erasing it",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 anatomical edit preserves overlapping uncertainty",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 uncertainty does not add training class",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 Draw contour fills known native voxel",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 Draw stays on acquired slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 independent reopen labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 independent full geometry labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 SimpleITK voxels labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 SimpleITK spacing labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 SimpleITK LPS origin labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 SimpleITK LPS direction labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 independent reopen uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 independent full geometry uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 SimpleITK voxels uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 SimpleITK spacing uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 SimpleITK LPS origin uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 SimpleITK LPS direction uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 editable segmentation reopen medial",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 editable segmentation reopen lateral",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 editable segmentation reopen uncertain",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 save reopen labels",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 save reopen uncertainty",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 original dimensions retained",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 incomplete review blocks approval",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 uncertainty erased separately",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 draft protocol blocks research approval",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 practice approval records honest role",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 approved editing creates draft",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 approved checkpoint preserved",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 every acquired slice maps to native plane",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 blank mode ignores nearby prediction",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 prediction-free scene contains source MRI only",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 empty annotation exports full native dimensions",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 empty annotation exports native physical grid",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 completely empty segmentation saves and reopens",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 secondary reformats reject editing",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 notes accept shortcut letters",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 notes typing does not navigate or switch tools",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 native Paint changes voxels",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 Paint affects intended acquired slice only",
+      "passed": true,
+      "detail": "[11]"
+    },
+    {
+      "name": "SYNTHETIC_02 known voxel painted medial",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 undo restores blank",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 redo restores paint",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 Reviewed next records explicit review",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 Reviewed next advances one acquired slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 edit invalidates reviewed slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 lateral replaces medial with fixed value 2",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 compartment overwrite undo restores prior anatomy",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 compartment overwrite redo restores replacement",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 erase removes lateral",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 erase undo restores label",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 undo survives switching uncertainty label",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 separate uncertainty exists",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 uncertainty overlaps anatomy without erasing it",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 anatomical edit preserves overlapping uncertainty",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 uncertainty does not add training class",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 Draw contour fills known native voxel",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 Draw stays on acquired slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 independent reopen labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 independent full geometry labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 SimpleITK voxels labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 SimpleITK spacing labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 SimpleITK LPS origin labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 SimpleITK LPS direction labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 independent reopen uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 independent full geometry uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 SimpleITK voxels uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 SimpleITK spacing uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 SimpleITK LPS origin uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 SimpleITK LPS direction uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 editable segmentation reopen medial",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 editable segmentation reopen lateral",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 editable segmentation reopen uncertain",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 save reopen labels",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 save reopen uncertainty",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 original dimensions retained",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 incomplete review blocks approval",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 uncertainty erased separately",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 draft protocol blocks research approval",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 practice approval records honest role",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 approved editing creates draft",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 approved checkpoint preserved",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "practice ZIP explicitly marked",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "all approved synthetic cases exported",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "MRI images not duplicated in results",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export ZIP CRC integrity",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export retains labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export retains uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export retains validity.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export retains slice_review.csv",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export retains segmentation.seg.nrrd",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 exported approved voxels labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 exported approved voxels uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export retains labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export retains uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export retains validity.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export retains slice_review.csv",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export retains segmentation.seg.nrrd",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 exported approved voxels labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 exported approved voxels uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "entire source package unchanged",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "actual application loads explicitly permitted correction mask",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "correction source and version recorded",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "correction original prediction preserved separately",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "correction saves and reopens exact starting voxels",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "correction does not alter original supplied mask",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "correction leaves source package unchanged",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "repeated save does not accumulate scene helper nodes",
+      "passed": true,
+      "detail": "124 -> 124"
+    },
+    {
+      "name": "save failure blocks case switch and retains unsaved work",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "completed stroke awaits queued observer before immediate close",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "immediate case close flushes and saves queued stroke",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "failed native image load releases partial case session",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "failed native image load releases writer lock for retry",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "case list populated and visible",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "closing probe is dirty before window close",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "actual window close releases case session",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "actual window close saves latest notes",
+      "passed": true,
+      "detail": ""
+    }
+  ],
+  "scope": "Synthetic development integration; neither anatomical validation nor Windows installer acceptance.",
+  "settings_scope": "Isolated Qt settings under synthetic output; no production settings changed.",
+  "folder_layout": "legacy",
+  "case_table": {
+    "row_count": 2,
+    "column_count": 2,
+    "visible": true,
+    "header_visible": true,
+    "query": "",
+    "filter": "All cases",
+    "rows": [
+      {
+        "hidden": false,
+        "identity": "SYNTHETIC_01 \u00b7 M000 \u00b7 Left",
+        "status": "Needs review"
+      },
+      {
+        "hidden": false,
+        "identity": "SYNTHETIC_02 \u00b7 M000 \u00b7 Left",
+        "status": "Needs review"
+      }
+    ]
+  },
+  "display": {
+    "device_pixel_ratio": 2.0,
+    "captures": [
+      {
+        "requested_logical_size": [
+          1280,
+          800
+        ],
+        "actual_logical_size": [
+          1280,
+          800
+        ],
+        "file": "synthetic-application-1280x800.png"
+      },
+      {
+        "requested_logical_size": [
+          1600,
+          1000
+        ],
+        "actual_logical_size": [
+          1600,
+          842
+        ],
+        "file": "synthetic-application-1600x1000.png"
+      }
+    ]
+  },
+  "screenshot": "synthetic-application-1280x800.png",
+  "passed": true
+}

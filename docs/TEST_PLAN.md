@@ -51,3 +51,9 @@ The actual downstream training-loader test is a separate integration requirement
 ## Permitted practice and batch gate
 
 Use real development/practice scans only when explicitly provided with permission. Do not use protected final-test cases for interface tuning. Keep real identities, images, results and private logs outside Git. Before any release for all cases, exercise import → native edit → save → reopen → review → approve → export in the actual application and check saved outputs independently. Resolve the anatomical-protocol status and final uncertainty policy with the study team before research approval.
+
+## Folder-layout compatibility
+
+`tests/test_layouts.py` exercises both exact legacy and flat source names, invalid ID/visit/side names, unsafe paths, duplicate case/source identities, source byte preservation and reconnection of an existing checkpoint after a layout-only migration. The dataset and case identity hashes must remain unchanged. `tools/make_synthetic.py --layout flat` generates the flat fixture without source annotation directories; the default legacy fixture remains available.
+
+Run the native workflow in separate fresh Slicer processes with `MENISCUS_TEST_LAYOUT=legacy` and `MENISCUS_TEST_LAYOUT=flat`. Use different `MENISCUS_TEST_OUTPUT` directories, then use the existing `MENISCUS_RESUME_FROM` route for a fresh-process restart. These settings affect only generated synthetic fixtures. Mac results must be reported separately from Windows; a Mac run does not validate the Windows installer or renderer.

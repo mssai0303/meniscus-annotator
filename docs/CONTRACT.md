@@ -1,18 +1,21 @@
 # Input/output contract v1
 
-Application 0.1.0. The preparation session's current code defines the existing input schema; this application adapts it without editing or expanding the source files. A final real package was unavailable at implementation time. Synthetic integration does not establish real-package integration or anatomical validity.
+Application 0.1.0. The preparation project defines the input schema. This application verifies it without changing the source files. Folder-layout revision 2 adds the flat naming below while keeping the earlier nested layout readable. Synthetic checks do not establish anatomical validity or Windows acceptance.
 
 ## Input adapter: `meniscus_case/1`
 
 Choose a complete dataset root with `README.txt`, `case_index.csv`, and case folders:
 
 ```text
-Cases/OAI_<participant_id>/M<visit_month, 3 digits>/<LEFT|RIGHT>/series_<source_series_key>/
+Cases/OAI_<participant_id>_M<visit_month, 3 digits>_<LEFT|RIGHT>/
     image.nii.gz
     case.json
     slice_review.csv
-    annotations/   # ignored; application never writes here or auto-loads masks
 ```
+
+The earlier `Cases/OAI_<participant_id>/M<visit_month, 3 digits>/<LEFT|RIGHT>/series_<source_series_key>/` layout is also accepted. Its known empty `annotations/` directory may remain; it is ignored, and the application never writes annotations into the source package or auto-loads nearby masks. In both layouts the full folder name must match the ID, visit and side in unchanged `case.json`; the legacy series component must also match the original source key. Shorter folders never change case keys, series identifiers, dates, images or dataset identity. The index's `relative_folder` is the only index value changed by a folder-layout migration.
+
+Draft checkpoints remain in the separate local work folder, and approved result exports remain in the separate results folder. Work binding hashes source metadata and image checksums, not source locations or folder layout, so an intact migrated package can reconnect existing work. A live loaded dataset must be closed and reopened after a migration: its in-memory source-file hash guards deliberately reject an index modified during the session.
 
 The case index has exactly these ordered columns:
 

@@ -10,10 +10,12 @@ import nibabel as nib
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from MeniscusAnnotatorLib.core import INDEX_FIELDS, SLICE_CONVENTION, sha256
+from MeniscusAnnotatorLib.core import INDEX_FIELDS, SLICE_CONVENTION, sha256, case_folder_options
 
 
-def make_synthetic(root):
+def make_synthetic(root, layout='legacy'):
+    if layout not in ('legacy', 'flat'):
+        raise ValueError('Synthetic layout must be legacy or flat.')
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
     if (root / 'case_index.csv').exists():
@@ -21,9 +23,11 @@ def make_synthetic(root):
     rows = []
     for index, shape in enumerate(((96, 80, 17), (112, 88, 23))):
         key = 'SYNTHETIC_%02d' % (index+1)
-        folder = root / 'Cases' / ('OAI_' + key) / 'M000' / 'LEFT' / ('series_' + key)
+        identity = {'participant_id': key, 'visit_month': 0, 'knee_side': 'L', 'source_series_key': key}
+        folder = root / case_folder_options(identity)[0 if layout == 'flat' else 1]
         folder.mkdir(parents=True, exist_ok=False)
-        (folder / 'annotations').mkdir()
+        if layout == 'legacy':
+            (folder / 'annotations').mkdir()
         direction = np.array([[0., 0., 1.], [1., 0., 0.], [0., 1., 0.]])
         if index:
             a, b = np.deg2rad([13., 6.])
@@ -77,5 +81,6 @@ def make_synthetic(root):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('output', type=Path)
+    parser.add_argument('--layout', choices=['legacy', 'flat'], default='legacy')
     args = parser.parse_args()
-    print(make_synthetic(args.output))
+    print(make_synthetic(args.output, layout=args.layout))

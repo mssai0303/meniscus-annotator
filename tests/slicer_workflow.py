@@ -25,9 +25,16 @@ REPO = Path(__file__).resolve().parents[1] if '__file__' in globals() else Path(
 sys.path.insert(0, str(REPO))
 OUTPUT = Path(os.environ.get('MENISCUS_TEST_OUTPUT', tempfile.mkdtemp(prefix='meniscus-slicer-results-')))
 OUTPUT.mkdir(parents=True, exist_ok=True)
+# Isolate the widget's plain qt.QSettings as well as Slicer's own --testing
+# settings. Reuse only this synthetic directory during a fresh-process restart.
+SETTINGS_ROOT = Path(os.environ.get('MENISCUS_RESUME_FROM', str(OUTPUT))) / 'Qt settings'
+SETTINGS_ROOT.mkdir(parents=True, exist_ok=True)
+qt.QSettings.setDefaultFormat(qt.QSettings.IniFormat)
+qt.QSettings.setPath(qt.QSettings.IniFormat, qt.QSettings.UserScope, str(SETTINGS_ROOT))
 REPORT = {'platform': sys.platform, 'os': platform.platform(), 'machine': platform.machine(), 'slicer_version': slicer.app.applicationVersion,
           'slicer_revision': slicer.app.repositoryRevision, 'checks': [],
-          'scope': 'Synthetic development integration; neither anatomical validation nor Windows installer acceptance.'}
+          'scope': 'Synthetic development integration; neither anatomical validation nor Windows installer acceptance.',
+          'settings_scope': 'Isolated Qt settings under synthetic output; no production settings changed.'}
 
 
 def check(name, condition, detail=''):
@@ -112,12 +119,16 @@ def run():
         return
     dataset_root = OUTPUT / 'Synthetic dataset 空間'
     work_root = OUTPUT / 'Local work Jeff'
-    make_synthetic(dataset_root)
+    layout = os.environ.get('MENISCUS_TEST_LAYOUT', 'legacy')
+    REPORT['folder_layout'] = layout
+    make_synthetic(dataset_root, layout=layout)
     # Nearby masks are intentionally present but never configured as permitted input.
     fixture_dataset = Dataset(dataset_root)
     for fixture_case in fixture_dataset.cases:
         phantom_prediction = np.full(fixture_case.shape_xyz[::-1], 2, dtype=np.uint8)
-        write_native(fixture_case.folder / 'annotations' / 'prediction.nii.gz', phantom_prediction, fixture_case)
+        nearby = fixture_case.folder / 'annotations' if layout == 'legacy' else dataset_root / 'Unconfigured predictions' / fixture_case.key
+        nearby.mkdir(parents=True, exist_ok=True)
+        write_native(nearby / 'prediction.nii.gz', phantom_prediction, fixture_case)
     source_hashes = {str(p.relative_to(dataset_root)): sha256(p) for p in dataset_root.rglob('*') if p.is_file()}
     slicer.util.selectModule('MeniscusAnnotator')
     widget = slicer.modules.meniscusannotator.widgetRepresentation().self()
