@@ -92,14 +92,43 @@ if ($TestInstall) {
   if (-not $health.passed) { throw 'Installed runtime import/identity check failed.' }
   $receipt['runtime_import_test']=$health
   Remove-Item Env:\MENISCUS_PACKAGE_CHECK
+  $TestBase = Join-Path $env:LOCALAPPDATA 'Meniscus Annotator synthetic tests'
+  $env:MENISCUS_TEST_AUTOCLOSE = '1'
+  $env:MENISCUS_TEST_RUN_ID = [Guid]::NewGuid().ToString('N')
+  $examples = Start-Process -FilePath (Join-Path $Installed 'MeniscusAnnotatorExamples.exe') -PassThru
+  if (-not $examples.WaitForExit(120000)) { $examples.Kill($true); throw 'Installed synthetic generator exceeded 120 seconds.' }
+  $createdReport = Join-Path (Join-Path $TestBase $env:MENISCUS_TEST_RUN_ID) 'installed-tests.json'
+  if ($examples.ExitCode -ne 0 -or -not (Test-Path $createdReport)) { throw 'Installed synthetic generator did not complete.' }
+  $created = Get-Content -Raw $createdReport | ConvertFrom-Json
+  if (-not $created.passed -or $created.folder_layout -ne 'flat') { throw 'Installed synthetic package validation failed.' }
+  $receipt['installed_synthetic_generation_test']=$created
   if ($RunIntegration) {
-    $env:MENISCUS_TEST_OUTPUT = Join-Path $BuildRoot 'synthetic-integration'
-    $test = Start-Process -FilePath (Join-Path $Installed 'Slicer.exe') -ArgumentList @('--no-splash','--testing','--python-script',"`"$(Join-Path $Repo 'tests\slicer_workflow.py')`"") -Wait -PassThru
-    if ($test.ExitCode -ne 0) { throw 'Synthetic desktop integration failed; inspect the synthetic-integration folder.' }
-    $report = Get-Content -Raw (Join-Path $env:MENISCUS_TEST_OUTPUT 'slicer-workflow.json') | ConvertFrom-Json
-    if (-not $report.passed) { throw 'Synthetic desktop integration reported failure.' }
-    $receipt['synthetic_desktop_test']='PASSED on this runner; still not Windows11 interactive acceptance'
+    # Exercise only the installed TestKit. No source checkout can shadow the app.
+    $env:MENISCUS_TEST_RUN_ID = [Guid]::NewGuid().ToString('N')
+    $fullRoot = Join-Path $TestBase $env:MENISCUS_TEST_RUN_ID
+    $test = Start-Process -FilePath (Join-Path $Installed 'MeniscusAnnotatorChecks.exe') -PassThru
+    if (-not $test.WaitForExit(600000)) { $test.Kill($true); throw 'Installed synthetic desktop checks exceeded ten minutes.' }
+    $evidence = Join-Path $BuildRoot 'synthetic-integration'
+    New-Item -ItemType Directory -Force $evidence | Out-Null
+    Get-ChildItem $fullRoot -File | Where-Object { $_.Name -in @('slicer-workflow.json','installed-tests.json') -or $_.Extension -eq '.png' } | Copy-Item -Destination $evidence
+    if ($test.ExitCode -ne 0) { throw 'Installed synthetic desktop integration failed; inspect its reports.' }
+    $report = Get-Content -Raw (Join-Path $fullRoot 'installed-tests.json') | ConvertFrom-Json
+    if (-not $report.passed) { throw 'Installed synthetic desktop integration reported failure.' }
+    $receipt['synthetic_desktop_test']=$report
+    $env:MENISCUS_TEST_RUN_ID = [Guid]::NewGuid().ToString('N')
+    $resumeRoot = Join-Path $TestBase $env:MENISCUS_TEST_RUN_ID
+    $resume = Start-Process -FilePath (Join-Path $Installed 'MeniscusAnnotatorResumeCheck.exe') -PassThru
+    if (-not $resume.WaitForExit(180000)) { $resume.Kill($true); throw 'Installed synthetic resume check exceeded three minutes.' }
+    $resumeEvidence = Join-Path $BuildRoot 'synthetic-resume'
+    New-Item -ItemType Directory -Force $resumeEvidence | Out-Null
+    Get-ChildItem $resumeRoot -File | Where-Object { $_.Name -in @('slicer-workflow.json','installed-tests.json') } | Copy-Item -Destination $resumeEvidence
+    if ($resume.ExitCode -ne 0) { throw 'Installed fresh-process synthetic resume failed.' }
+    $resumeReport = Get-Content -Raw (Join-Path $resumeRoot 'installed-tests.json') | ConvertFrom-Json
+    if (-not $resumeReport.passed) { throw 'Installed synthetic resume reported failure.' }
+    $receipt['synthetic_resume_test']=$resumeReport
   }
+  Remove-Item Env:\MENISCUS_TEST_AUTOCLOSE
+  Remove-Item Env:\MENISCUS_TEST_RUN_ID
   # Simulate a runtime dependency still held open; uninstall must fail before deletion.
   $HeldRuntime = [IO.File]::Open((Join-Path $Installed 'bin\python312.dll'), [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
   try {

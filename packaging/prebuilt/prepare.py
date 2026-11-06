@@ -86,15 +86,41 @@ def prepare(runtime, installer, output, cache):
     shutil.copy2(output / 'bin' / 'SlicerApp-real.exe', output / 'bin' / 'MeniscusAnnotatorApp-real.exe')
     config = (output / 'bin' / 'SlicerLauncherSettings.ini').read_text(encoding="utf-8")
     config = config.replace('/bin/SlicerApp-real.exe', '/bin/MeniscusAnnotatorApp-real.exe')
-    config = re.sub(r'^arguments=$', 'arguments=--no-splash --disable-cli-modules', config, count=1, flags=re.M)
+    config = re.sub(r'^arguments=$', 'arguments=--no-splash --disable-cli-modules --modules-to-ignore Welcome', config, count=1, flags=re.M)
     config = re.sub(r'^name=Slicer$', 'name=MeniscusAnnotator', config, count=1, flags=re.M)
     config = config.replace('[EnvironmentVariables]', '[EnvironmentVariables]\nPYTHONDONTWRITEBYTECODE=1\nSLICERRC=<APPLAUNCHER_DIR>/Bootstrap.py')
     (output / 'bin' / 'MeniscusAnnotatorLauncherSettings.ini').write_text(config, encoding="utf-8")
     shutil.copy2(HERE / 'Bootstrap.py', output / 'Bootstrap.py')
     shutil.copy2(HERE / 'RuntimeCheck.py', output / 'RuntimeCheck.py')
+    shutil.copy2(HERE / 'WorkflowShell.py', output / 'WorkflowShell.py')
     shutil.copy2(REPO / 'packaging' / 'Applications' / 'MeniscusAnnotatorApp' / 'Resources' / 'DesktopIcon.ico', output / 'MeniscusAnnotator.ico')
     defaults = output / 'share' / 'Slicer-5.12' / 'MeniscusAnnotatorDefaultSettings.ini'
-    defaults.write_text('[Extensions]\nAutoUpdateCheck=false\nAutoUpdateInstall=false\n[ApplicationUpdate]\nAutoUpdateCheck=false\n[ApplicationUpdates]\nEnabled=false\n', encoding="utf-8")
+    defaults.write_text('[Modules]\nHomeModule=MeniscusAnnotator\n[Extensions]\nAutoUpdateCheck=false\nAutoUpdateInstall=false\n[ApplicationUpdate]\nAutoUpdateCheck=false\n[ApplicationUpdates]\nEnabled=false\n', encoding="utf-8")
+    # Whitelist procedural fixtures and the maintained native suite only. No
+    # source checkout/application copy is placed in TestKit.
+    kit = output / 'TestKit'
+    for relative in ('tests/slicer_workflow.py', 'tools/make_synthetic.py'):
+        destination = kit / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(REPO / relative, destination)
+    (kit / 'tools' / '__init__.py').write_text('"""Procedural synthetic fixtures only."""\n', encoding='utf-8')
+    shutil.copy2(HERE / 'RunInstalledTests.py', kit / 'RunInstalledTests.py')
+    shutil.copy2(HERE / 'SyntheticTestKit.txt', kit / 'README.txt')
+    shutil.copy2(HERE / 'RunSyntheticChecks.ps1', kit / 'RunSyntheticChecks.ps1')
+    shutil.copy2(output / 'bin' / 'SlicerApp-real.exe', output / 'bin' / 'MeniscusAnnotatorTestApp-real.exe')
+    for stem, action in (('MeniscusAnnotatorChecks', 'workflow'), ('MeniscusAnnotatorResumeCheck', 'resume'), ('MeniscusAnnotatorExamples', 'create')):
+        shutil.copy2(output / 'Slicer.exe', output / (stem + '.exe'))
+        test_config = config.replace('/bin/MeniscusAnnotatorApp-real.exe', '/bin/MeniscusAnnotatorTestApp-real.exe')
+        test_config = test_config.replace('name=MeniscusAnnotator\n', 'name=MeniscusAnnotatorTest\n')
+        test_config = test_config.replace('SLICERRC=<APPLAUNCHER_DIR>/Bootstrap.py',
+                                          'SLICERRC=<APPLAUNCHER_DIR>/TestKit/RunInstalledTests.py\nMENISCUS_TEST_ACTION=' + action)
+        if action == 'create':
+            test_config = test_config.replace('arguments=--no-splash', 'arguments=--no-main-window --no-splash')
+        (output / 'bin' / (stem + 'LauncherSettings.ini')).write_text(test_config, encoding='utf-8')
+    # Keep the test profile from constructing the reader widget before the suite
+    # redirects its QSettings; production home remains MeniscusAnnotator.
+    test_defaults = output / 'share' / 'Slicer-5.12' / 'MeniscusAnnotatorTestDefaultSettings.ini'
+    test_defaults.write_text('[Modules]\nHomeModule=\n[Extensions]\nAutoUpdateCheck=false\nAutoUpdateInstall=false\n[ApplicationUpdate]\nAutoUpdateCheck=false\n[ApplicationUpdates]\nEnabled=false\n', encoding='utf-8')
     license_dir = output / 'share' / 'MeniscusAnnotator' / 'licenses'
     license_dir.mkdir(parents=True)
     for source in (REPO / 'packaging' / 'licenses').glob('*'):

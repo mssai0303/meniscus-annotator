@@ -74,6 +74,42 @@ establish content/byte integrity only; they do not verify Windows execution.
 This process is reproducible from pinned inputs and a recorded source commit;
 installer timestamps may differ, so bit-identical output is not promised.
 
+## Installed synthetic test kit
+
+The payload whitelists `tests/slicer_workflow.py` and `tools/make_synthetic.py`
+under `TestKit/`, with a small installed runner. It contains no second copy of
+the application/core implementation: imports must resolve from the installed
+`qt-scripted-modules` directory. Native test launchers use a separate
+`MeniscusAnnotatorTest` Qt profile and fresh OS-resolved local test folders,
+outside installation and ordinary annotation work. No MRI input picker or
+source checkout is used. Generation explicitly uses the flat layout.
+
+The versioned Start-menu Testing folder offers **Create synthetic examples**,
+**Run synthetic workflow checks** and **Check synthetic resume**. The last item
+requires a prior successful workflow run and reopens only that managed synthetic
+run in a fresh process. The procedural geometric examples are not anatomical
+teaching material. Reports state technical scope separately from anatomy and
+independent-reader review.
+
+A maintainer already using normal PowerShell can invoke the same native entries:
+
+```powershell
+# Set this to the actual installation folder if a custom location was chosen.
+$install = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Programs\Meniscus Annotator\0.1.0'
+& (Join-Path $install 'MeniscusAnnotatorExamples.exe')
+& (Join-Path $install 'MeniscusAnnotatorChecks.exe')
+& (Join-Path $install 'MeniscusAnnotatorResumeCheck.exe')
+```
+
+These commands use the bundled runtime, with no external Python or downloads.
+`TestKit/RunSyntheticChecks.ps1` is an optional convenience, without administrator
+requests or execution-policy bypasses. Routine annotation does not need it.
+
+The test-kit whitelist/profile assembly has been checked on the development
+host. Its new installed entrypoints have not yet been executed: Windows builds
+and acceptance are on hold while the user reviews the redesigned Mac preview.
+The earlier lifecycle receipt does not cover these added test-kit entrypoints.
+
 ## Hosted CI resources, limits and cost
 
 The manual-only `Windows prebuilt installer` workflow uses `windows-latest`,
@@ -101,46 +137,56 @@ not a promise of a free run. A roughly 300 MB installer retained for one day use
 artifact storage; repeated artifacts and other repositories also count. Keep
 retention short and use account spending controls. No larger runner is needed.
 
+## Declared platform requirements and actual verification
+
+Windows11 is an upstream recommendation/test target, not an established launch
+minimum for this pinned application. No Windows11-only guard is added.
+
+| Component | Pinned declaration |
+|---|---|
+| Slicer 5.12.4 | Its [pinned requirements](https://github.com/Slicer/Slicer/blob/4e21c19d8360242d88d6ca2490bf52400441b8e1/Docs/user_guide/getting_started.md) recommend Windows11 and describe Windows10 as untested but potentially working. Its [platform check](https://github.com/Slicer/Slicer/blob/4e21c19d8360242d88d6ca2490bf52400441b8e1/CMake/SlicerBlockPlatformCheck.cmake) checks compiler versions; it does not enforce Windows11. |
+| CPython 3.12.10 | [Exact source](https://github.com/python/cpython/blob/v3.12.10/PC/pyconfig.h) sets `Py_WINVER` to `0x0603` (Windows8.1); its [installer check](https://github.com/python/cpython/blob/v3.12.10/Tools/msi/bundle/bootstrap/PythonBootstrapperApplication.cpp) accepts Windows8.1+/Server2012+. This application bundles Python. |
+| Qt 5.15.2 | Its [release support table](https://github.com/qt/qtdoc/blob/v5.15.2/doc/src/platforms/supported-platforms.qdocinc) lists Windows10/8.1/7 on x86/x64, with Windows10/MSVC2019 as a reference configuration. |
+| nibabel 5.3.2 | Its [release metadata](https://github.com/nipy/nibabel/blob/5.3.2/pyproject.toml) requires Python>=3.9 and declares OS independence, without an additional Windows release minimum. |
+| This installer/application | The installer checks Windows x64, an ASCII-only empty installation path and one registered copy of the fixed version per user. It does not check for Windows11. Normal annotation requires no system Python or PowerShell. |
+
+These component declarations do not establish a minimum for every bundled native
+library. Actual compatibility testing remains necessary. OpenGL 3.2 or newer and
+persistent, user-writable work storage are required for the focused workflow.
+Windows11 remains **untested by this project**, which does not mean incompatible.
+
+## Current Horizon Windows10 test target
+
+The user-provided target is Windows10 Enterprise build19045 x64, 16GB RAM,
+107.9GB free and NVIDIA A16-1Q/VMware graphics. User-run checks reported successful
+NIfTI voxel/full-grid verification and real OpenGL rendering with NVIDIA
+A16-1Q/PCI/SSE2, OpenGL3.2.0, driver538.78. The user confirmed the synthetic
+grayscale oval/ring is visible in the standard Slicer probe. This is baseline
+Slicer compatibility evidence; it is not yet the focused application's complete
+annotation workflow. Explicit scrolling and the installed application checks
+remain separately recorded. No paid VM or full-source build is needed.
+
+Documents and LOCALAPPDATA write probes survived disconnect/reconnect and a
+sign-out/new session in the user's checks. Recomposition/profile-reset retention
+still depends on the institution's configuration. A local drive can be a profile
+container; do not infer permanent storage from a drive letter. Dropbox must not
+be the only active working copy.
+
+The maintainer-only `packaging/windows-preflight.ps1` records resolved locations,
+UNC/redirection clues, drive type, GPU/driver and persistence probes without
+admin requests or execution-policy changes. Institutional script restrictions
+must be reported rather than bypassed.
+
 ## Remaining acceptance
 
-Read the generated receipt for the build's actual result. Neither a compiled
-installer nor a successful hosted smoke test proves Windows11 mouse/keyboard,
-resizing/high-DPI, offline annotation, crash recovery or the complete installed
-import/edit/save/reopen/review/approve/export workflow. Complete
-`packaging/WINDOWS_ACCEPTANCE.md` on an interactive Windows11 x64 machine before
-claiming release support. Normal signing/security prompts and institutional
-restrictions can apply.
+The hosted Windows installer lifecycle/import tests passed, as recorded in
+`packaging/evidence/windows-lifecycle-ci.json`. That receipt explicitly describes
+its older source/layout scope. It does not prove desktop rendering, offline
+annotation or human mouse/keyboard behaviour.
 
-## Proposed Horizon compatibility target — not verified
-
-The proposed remote desktop is Windows 10 Enterprise build 19045 x64, 16 GB RAM,
-about 110 GB free and NVIDIA A16-1Q/VMware graphics. Current official [Slicer
-requirements](https://slicer.readthedocs.io/en/latest/user_guide/getting_started.html#system-requirements)
-recommend Windows11; Windows10 is no longer tested upstream and may still work.
-Graphics must expose OpenGL 3.2 or newer to the actual remote session. A GPU name
-alone does not demonstrate that the Horizon display path exposes that capability.
-
-First establish permission to install/run this research application and whether
-the VDI profile/local Documents survives disconnect/logoff/recomposition. The
-maintainer-only `packaging/windows-preflight.ps1` records OS, available memory,
-GPU/driver names, disk space and resolved Documents/LOCALAPPDATA drive type, UNC/redirection clues and a
-user-writable persistence probe without admin
-requests, execution-policy changes or MRI access. Institutional script blocking
-must be reported instead of bypassed. Reconnect to the same authorised session
-and run `-VerifyProbe <probe-file> -Phase disconnect-reconnect`; repeat after
-logoff/new session with `-Phase logoff-new-session` to check persistence; a successful immediate
-write does not establish survival across profile reset or VDI recomposition.
-
-Then install this fixed version in an ASCII path, open the committed synthetic
-package and test native-plane rendering/editing. Only after rendering and
-persistence succeed should the complete synthetic edit/save/reopen/approve/export
-workflow be evaluated. Record actual Horizon client/session/display scaling and
-the renderer's OpenGL details. No full-source superbuild or VM installation is
-needed for this compatibility test. Windows11 interactive acceptance remains
-pending separately.
-
-A path reported on a local drive can still be an FSLogix/profile container or a
-disposable VM disk. Path/drive checks cannot settle this. If installation or work
-vanishes after logoff/recomposition, annotation must wait for IT-approved
-persistent active-work storage and backup. A live Dropbox copy alone does not
-solve the active-work requirement.
+Continue on the actual Horizon Windows10 configuration: install the final fixed
+candidate, then exercise native-plane editing, review, save/reopen, fresh-process
+resume, deliberate approval and export using synthetic data. Record resizing,
+display scaling, input and offline behaviour. Complete the corresponding rows in
+`packaging/WINDOWS_ACCEPTANCE.md`; Windows11 stays pending until it is actually
+tested. Normal signing/security prompts and institutional restrictions can apply.

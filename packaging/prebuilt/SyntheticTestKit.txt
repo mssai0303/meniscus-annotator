@@ -1,0 +1,37 @@
+Meniscus Annotator - installed synthetic software checks
+
+These tools generate geometric phantoms, never locate participant MRI, and use
+only the module and dependencies installed with this application. A source
+checkout, system Python, terminal or runtime download is not required.
+
+Start menu > Meniscus Annotator 0.1.0 > Testing:
+  Create synthetic examples - creates two complete flat-layout volumes in a new
+  OS-resolved local test folder, then shows its location. In the normal reader,
+  choose Open dataset and that synthetic package for manual interface practice.
+  The shapes are not anatomical teaching examples.
+
+  Run synthetic workflow checks - exercises the installed module's native
+  acquired-plane strokes, review, save/reopen, practice approval and export. The
+  suite closes its own test window after checking close/save recovery. A result
+  dialog reports the result and offers the generated report/screenshot folder.
+
+  Check synthetic resume - start this only after a successful workflow check.
+  It opens a fresh process and verifies the previous synthetic case, slice,
+  notes and native masks. The test profile is separate from Jeff's reader profile.
+
+Every invocation uses a fresh folder under the operating system's local app-data
+location / Meniscus Annotator synthetic tests. Input examples, work, exports and
+reports stay there, outside the installation and ordinary annotation work.
+Reports are installed-tests.json and (for workflow/resume) slicer-workflow.json.
+Uncertainty and practice results remain explicitly marked. Technical acceptance
+is not anatomical correctness, independent review or training-loader acceptance.
+
+If a maintainer is already using normal PowerShell, these equivalents need no
+Python installation (set $install to the chosen installation folder):
+  & (Join-Path $install 'MeniscusAnnotatorExamples.exe')
+  & (Join-Path $install 'MeniscusAnnotatorChecks.exe')
+  & (Join-Path $install 'MeniscusAnnotatorResumeCheck.exe')
+
+RunSyntheticChecks.ps1 is an optional convenience for maintainers. Do not bypass
+institutional script restrictions; the native Start-menu entries are available.
+Only use the regular reader for authorised real-data annotation.
