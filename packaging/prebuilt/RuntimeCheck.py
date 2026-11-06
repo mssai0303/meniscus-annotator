@@ -30,6 +30,6 @@ except Exception:
     print(receipt['error'])
 finally:
     try:
-        Path(os.environ['MENISCUS_PACKAGE_CHECK']).write_text(json.dumps(receipt, indent=2))
+        Path(os.environ['MENISCUS_PACKAGE_CHECK']).write_text(json.dumps(receipt, indent=2), encoding="utf-8")
     finally:
         slicer.app.exit(exit_code)

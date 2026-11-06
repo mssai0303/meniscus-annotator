@@ -15,7 +15,7 @@ import zipfile
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-LOCK = json.loads((HERE / 'dependencies.json').read_text())
+LOCK = json.loads((HERE / 'dependencies.json').read_text(encoding="utf-8"))
 
 def digest(path, algorithm='sha256'):
     h = hashlib.new(algorithm)
@@ -66,7 +66,7 @@ def prepare(runtime, installer, output, cache):
     site = output / 'lib' / 'Python' / 'Lib' / 'site-packages'
     for glob, expected in [('numpy-*.dist-info', '2.4.6'), ('packaging-*.dist-info', '26.2'), ('typing_extensions-*.dist-info', '4.15.0')]:
         candidates = list(site.glob(glob))
-        if len(candidates) != 1 or ('Version: ' + expected + '\n') not in (candidates[0] / 'METADATA').read_text():
+        if len(candidates) != 1 or ('Version: ' + expected + '\n') not in (candidates[0] / 'METADATA').read_text(encoding="utf-8"):
             raise ValueError('Official runtime dependency differs from the lock: ' + glob)
     with zipfile.ZipFile(wheel) as archive:
         for info in archive.infolist():
@@ -84,27 +84,27 @@ def prepare(runtime, installer, output, cache):
     # Upstream executables remain byte-for-byte unchanged.
     shutil.copy2(output / 'Slicer.exe', output / 'MeniscusAnnotator.exe')
     shutil.copy2(output / 'bin' / 'SlicerApp-real.exe', output / 'bin' / 'MeniscusAnnotatorApp-real.exe')
-    config = (output / 'bin' / 'SlicerLauncherSettings.ini').read_text()
+    config = (output / 'bin' / 'SlicerLauncherSettings.ini').read_text(encoding="utf-8")
     config = config.replace('/bin/SlicerApp-real.exe', '/bin/MeniscusAnnotatorApp-real.exe')
     config = re.sub(r'^arguments=$', 'arguments=--no-splash --disable-cli-modules', config, count=1, flags=re.M)
     config = re.sub(r'^name=Slicer$', 'name=MeniscusAnnotator', config, count=1, flags=re.M)
     config = config.replace('[EnvironmentVariables]', '[EnvironmentVariables]\nPYTHONDONTWRITEBYTECODE=1\nSLICERRC=<APPLAUNCHER_DIR>/Bootstrap.py')
-    (output / 'bin' / 'MeniscusAnnotatorLauncherSettings.ini').write_text(config)
+    (output / 'bin' / 'MeniscusAnnotatorLauncherSettings.ini').write_text(config, encoding="utf-8")
     shutil.copy2(HERE / 'Bootstrap.py', output / 'Bootstrap.py')
     shutil.copy2(HERE / 'RuntimeCheck.py', output / 'RuntimeCheck.py')
     shutil.copy2(REPO / 'packaging' / 'Applications' / 'MeniscusAnnotatorApp' / 'Resources' / 'DesktopIcon.ico', output / 'MeniscusAnnotator.ico')
     defaults = output / 'share' / 'Slicer-5.12' / 'MeniscusAnnotatorDefaultSettings.ini'
-    defaults.write_text('[Extensions]\nAutoUpdateCheck=false\nAutoUpdateInstall=false\n[ApplicationUpdate]\nAutoUpdateCheck=false\n[ApplicationUpdates]\nEnabled=false\n')
+    defaults.write_text('[Extensions]\nAutoUpdateCheck=false\nAutoUpdateInstall=false\n[ApplicationUpdate]\nAutoUpdateCheck=false\n[ApplicationUpdates]\nEnabled=false\n', encoding="utf-8")
     license_dir = output / 'share' / 'MeniscusAnnotator' / 'licenses'
     license_dir.mkdir(parents=True)
     for source in (REPO / 'packaging' / 'licenses').glob('*'):
         shutil.copy2(source, license_dir / source.name)
     shutil.copy2(REPO / 'LICENSE', license_dir / 'MeniscusAnnotator-Apache-2.0.txt')
     shutil.copy2(REPO / 'packaging' / 'TEMPLATE_NOTICE.txt', license_dir / 'TEMPLATE_NOTICE.txt')
-    (output / 'README-FIRST.txt').write_text('Meniscus Annotator 0.1.0\nBased on official 3D Slicer 5.12.4 r34645.\nOpen Meniscus Annotator from the Start menu, then Open dataset.\nDo not edit files in this installation directory. Saved work and exports live in your chosen local work/results folders.\nThis wrapped distribution retains upstream Slicer branding and runtime version. It is not a custom-compiled Slicer application.\n')
+    (output / 'README-FIRST.txt').write_text('Meniscus Annotator 0.1.0\nBased on official 3D Slicer 5.12.4 r34645.\nOpen Meniscus Annotator from the Start menu, then Open dataset.\nDo not edit files in this installation directory. Saved work and exports live in your chosen local work/results folders.\nThis wrapped distribution retains upstream Slicer branding and runtime version. It is not a custom-compiled Slicer application.\n', encoding="utf-8")
     guide = REPO / 'docs' / 'USER_GUIDE.md'
     if guide.exists():
-        (output / 'UserGuide.txt').write_text(guide.read_text().replace('images/annotation-workflow.png', 'GuideImages/annotation-workflow.png'))
+        (output / 'UserGuide.txt').write_text(guide.read_text(encoding="utf-8").replace('images/annotation-workflow.png', 'GuideImages/annotation-workflow.png'), encoding="utf-8")
     image = REPO / 'docs' / 'images' / 'annotation-workflow.png'
     if image.exists():
         (output / 'GuideImages').mkdir()
@@ -124,13 +124,13 @@ def prepare(runtime, installer, output, cache):
                 'original_runtime_files_unchanged': len(original_files),
                 'files_sha256': files,
                 'scope': 'Payload assembly and byte-integrity checks only; no Windows execution or anatomical validation implied.'}
-    (output / 'distribution.json').write_text(json.dumps(manifest, indent=2) + '\n')
+    (output / 'distribution.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding="utf-8")
     # Delete only known installed files. Unrelated user files survive uninstall.
     names = sorted([*files, 'distribution.json'], reverse=True)
     commands = ['Delete "$INSTDIR\\' + nsis_literal(name.replace('/', '\\')) + '"' for name in names]
     directories = sorted({str(f.relative_to(output)).replace('\\', '/') for f in output.rglob('*') if f.is_dir()}, key=lambda n: (n.count('/'), n), reverse=True)
     commands += ['RMDir "$INSTDIR\\' + nsis_literal(name.replace('/', '\\')) + '"' for name in directories]
-    (output.parent / 'uninstall-files.nsh').write_text('\n'.join(commands) + '\n')
+    (output.parent / 'uninstall-files.nsh').write_text('\n'.join(commands) + '\n', encoding="utf-8")
     return {'files': len(files) + 1, 'bytes': sum(f.stat().st_size for f in output.rglob('*') if f.is_file()), 'original_runtime_files_unchanged': len(original_files)}
 
 if __name__ == '__main__':

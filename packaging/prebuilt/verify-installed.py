@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import sys
 root = Path(sys.argv[1]).resolve()
-manifest = json.loads((root / 'distribution.json').read_text())
+manifest = json.loads((root / 'distribution.json').read_text(encoding="utf-8"))
 for name, expected in manifest['files_sha256'].items():
     file = root / name
     h = hashlib.sha256()

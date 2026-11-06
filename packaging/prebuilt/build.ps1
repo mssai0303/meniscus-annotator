@@ -9,6 +9,8 @@ if ($BuildRoot -match ' ') { throw 'Choose a build directory without spaces for 
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $Lock = Get-Content -Raw (Join-Path $PSScriptRoot 'dependencies.json') | ConvertFrom-Json
 $Python = (Get-Command python.exe -ErrorAction Stop).Source
+# Keep the maintainer interpreter consistent with the bundled runtime's UTF-8 mode.
+$env:PYTHONUTF8 = '1'
 function Checked([string]$Exe, [string[]]$Arguments) {
   & $Exe @Arguments
   if ($LASTEXITCODE -ne 0) { throw "$Exe failed with exit $LASTEXITCODE" }
