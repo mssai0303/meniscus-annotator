@@ -1,0 +1,31 @@
+{
+  "platform": "darwin",
+  "os": "macOS-27.2-x86_64-i386-64bit",
+  "machine": "x86_64",
+  "slicer_version": "5.12.4",
+  "slicer_revision": "4e21c19",
+  "checks": [
+    {
+      "name": "restart resumes last case",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "restart preserves close-saved notes",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "restart resumes acquired slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "restart restores saved native masks",
+      "passed": true,
+      "detail": ""
+    }
+  ],
+  "scope": "Synthetic development integration; neither anatomical validation nor Windows installer acceptance.",
+  "passed": true
+}

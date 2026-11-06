@@ -381,3 +381,76 @@ def test_lock_released_after_abrupt_process_exit(setup):
     result = subprocess.run([sys.executable, '-c', script], capture_output=True)
     assert result.returncode == 17, result.stderr.decode()
     store.open_case(ds.cases[0]).close()
+
+
+def test_dataset_validation_progress_callback(setup):
+    source, _, _ = setup
+    updates = []
+    ds = Dataset(source, progress=lambda current, total: updates.append((current, total)))
+    assert updates == [(0, 2), (1, 2), (2, 2)]
+    assert len(ds.cases) == 2
+
+
+def test_source_image_symlink_rejected(setup, tmp_path):
+    source, ds, _ = setup
+    image = ds.cases[0].image_path
+    target = tmp_path/'external-image.nii.gz'
+    shutil.copyfile(image, target)
+    image.unlink()
+    image.symlink_to(target)
+    with pytest.raises(ValidationError, match='symbolic links'): Dataset(source)
+
+
+@pytest.mark.parametrize('version', ['../../escaped', '/absolute', 'NUL', 'CON.txt', 'version.'])
+def test_dataset_version_cannot_escape_default_work_folder(setup, version):
+    source, ds, _ = setup
+    for c in ds.cases:
+        metadata = json.loads((c.folder/'case.json').read_text())
+        metadata['dataset_version'] = version
+        (c.folder/'case.json').write_text(json.dumps(metadata))
+    with pytest.raises(ValidationError, match='portable folder identifier'): Dataset(source)
+
+
+def test_atomic_directory_commit_failure_preserves_previous(setup, monkeypatch):
+    _, ds, store = setup
+    with store.open_case(ds.cases[0]) as session:
+        labels, uncertainty = session.blank_arrays()
+        first = session.save(labels, uncertainty, seg_writer)
+        labels[2, 4, 6] = 1
+        real_replace = core.os.replace
+        def fail_commit(source, target):
+            if Path(source).name.startswith('.pending-') and Path(source).parent.name == 'versions':
+                raise PermissionError(errno.EACCES, 'Simulated commit interruption')
+            return real_replace(source, target)
+        monkeypatch.setattr(core.os, 'replace', fail_commit)
+        with pytest.raises(ValidationError, match='previous saved version is intact'):
+            session.save(labels, uncertainty, seg_writer)
+        assert store._checkpoints(session.folder) == [first]
+        assert not any(p.name.startswith('.pending-') for p in (session.folder/'versions').iterdir())
+
+
+def test_current_pointer_failure_recovers_complete_committed_version(setup, monkeypatch):
+    _, ds, store = setup
+    case = ds.cases[0]
+    with store.open_case(case) as session:
+        labels, uncertainty = session.blank_arrays()
+        first = session.save(labels, uncertainty, seg_writer)
+        labels[2, 4, 6] = 1
+        real_replace = core.os.replace
+        def fail_pointer(source, target):
+            if Path(target).name == 'CURRENT.json':
+                raise OSError(errno.ENOSPC, 'Simulated pointer interruption')
+            return real_replace(source, target)
+        monkeypatch.setattr(core.os, 'replace', fail_pointer)
+        with pytest.raises(ValidationError): session.save(labels, uncertainty, seg_writer)
+        assert len(store._checkpoints(session.folder)) == 2
+    with store.open_case(case) as resumed:
+        assert resumed.current_checkpoint != first
+        assert resumed.load()[0][2, 4, 6] == 1
+
+
+@pytest.mark.parametrize('rule', [None, [], {'annotation_mode': 'blank', 'starting_mask': {'path': 'forbidden'}}, {'annotation_mode': 'correction'}, {'annotation_mode': 'automatic'}])
+def test_malformed_or_prediction_free_job_rejected(setup, tmp_path, rule):
+    _, ds, _ = setup
+    job = {'schema_version': 'meniscus_job/1', 'dataset_identity': ds.identity, 'cases': {ds.cases[0].key: rule}}
+    with pytest.raises(ValidationError): WorkStore(tmp_path/'Bad job work', ds, job)

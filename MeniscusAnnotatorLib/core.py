@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import os
+import re
 from pathlib import Path, PurePosixPath
 import shutil
 import tempfile
@@ -146,6 +147,8 @@ class Case:
     def __init__(self, root, row):
         self.folder = safe_relative(root, row['relative_folder'])
         self.image_path = self.folder / 'image.nii.gz'
+        for source_path in (self.image_path, self.folder / 'case.json', self.folder / 'slice_review.csv', Path(root) / 'case_index.csv'):
+            need(not source_path.is_symlink(), 'Dataset source files must not be symbolic links. Use a complete local package.')
         self._source_hashes = {self.folder / 'case.json': sha256(self.folder / 'case.json'), self.folder / 'slice_review.csv': sha256(self.folder / 'slice_review.csv'), Path(root) / 'case_index.csv': sha256(Path(root) / 'case_index.csv')}
         self.metadata = read_json(self.folder / 'case.json')
         m = self.metadata
@@ -159,6 +162,7 @@ class Case:
         need(m['annotation_status'] == 'not_started', 'Input package must contain original unannotated inputs.')
         need(type(m['visit_month']) is int and m['visit_month'] >= 0, 'Case visit is invalid.')
         need(all(isinstance(m[k], str) and bool(m[k].strip()) for k in ('dataset_version', 'participant_id', 'source_series_key', 'series_instance_uid', 'preparation_verifier')), 'Case source identity is incomplete.')
+        need(re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,99}', m['dataset_version']) and not m['dataset_version'].endswith('.') and m['dataset_version'].upper().split('.')[0] not in {'CON', 'PRN', 'AUX', 'NUL', *('COM'+str(i) for i in range(1,10)), *('LPT'+str(i) for i in range(1,10))}, 'Dataset version must be a safe portable folder identifier.')
         shape = np.asarray(m['dimensions_xyz'])
         spacing = np.asarray(m['spacing_xyz_mm'], dtype=float)
         origin = np.asarray(m['origin_lps_mm'], dtype=float)
@@ -197,7 +201,7 @@ class Case:
 
 class Dataset:
     """Closed adapter for the preparation session's meniscus_case/1 package."""
-    def __init__(self, root):
+    def __init__(self, root, progress=None):
         self.root = Path(root).resolve()
         need(self.root.is_dir() and (self.root / 'README.txt').is_file(), 'Select the complete dataset folder containing README.txt and case_index.csv.')
         try:
@@ -207,9 +211,13 @@ class Dataset:
                 rows = list(reader)
             need(rows, 'Dataset case index is empty.')
             self.cases = []
+            if progress:
+                progress(0, len(rows))
             for row in rows:
                 try:
                     self.cases.append(Case(self.root, row))
+                    if progress:
+                        progress(len(self.cases), len(rows))
                 except (ValidationError, OSError, ValueError, TypeError, KeyError) as exc:
                     raise ValidationError('Case %s: %s' % (row.get('case_key', '(unknown)'), exc)) from exc
             need(len({c.key for c in self.cases}) == len(self.cases), 'Dataset has duplicate case identities.')
@@ -284,8 +292,18 @@ class WorkStore:
         self.root.mkdir(parents=True, exist_ok=True)
         self.job = copy.deepcopy(job)
         if self.job is not None:
-            need(self.job.get('schema_version') == 'meniscus_job/1' and self.job.get('dataset_identity') == dataset.identity, 'Job configuration does not match this dataset.')
-            need(set(self.job.get('cases', {})).issubset(dataset.by_key), 'Job configuration refers to an unknown case.')
+            need(isinstance(self.job, dict) and self.job.get('schema_version') == 'meniscus_job/1' and self.job.get('dataset_identity') == dataset.identity, 'Job configuration does not match this dataset.')
+            rules = self.job.get('cases', {})
+            need(isinstance(rules, dict) and set(rules).issubset(dataset.by_key), 'Job configuration refers to an unknown case or has invalid case rules.')
+            protocol = self.job.get('protocol', {'version': 'draft-practice-1', 'status': 'draft'})
+            need(isinstance(protocol, dict) and isinstance(protocol.get('version'), str) and protocol['version'].strip() and protocol.get('status') in ('draft', 'released'), 'Job configuration requires an explicit protocol version and draft/released status.')
+            for rule in rules.values():
+                need(isinstance(rule, dict) and rule.get('annotation_mode', 'blank') in ('blank', 'correction'), 'Job configuration has an invalid annotation mode.')
+                if rule.get('annotation_mode', 'blank') == 'blank':
+                    need(rule.get('starting_mask') is None, 'Prediction-free case rules must not include a starting mask.')
+                else:
+                    start = rule.get('starting_mask')
+                    need(isinstance(start, dict) and all(isinstance(start.get(k), str) and start[k].strip() for k in ('path', 'sha256', 'version', 'source')), 'Correction job requires an explicitly permitted mask path, checksum, source and version.')
         binding_path = self.root / 'dataset.json'
         binding = {'schema_version': 'meniscus_work/1', 'dataset_identity': dataset.identity, 'dataset_version': dataset.version}
         # Claim only a previously empty/unclaimed folder; no overwrite of other datasets.
@@ -543,7 +561,7 @@ class CaseSession:
             write_json(pending / 'manifest.json', manifest)
             # Sync all payloads, including Slicer-written segmentation, before commit.
             for child in pending.iterdir():
-                with child.open('rb') as stream:
+                with child.open('r+b') as stream:
                     os.fsync(stream.fileno())
             self.store._validate_checkpoint(pending, self.case)
             self.case.verify_source()
@@ -655,7 +673,7 @@ def export_approved(store, destination, case_keys=None, include_practice=False):
                             digest.update(chunk)
                     need(digest.hexdigest() == expected_hash, 'Case %s exported %s failed its output checksum. Retry export from an intact saved version.' % (case.key, name))
                 case.verify_source()
-        with temporary.open('rb') as stream:
+        with temporary.open('r+b') as stream:
             os.fsync(stream.fileno())
         os.replace(temporary, output)
         fsync_dir(destination)

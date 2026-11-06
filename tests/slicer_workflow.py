@@ -52,7 +52,7 @@ def xy_for_ijk(widget, ijk):
     return tuple(int(round(x)) for x in xy[:2])
 
 
-def stroke(widget, ijk, tool='Paint', label='medial'):
+def stroke(widget, ijk, tool='Paint', label='medial', flush=True):
     """Drive the installed native Slicer effect through actual VTK view events."""
     widget.setLabel(label)
     widget.setTool(tool)
@@ -68,7 +68,8 @@ def stroke(widget, ijk, tool='Paint', label='medial'):
     interactor.SetEventInformation(xy[0], xy[1], 0, 0)
     for name in ('EnterEvent', 'MouseMoveEvent', 'LeftButtonPressEvent', 'LeftButtonReleaseEvent'):
         interactor.InvokeEvent(name)
-    events()
+    if flush:
+        events()
     return xy
 
 
@@ -294,9 +295,58 @@ def run():
     check('entire source package unchanged', source_hashes == {str(p.relative_to(dataset_root)): sha256(p) for p in dataset_root.rglob('*') if p.is_file()})
     widget.openCase(keys[-1])
     widget.goSlice(widget.session.case.n_slices // 2)
+    node_count_before = slicer.mrmlScene.GetNumberOfNodes()
+    for repeat in range(3):
+        widget.save()
+        events()
+    check('repeated save does not accumulate scene helper nodes', slicer.mrmlScene.GetNumberOfNodes() == node_count_before, '%s -> %s' % (node_count_before,slicer.mrmlScene.GetNumberOfNodes()))
+    # A failed save must abort case switching and retain the active unsaved case.
+    from MeniscusAnnotatorLib.core import ValidationError
+    original_session = widget.session
+    original_save = original_session.save
+    old_notes = str(widget.notes.toPlainText())
+    widget.notes.setPlainText('Synthetic save-failure probe')
+    def simulated_full_disk(*args, **kwargs):
+        raise ValidationError('Synthetic insufficient disk space; free space and retry.')
+    original_session.save = simulated_full_disk
+    failed_as_expected = False
+    try:
+        widget.openCase(keys[0])
+    except ValidationError:
+        failed_as_expected = True
+    finally:
+        original_session.save = original_save
+    check('save failure blocks case switch and retains unsaved work', failed_as_expected and widget.session is original_session and widget.dirty and not original_session.closed)
+    widget.notes.setPlainText(old_notes)
+    widget.save()
+    # Close immediately after a native stroke, before the queued edit observer runs.
+    dims = widget.volume.GetImageData().GetDimensions()
+    target = (dims[0]//2+15, dims[1]//2+10, dims[2]//2)
+    stroke(widget, target, flush=False)
+    check('completed stroke awaits queued observer before immediate close', widget._editQueued and not widget.dirty)
+    closing_case = widget.session.case
+    widget.closeCase()
+    latest = widget.store._checkpoints(widget.store.case_folder(closing_case))[0]
+    close_labels = np.asarray(nib.load(str(latest / 'labels.nii.gz')).dataobj).transpose(2,1,0)
+    check('immediate case close flushes and saves queued stroke', close_labels[target[2],target[1],target[0]] == 1)
+    original_load = slicer.util.loadVolume
+    slicer.util.loadVolume = lambda *args, **kwargs: None
+    load_failed_as_expected = False
+    try:
+        widget.openCase(closing_case.key)
+    except ValidationError:
+        load_failed_as_expected = True
+    finally:
+        slicer.util.loadVolume = original_load
+    check('failed native image load releases partial case session', load_failed_as_expected and widget.session is None and widget.volume is None)
+    widget.openCase(closing_case.key)
+    check('failed native image load releases writer lock for retry', widget.session is not None)
+    widget.goSlice(target[2])
+    events()
     table = widget.caseTable
     REPORT['case_table'] = {'row_count':table.rowCount, 'column_count':table.columnCount, 'visible':table.isVisible(), 'header_visible':table.horizontalHeader().isVisible(), 'query':str(widget.search.text), 'filter':str(widget.progressFilter.currentText), 'rows':[{'hidden':table.isRowHidden(row),'identity':str(table.item(row,0).text()),'status':str(table.item(row,1).text())} for row in range(table.rowCount)]}
     check('case list populated and visible', table.isVisible() and table.rowCount == len(keys) and all(not table.isRowHidden(row) for row in range(table.rowCount)))
+    table.grab().save(str(OUTPUT / 'synthetic-case-table.png'))
     table.viewport().update()
     table.horizontalHeader().repaint()
     table.repaint()
@@ -322,7 +372,7 @@ def run():
         latest = widget.store._checkpoints(widget.store.case_folder(case))[0]
         state = json.loads((latest / 'annotation.json').read_text())
         check('actual window close saves latest notes', state['notes'] == 'Synthetic close persistence probe')
-    else:
+    elif os.environ.get('MENISCUS_TEST_KEEP_OPEN') != '1':
         widget.closeCase()
     REPORT['passed'] = all(c['passed'] for c in REPORT['checks'])
 

@@ -145,6 +145,14 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.progressFilter.connect('currentIndexChanged(int)', self._filter)
         self.layout.addWidget(self.progressFilter)
         self.caseTable = qt.QTableWidget(0, 2)
+        # Item delegates use the view palette; make text explicit under Slicer themes.
+        tablePalette = self.caseTable.palette
+        for role in [qt.QPalette.Text, qt.QPalette.WindowText, qt.QPalette.ButtonText]:
+            tablePalette.setColor(role, qt.QColor('#25313c'))
+        tablePalette.setColor(qt.QPalette.Base, qt.QColor('#ffffff'))
+        self.caseTable.palette = tablePalette
+        self.caseTable.horizontalHeader().palette = tablePalette
+        self.caseTable.setStyleSheet('QTableWidget { color:#25313c; background:#ffffff; gridline-color:#dce3e9; } QHeaderView::section { color:#25313c; background:#e9eef2; border:0; padding:7px; }')
         self.caseTable.setHorizontalHeaderLabels(['OAI ID · visit · side', 'Progress'])
         self.caseTable.verticalHeader().hide()
         self.caseTable.horizontalHeader().setStretchLastSection(True)
@@ -407,7 +415,14 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
     def openDataset(self, root, work_root=None):
         self.message.setText('Validating dataset…')
         slicer.app.processEvents()
-        ds = Dataset(root)
+        def progress(done, total):
+            self.message.setText(f'Validating dataset: {done} of {total} scans…')
+            slicer.app.processEvents(qt.QEventLoop.ExcludeUserInputEvents)
+        qt.QApplication.setOverrideCursor(qt.Qt.WaitCursor)
+        try:
+            ds = Dataset(root, progress=progress)
+        finally:
+            qt.QApplication.restoreOverrideCursor()
         documents = qt.QStandardPaths.writableLocation(qt.QStandardPaths.DocumentsLocation)
         version = ds.cases[0].metadata['dataset_version']
         remembered = self.settings.value('Meniscus/work/' + version, '')
@@ -558,8 +573,13 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             self._configureEffects()
             self._lastArrays = self.collectArrays()
             for node in [self.anatomy]:
-                tag = node.GetSegmentation().AddObserver(slicer.vtkSegmentation.SegmentModified, self._queueSegmentChanged)
-                self._observers.append((node.GetSegmentation(),tag))
+                # Voxel changes do not always modify segment properties. Observe
+                # source/derived representations as well as segment metadata.
+                for event in [slicer.vtkSegmentation.SourceRepresentationModified,
+                              slicer.vtkSegmentation.RepresentationModified,
+                              slicer.vtkSegmentation.SegmentModified]:
+                    tag = node.GetSegmentation().AddObserver(event, self._queueSegmentChanged)
+                    self._observers.append((node.GetSegmentation(),tag))
             slicer.util.setSliceViewerLayers(background=self.volume)
             self._layoutViews()
             resume_key = 'Meniscus/slice/' + self.session.case.identity
@@ -579,7 +599,8 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             self.setTool('Paint')
             self.settings.setValue('Meniscus/lastCase', key)
         except Exception:
-            self._loading = False
+            self.dirty = False
+            self._loading = True  # Release a partial load without trying to serialize missing nodes.
             self.closeCase()
             raise
         self._loading = False
@@ -685,7 +706,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         if self._loading or self._updating or self._editQueued:
             return
         self._editQueued = True
-        qt.QTimer.singleShot(0, self._segmentChanged)
+        qt.QTimer.singleShot(0, lambda: self._safe(self._segmentChanged))
 
     def _segmentChanged(self, *args):
         self._editQueued = False
@@ -711,6 +732,9 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
                 self._lastArrays = tuple(a.copy() for a in arrays)
                 self.dirty = True
                 self.refreshReview()
+        except Exception:
+            self.editor.setActiveEffectByName('')
+            raise
         finally:
             self._updating = False
 
@@ -874,12 +898,17 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
                         raise ValidationError('Reopened editable segmentation differs from the annotation.')
             finally:
                 if reopened:
+                    helpers = [reopened.GetDisplayNode(), reopened.GetStorageNode()]
                     slicer.mrmlScene.RemoveNode(reopened)
+                    for helper in helpers:
+                        if helper:
+                            slicer.mrmlScene.RemoveNode(helper)
         finally:
-            storage = combined.GetStorageNode()
+            helpers = [combined.GetDisplayNode(), combined.GetStorageNode()]
             slicer.mrmlScene.RemoveNode(combined)
-            if storage:
-                slicer.mrmlScene.RemoveNode(storage)
+            for helper in helpers:
+                if helper:
+                    slicer.mrmlScene.RemoveNode(helper)
 
     def save(self, approve=False, practice=False):
         if not self.session:
@@ -964,7 +993,13 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         if result:
             self._lastExport = result
             self.message.setText('Export verified: ' + Path(result).name)
-            if slicer.util.confirmYesNoDisplay('Results ZIP created and checked.\n\nShow exported file?',windowTitle='Export complete'):
+            notice = qt.QMessageBox(slicer.util.mainWindow())
+            notice.setWindowTitle('Export complete')
+            notice.setText('Results ZIP created and checked.\n\n' + Path(result).name)
+            showFile = notice.addButton('Show exported file', qt.QMessageBox.ActionRole)
+            notice.addButton(qt.QMessageBox.Close)
+            notice.exec_()
+            if notice.clickedButton() == showFile:
                 qt.QDesktopServices.openUrl(qt.QUrl.fromLocalFile(str(Path(result).parent)))
 
     def _help(self):
@@ -973,8 +1008,16 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         dialog.setWindowTitle('Setup and shortcut help')
         dialog.setText(text)
         diagnostics = dialog.addButton('Diagnostics', qt.QMessageBox.ActionRole)
+        restore = dialog.addButton('Restore last saved case', qt.QMessageBox.ActionRole)
         dialog.addButton(qt.QMessageBox.Close)
         dialog.exec_()
+        if dialog.clickedButton() == restore and self.session:
+            if slicer.util.confirmYesNoDisplay('Discard unsaved changes and reopen the last verified checkpoint? Previous saved versions will remain intact.', windowTitle='Restore saved case'):
+                key = self.session.case.key
+                self.dirty = False
+                self._loading = True
+                self.closeCase()
+                self._safe(lambda: self.openCase(key))
         if dialog.clickedButton() == diagnostics:
             slicer.util.infoDisplay(self._diagnostic or 'No errors recorded in this session.',windowTitle='Local diagnostic details — keep private')
 
