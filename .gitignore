@@ -13,3 +13,15 @@ private/
 *.zip
 *.log
 .DS_Store
+# Guard against accidentally placing a dataset/work folder in the source tree
+Cases/
+cases/
+annotations/
+case_index.csv
+case.json
+slice_review.csv
+annotation.json
+manifest.json
+dataset.json
+CURRENT.json
+*.lock
