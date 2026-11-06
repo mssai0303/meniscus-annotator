@@ -1,0 +1,15 @@
+# No participant data or local work in this repository
+__pycache__/
+*.pyc
+.venv/
+build/
+dist/
+local/
+private/
+*.nii
+*.nii.gz
+*.nrrd
+*.mrb
+*.zip
+*.log
+.DS_Store
