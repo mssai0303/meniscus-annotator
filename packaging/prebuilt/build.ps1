@@ -52,12 +52,12 @@ $receipt = [ordered]@{
   installer_filename=(Split-Path -Leaf $Output); installer_bytes=(Get-Item $Output).Length
   installer_sha256=(Get-FileHash $Output -Algorithm SHA256).Hash.ToLower()
   nsis='3.13'; sevenzip='26.05'; install_test='NOT RUN'; runtime_import_test='NOT RUN'
-  synthetic_desktop_test='NOT RUN'; Windows11_interactive_acceptance='NOT RUN'
+  synthetic_desktop_test='NOT RUN'; Windows11_interactive_acceptance='NOT RUN'; Horizon_Windows10_19045_acceptance='NOT RUN'
 }
 try {
 if ($TestInstall) {
   # Private ephemeral build host only. No MRI data enter this workflow.
-  $Installed = Join-Path $BuildRoot 'Installed with spaces Ω'
+  $Installed = Join-Path $BuildRoot 'Installed with spaces'
   $process = Start-Process -FilePath $Output -ArgumentList @('/S',"/D=$Installed") -Wait -PassThru
   if ($process.ExitCode -ne 0) { throw 'Installer execution failed.' }
   Checked $Python @((Join-Path $PSScriptRoot 'verify-installed.py'),$Installed)

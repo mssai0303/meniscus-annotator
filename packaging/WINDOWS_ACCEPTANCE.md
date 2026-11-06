@@ -1,6 +1,8 @@
 # Windows acceptance record — NOT RUN
 
-Application: 0.1.0. Target: Windows 11 x64. Installer: **not built in this session**.
+Application: 0.1.0. Release target: Windows 11 x64.
+Proposed compatibility test only: Horizon Windows10 Enterprise19045 x64,16GB,
+110GB free,NVIDIA A16-1Q/VMware graphics — unverified. Installer: **not built in this session**.
 Do not mark a row passed without executing it on the installed application.
 Use synthetic input unless development/practice access is explicitly permitted.
 Attach hashes, test logs and screenshots outside the repository if they contain real data.
@@ -26,7 +28,7 @@ Attach hashes, test logs and screenshots outside the repository if they contain 
 | Reconnect moved dataset; wrong hash rejected | Pending |
 | Approve deliberately; only eligible cases exported | Pending |
 | ZIP reopen with independent reader; full grid/hashes/review records match | Pending |
-| Paths with spaces and Unicode; supported maximum path rejection | Pending |
+| ASCII installation path with spaces; Unicode install path clearly rejected; dataset/work Unicode and maximum paths | Pending |
 | Resize at 1024×768 and 1366×768; 100/150/200% scaling | Pending |
 | Uninstall/reinstall retains work outside installation directory | Pending |
 | Transitive licenses and bundled nibabel/typing_extensions notices present | Pending |

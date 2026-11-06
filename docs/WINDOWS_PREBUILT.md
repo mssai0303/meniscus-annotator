@@ -50,7 +50,9 @@ Studio nor Qt source/build tools are required. From a clean checkout:
 ```
 
 Use a fresh build folder without spaces; the installation check deliberately
-uses spaces and Unicode in its installation path. The script downloads only
+uses spaces in its installation path. Upstream Slicer requires an ASCII-only
+installation path; the installer rejects unsupported Unicode paths with a clear
+message. Dataset/work Unicode handling remains a separate application test. The script downloads only
 locked inputs, extracts the runtime, assembles the payload, compiles the NSIS
 installer, then optionally installs it, checks every installed hash and launches
 its actual installed runtime without a main window to check imports/identity.
@@ -101,3 +103,37 @@ import/edit/save/reopen/review/approve/export workflow. Complete
 `packaging/WINDOWS_ACCEPTANCE.md` on an interactive Windows11 x64 machine before
 claiming release support. Normal signing/security prompts and institutional
 restrictions can apply.
+
+## Proposed Horizon compatibility target — not verified
+
+The proposed remote desktop is Windows 10 Enterprise build 19045 x64, 16 GB RAM,
+about 110 GB free and NVIDIA A16-1Q/VMware graphics. Current official [Slicer
+requirements](https://slicer.readthedocs.io/en/latest/user_guide/getting_started.html#system-requirements)
+recommend Windows11; Windows10 is no longer tested upstream and may still work.
+Graphics must expose OpenGL 3.2 or newer to the actual remote session. A GPU name
+alone does not demonstrate that the Horizon display path exposes that capability.
+
+First establish permission to install/run this research application and whether
+the VDI profile/local Documents survives disconnect/logoff/recomposition. The
+maintainer-only `packaging/windows-preflight.ps1` records OS, available memory,
+GPU/driver names, disk space and resolved Documents/LOCALAPPDATA drive type, UNC/redirection clues and a
+user-writable persistence probe without admin
+requests, execution-policy changes or MRI access. Institutional script blocking
+must be reported instead of bypassed. Reconnect to the same authorised session
+and run `-VerifyProbe <probe-file> -Phase disconnect-reconnect`; repeat after
+logoff/new session with `-Phase logoff-new-session` to check persistence; a successful immediate
+write does not establish survival across profile reset or VDI recomposition.
+
+Then install this fixed version in an ASCII path, open the committed synthetic
+package and test native-plane rendering/editing. Only after rendering and
+persistence succeed should the complete synthetic edit/save/reopen/approve/export
+workflow be evaluated. Record actual Horizon client/session/display scaling and
+the renderer's OpenGL details. No full-source superbuild or VM installation is
+needed for this compatibility test. Windows11 interactive acceptance remains
+pending separately.
+
+A path reported on a local drive can still be an FSLogix/profile container or a
+disposable VM disk. Path/drive checks cannot settle this. If installation or work
+vanishes after logoff/recomposition, annotation must wait for IT-approved
+persistent active-work storage and backup. A live Dropbox copy alone does not
+solve the active-work requirement.

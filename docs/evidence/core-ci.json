@@ -1,0 +1,15 @@
+{
+  "conclusion": "success",
+  "headSha": "c3309e78a7f0ed83ed23afd9eb0b7afc30854f70",
+  "url": "https://github.com/mssai0303/meniscus-annotator/actions/runs/42308526000",
+  "jobs": [
+    {
+      "name": "synthetic-core (ubuntu-24.04)",
+      "conclusion": "success"
+    },
+    {
+      "name": "synthetic-core (windows-2025)",
+      "conclusion": "success"
+    }
+  ]
+}

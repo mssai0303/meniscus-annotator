@@ -42,6 +42,16 @@ Function .onInit
 FunctionEnd
 Section "Application" SEC_APP
   SectionIn RO
+  ; Upstream Slicer documents ASCII-only installation paths. UTF-8 byte length
+  ; equals UTF-16 character count only for an ASCII path (including terminator).
+  StrLen $0 "$INSTDIR"
+  IntOp $0 $0 + 1
+  System::Call 'kernel32::WideCharToMultiByte(i 65001, i 0, w "$INSTDIR", i -1, p 0, i 0, p 0, p 0) i.r1'
+  IntCmp $0 $1 ascii_install_path ascii_install_error ascii_install_error
+  ascii_install_error:
+    MessageBox MB_ICONSTOP "Slicer requires an installation path containing only ASCII characters. Choose a writable folder with English letters, numbers and spaces. Dataset and work locations are separate." /SD IDOK
+    Abort
+  ascii_install_path:
   FindFirst $0 $1 "$INSTDIR\*"
   empty_check_loop:
     StrCmp $1 "" empty_check_done
