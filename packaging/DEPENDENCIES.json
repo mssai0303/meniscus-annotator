@@ -1,0 +1,29 @@
+{
+  "application_version": "0.1.0",
+  "release_target": "Windows x64",
+  "slicer": {
+    "version": "5.12.4",
+    "revision": "34645",
+    "commit": "4e21c19d8360242d88d6ca2490bf52400441b8e1",
+    "repository": "https://github.com/Slicer/Slicer.git"
+  },
+  "template": {
+    "commit": "1863e64fe2c622a4de8021b145de180a91d8de52",
+    "repository": "https://github.com/KitwareMedical/SlicerCustomAppTemplate.git"
+  },
+  "toolchain": {
+    "cmake": "3.31.6",
+    "visual_studio": "2022 17.14",
+    "msvc_toolset": "14.44.35207",
+    "windows_sdk": "10.0.26100.0",
+    "qt": "5.15.2 msvc2019_64",
+    "nsis": "3.11",
+    "git": "2.49.0.windows.1"
+  },
+  "additional_python": {
+    "nibabel": "5.3.2",
+    "typing_extensions": "4.15.0"
+  },
+  "slicer_transitive_dependencies": "Pinned by the exact Slicer source commit; preserve generated CMakeCache and SuperBuild external project files with build receipt.",
+  "verification_status": "Windows build and installer unverified; no installer produced."
+}

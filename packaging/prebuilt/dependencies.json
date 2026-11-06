@@ -1,0 +1,33 @@
+{
+  "application_version": "0.1.0",
+  "route": "Wrapped official Slicer distribution; not a custom-compiled Slicer application",
+  "slicer": {
+    "url": "https://download.slicer.org/bitstream/6aa1db04ce9de556d30112bb",
+    "version": "5.12.4",
+    "revision": "34645",
+    "sha512": "5ba320cb67f0acdaacf0a31380e9cf3b9f46d05f57a53da7e04ebcd9490251ecbe998bfefdbdab1f747e038653177868cdb0ad30986473b9d68efba0f4c6045c",
+    "size": 268839640
+  },
+  "sevenzip": {
+    "version": "26.05",
+    "url": "https://github.com/ip7z/7zip/releases/download/26.05/7z2605-x64.exe",
+    "sha256": "fd99e86f57d8f429ef5ed045bf98315af962e2309b0f1ba87a147a44c71647d0"
+  },
+  "nsis": {
+    "version": "3.13",
+    "url": "https://prdownloads.sourceforge.net/nsis/nsis-3.13.zip",
+    "sha256": "ba63dffc4410ee89193e1cb5a41989991bd77c61068da17e3156d136b7b0b3d8"
+  },
+  "nibabel": {
+    "version": "5.3.2",
+    "url": "https://files.pythonhosted.org/packages/43/b2/dc384197be44e2a640bb43311850e23c2c30f3b82ce7c8cdabbf0e53045e/nibabel-5.3.2-py3-none-any.whl",
+    "sha256": "52970a5a8a53b1b55249cba4d9bcfaa8cc57e3e5af35a29d7352237e8680a6f8"
+  },
+  "prerequisites_already_in_official_runtime": {
+    "numpy": "2.4.6",
+    "packaging": "26.2",
+    "typing_extensions": "4.15.0",
+    "python": "3.12",
+    "vc_runtime": "App-local DLLs retained"
+  }
+}

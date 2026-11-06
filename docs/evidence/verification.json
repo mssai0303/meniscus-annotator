@@ -1,14 +1,14 @@
 {
   "application_version": "0.1.0",
-  "recorded_utc": "2026-11-06T22:54:39.428888+00:00",
+  "recorded_utc": "2026-11-06T22:59:35.473298+00:00",
   "core_tests": 47,
-  "slicer_workflow_assertions": 128,
+  "slicer_workflow_assertions": 142,
   "fresh_process_assertions": 4,
   "native_windows_tests": 0,
   "files_sha256": {
     "MeniscusAnnotator.py": "7d8212a0e2047951d500fa5369dea6bf6cf57a30f04616c5e61765458aef8370",
     "MeniscusAnnotatorLib/core.py": "c454614359cc2d9024dfe09eef90fa09ebad62e973d49af8300643a720459172",
     "tests/test_core.py": "53a47dfaffee34ba52ab1c9a3ea998efae4df757a8811eff3597026f9ba3cda0",
-    "tests/slicer_workflow.py": "f44338d386ac0144c292fe75df0ee0563464e3edd3c0435ac3783e2bd83e5f6a"
+    "tests/slicer_workflow.py": "85d42ade459f4b860f1fae5a3a39793018b4be7021d78f673ccdc2d13729a3c2"
   }
 }

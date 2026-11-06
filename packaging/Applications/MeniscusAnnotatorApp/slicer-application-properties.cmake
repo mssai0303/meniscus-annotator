@@ -1,0 +1,11 @@
+set(APPLICATION_NAME MeniscusAnnotator)
+set(APPLICATION_DISPLAY_NAME "Meniscus Annotator")
+set(VERSION_MAJOR 0)
+set(VERSION_MINOR 1)
+set(VERSION_PATCH 0)
+set(DESCRIPTION_SUMMARY "Acquired-grid meniscus annotation and review")
+set(DESCRIPTION_FILE "${MeniscusAnnotator_SOURCE_DIR}/README.md")
+set(WIN_ICON_FILE "${CMAKE_CURRENT_LIST_DIR}/Resources/DesktopIcon.ico")
+set(LICENSE_FILE "${MeniscusAnnotator_SOURCE_DIR}/LICENSE")
+# Upstream build macro requires an Apple icon path even on Windows.
+set(APPLE_ICON_FILE "${CMAKE_CURRENT_LIST_DIR}/Resources/UnusedRequiredIcon.icns")

@@ -91,7 +91,7 @@ def draw(widget, points):
 def run():
     # Import only our committed synthetic generator; never inspect a nearby MRI.
     from tools.make_synthetic import make_synthetic
-    from MeniscusAnnotatorLib.core import sha256, export_approved
+    from MeniscusAnnotatorLib.core import sha256, export_approved, Dataset, WorkStore, write_native
     import nibabel as nib
     import SimpleITK as sitk
     if os.environ.get('MENISCUS_RESUME_FROM'):
@@ -113,6 +113,11 @@ def run():
     dataset_root = OUTPUT / 'Synthetic dataset 空間'
     work_root = OUTPUT / 'Local work Jeff'
     make_synthetic(dataset_root)
+    # Nearby masks are intentionally present but never configured as permitted input.
+    fixture_dataset = Dataset(dataset_root)
+    for fixture_case in fixture_dataset.cases:
+        phantom_prediction = np.full(fixture_case.shape_xyz[::-1], 2, dtype=np.uint8)
+        write_native(fixture_case.folder / 'annotations' / 'prediction.nii.gz', phantom_prediction, fixture_case)
     source_hashes = {str(p.relative_to(dataset_root)): sha256(p) for p in dataset_root.rglob('*') if p.is_file()}
     slicer.util.selectModule('MeniscusAnnotator')
     widget = slicer.modules.meniscusannotator.widgetRepresentation().self()
@@ -141,7 +146,20 @@ def run():
         widget.goSlice(k)
         events()
         before, _ = widget.collectArrays()
-        check(key + ' blank mode', not np.any(before))
+        check(key + ' blank mode ignores nearby prediction', not np.any(before))
+        check(key + ' prediction-free scene contains source MRI only', slicer.mrmlScene.GetNodesByClass('vtkMRMLScalarVolumeNode').GetNumberOfItems() == 1)
+        widget.save()
+        blank_checkpoint = widget.session.current_checkpoint
+        blank_image = sitk.ReadImage(str(blank_checkpoint / 'labels.nii.gz'))
+        check(key + ' empty annotation exports full native dimensions', blank_image.GetSize() == dims and not sitk.GetArrayFromImage(blank_image).any())
+        metadata = widget.session.case.metadata
+        check(key + ' empty annotation exports native physical grid', np.allclose(blank_image.GetSpacing(),metadata['spacing_xyz_mm'],atol=1e-5) and np.allclose(blank_image.GetOrigin(),metadata['origin_lps_mm'],atol=1e-4) and np.allclose(np.array(blank_image.GetDirection()).reshape(3,3),metadata['direction_lps_columns'],atol=1e-5))
+        widget.closeCase()
+        widget.openCase(key)
+        widget.goSlice(k)
+        events()
+        blank_labels, blank_uncertainty = widget.collectArrays()
+        check(key + ' completely empty segmentation saves and reopens', not blank_labels.any() and not blank_uncertainty.any() and blank_labels.shape == dims[::-1])
         # Orientation reformats cannot become accidental editing surfaces.
         widget.reformats.setChecked(True)
         events()
@@ -293,6 +311,41 @@ def run():
                 check(case['case_key'] + ' exported approved voxels ' + name, np.array_equal(np.asarray(independent.dataobj).transpose(2, 1, 0), expected))
                 extracted.unlink()
     check('entire source package unchanged', source_hashes == {str(p.relative_to(dataset_root)): sha256(p) for p in dataset_root.rglob('*') if p.is_file()})
+    # Verified correction initialization is explicit and uses a separate local job.
+    original_store = widget.store
+    correction_case = widget.dataset.cases[-1]
+    starting = np.zeros(correction_case.shape_xyz[::-1], dtype=np.uint8)
+    starting[3,20:24,30:34] = 1
+    starting[5,30:34,40:44] = 2
+    initialization_root = OUTPUT / 'Synthetic initialization'
+    initialization_root.mkdir()
+    starting_path = initialization_root / 'verified-start.nii.gz'
+    write_native(starting_path, starting, correction_case)
+    starting_digest = sha256(starting_path)
+    explicit_job = {'schema_version':'meniscus_job/1', 'dataset_identity':widget.dataset.identity,
+                    'protocol':{'version':'synthetic-correction-practice-1','status':'draft'},
+                    'cases':{correction_case.key:{'annotation_mode':'correction',
+                    'starting_mask':{'path':str(starting_path),'sha256':starting_digest,
+                                     'version':'synthetic-start-v1','source':'Committed synthetic integration generator'}}}}
+    widget.store = WorkStore(OUTPUT / 'Correction work', widget.dataset, job=explicit_job)
+    widget.openCase(correction_case.key)
+    events()
+    correction_labels, correction_uncertainty = widget.collectArrays()
+    check('actual application loads explicitly permitted correction mask', np.array_equal(correction_labels,starting) and not correction_uncertainty.any())
+    initialization = widget.session.state['initialization']
+    check('correction source and version recorded', initialization['method']=='correction' and initialization['starting_mask']['sha256']==starting_digest and initialization['starting_mask']['version']=='synthetic-start-v1')
+    preserved_start = widget.session.folder / ('starting-mask-' + starting_digest + '.nii.gz')
+    check('correction original prediction preserved separately', preserved_start.is_file() and sha256(preserved_start)==starting_digest)
+    widget.save()
+    widget.closeCase()
+    widget.openCase(correction_case.key)
+    events()
+    reopened_correction, reopened_uncertainty = widget.collectArrays()
+    check('correction saves and reopens exact starting voxels', np.array_equal(reopened_correction,starting) and not reopened_uncertainty.any())
+    widget.closeCase()
+    widget.store = original_store
+    check('correction does not alter original supplied mask', sha256(starting_path)==starting_digest and sha256(preserved_start)==starting_digest)
+    check('correction leaves source package unchanged', source_hashes == {str(p.relative_to(dataset_root)): sha256(p) for p in dataset_root.rglob('*') if p.is_file()})
     widget.openCase(keys[-1])
     widget.goSlice(widget.session.case.n_slices // 2)
     node_count_before = slicer.mrmlScene.GetNumberOfNodes()

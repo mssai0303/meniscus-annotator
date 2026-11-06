@@ -10,15 +10,15 @@ acceptance of a real dataset, or Windows readiness.
 | Route | Environment | Result |
 | --- | --- | --- |
 | Core synthetic checks | Apple Silicon Mac, Python3.9.6, NumPy1.26.4, nibabel5.3.2, pytest8.3.5 |47 passed |
-| Actual Slicer workflow | macOS27.2, Slicer5.12.4 r34645/4e21c19, Intel runtime under Rosetta, Python3.12.10, NumPy2.4.6, nibabel5.3.2, SimpleITK2.5.5 |128 assertions passed |
+| Actual Slicer workflow | macOS27.2, Slicer5.12.4 r34645/4e21c19, Intel runtime under Rosetta, Python3.12.10, NumPy2.4.6, nibabel5.3.2, SimpleITK2.5.5 |142 assertions passed |
 | Fresh Slicer process resume | Same runtime; previous process closed through real window.close() |4 assertions passed |
 | Maintained checkpoint checker | Reopened synthetic work from actual Slicer run |Passed |
-| Native Windows installation or interaction | No Windows x64 host available |Not run |
+| Windows 10 Horizon installation or interaction | Proposed Enterprise19045 x64 desktop; session access pending |Not run |
 
 Raw synthetic-only receipts are committed in [evidence/](evidence/). The actual
 application screenshot in [Jeff's guide](USER_GUIDE.md) was inspected at1280×800
 logical pixels on Retina2×. A second requested1600×1000 capture was constrained
-by the Mac desktop to1600×842; it must not be described as a1600×1000 test.
+by the Mac desktop (actual dimensions are recorded in the receipt); it must not be described as a1600×1000 test.
 Windows100/125/150/200% display scaling remains pending.
 
 The native editor tests drive VTK mouse events through Paint, Erase and Draw.
@@ -74,8 +74,11 @@ Geometry tests cannot detect every internally shifted or incorrectly drawn mask.
 
 ## Release gates still open
 
-1. Build/package the Windows application and run clean-install/uninstall, offline
-   launch, real mouse/keyboard and persistence tests on native Windows11 x64.
+1. Build/package the Windows application and first check installation permissions,
+   session persistence and synthetic rendering on the proposed Windows10 Enterprise
+   build19045 x64 Horizon desktop (16GB RAM,110GB free,NVIDIA A16-1Q/VMware).
+   Then run installation, editing, save/reopen and export-geometry tests.
+   Native Windows11 x64 acceptance remains a separate pending gate.
    Check actual installer hash, graphics and all requested display scale factors.
    Build success or Windows ARM emulation cannot satisfy this gate.
 2. Test Windows spaces, Unicode, supported path lengths and institutional install
@@ -84,10 +87,15 @@ Geometry tests cannot detect every internally shifted or incorrectly drawn mask.
    complete. The expected final dataset folder was absent during implementation;
    no real-data import–edit–save–reopen–approve–export pass is claimed.
 4. Supply the agreed released anatomical protocol and approved practice cases.
-   Exercise the correction workflow in the actual application when an explicitly
-   permitted, verified starting mask is supplied (currently core-tested only).
+   Synthetic permitted correction, original-mask preservation and prediction-free
+   loading passed in the actual application; permitted real practice integration remains pending.
 5. Verify the real downstream loader and review the final installer licence
    inventory/signing/distribution requirements.
 
 The application is **not ready for all250 cases** until those gates have been
 closed and the end-to-end workflow repeated on the accepted Windows release.
+
+Actual desktop coverage also includes completely blank segmentations saved/reopened
+on the full source grid, ignored nearby phantom predictions with no hidden volume,
+and explicitly permitted synthetic correction with verified source/version/checksum
+and the original mask preserved separately.

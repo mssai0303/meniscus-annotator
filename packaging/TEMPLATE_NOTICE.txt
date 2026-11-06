@@ -1,0 +1,4 @@
+Application shell adapted from KitwareMedical/SlicerCustomAppTemplate
+commit 1863e64fe2c622a4de8021b145de180a91d8de52, Apache-2.0.
+Copyright (c) Kitware, Inc.
+See LICENSE. Slicer and bundled dependencies retain their own licenses.

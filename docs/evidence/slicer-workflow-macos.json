@@ -16,7 +16,27 @@
       "detail": ""
     },
     {
-      "name": "SYNTHETIC_01 blank mode",
+      "name": "SYNTHETIC_01 blank mode ignores nearby prediction",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 prediction-free scene contains source MRI only",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 empty annotation exports full native dimensions",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 empty annotation exports native physical grid",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 completely empty segmentation saves and reopens",
       "passed": true,
       "detail": ""
     },
@@ -261,7 +281,27 @@
       "detail": ""
     },
     {
-      "name": "SYNTHETIC_02 blank mode",
+      "name": "SYNTHETIC_02 blank mode ignores nearby prediction",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 prediction-free scene contains source MRI only",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 empty annotation exports full native dimensions",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 empty annotation exports native physical grid",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 completely empty segmentation saves and reopens",
       "passed": true,
       "detail": ""
     },
@@ -596,6 +636,36 @@
       "detail": ""
     },
     {
+      "name": "actual application loads explicitly permitted correction mask",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "correction source and version recorded",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "correction original prediction preserved separately",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "correction saves and reopens exact starting voxels",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "correction does not alter original supplied mask",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "correction leaves source package unchanged",
+      "passed": true,
+      "detail": ""
+    },
+    {
       "name": "repeated save does not accumulate scene helper nodes",
       "passed": true,
       "detail": "124 -> 124"
@@ -688,7 +758,7 @@
         ],
         "actual_logical_size": [
           1600,
-          842
+          844
         ],
         "file": "synthetic-application-1600x1000.png"
       }

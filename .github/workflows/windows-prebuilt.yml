@@ -1,0 +1,46 @@
+name: Windows prebuilt installer
+on:
+  workflow_dispatch:
+    inputs:
+      run_integration:
+        description: Also attempt synthetic Slicer rendering tests on hosted Windows Server (not Windows11 acceptance)
+        required: true
+        default: false
+        type: boolean
+permissions:
+  contents: read
+concurrency:
+  group: windows-prebuilt-installer
+  cancel-in-progress: false
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      MENISCUS_BUILD_ROOT: 'C:\D\MP'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Build and test installation with pinned prebuilt runtime
+        shell: pwsh
+        env:
+          RUN_INTEGRATION: ${{ inputs.run_integration }}
+        run: |
+          $integration = $env:RUN_INTEGRATION -eq 'true'
+          & .\packaging\prebuilt\build.ps1 -BuildRoot $env:MENISCUS_BUILD_ROOT -TestInstall -RunIntegration:$integration
+      - name: Retain private installer and evidence for one day
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: MeniscusAnnotator-0.1.0-Windows-x64
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: warn
+          path: |
+            C:\D\MP\MeniscusAnnotator-0.1.0-Windows-x64.exe
+            C:\D\MP\installer-build.json
+            C:\D\MP\installed-runtime-check.json
+            C:\D\MP\synthetic-integration\slicer-workflow.json
+            C:\D\MP\synthetic-integration\synthetic-application.png
+            C:\D\MP\synthetic-integration\failure-application.png

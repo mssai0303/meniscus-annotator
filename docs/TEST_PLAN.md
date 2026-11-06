@@ -15,6 +15,7 @@ Use `MENISCUS_TEST_OUTPUT` to select a local test-results directory, `MENISCUS_R
 Required native integration coverage:
 
 - Axis-aligned and oblique sagittal grids; varying extents/slice counts; anisotropic spacing.
+- Completely empty annotation save/reopen and full-grid exports before any stroke; nearby predictions ignored in blank mode; explicit verified correction initialization with preserved original and provenance.
 - Known native voxel paint, exact acquired-slice isolation, medial/lateral replacement, erase and undo/redo.
 - Contour drawing and independent uncertainty; no undocumented training class.
 - Review invalidation on edits, including undo/redo; explicit review of empty slices.

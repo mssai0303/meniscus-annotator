@@ -1,0 +1,36 @@
+name: Windows full-source build (self-hosted)
+on:
+  workflow_dispatch:
+    inputs:
+      run_integration:
+        description: Run synthetic desktop integration (interactive runner required)
+        required: true
+        default: false
+        type: boolean
+permissions:
+  contents: read
+jobs:
+  windows:
+    # Dedicated owner-controlled runner with packaging/DEPENDENCIES.json prerequisites.
+    # No runner is provisioned by this workflow. No artifacts or releases are published.
+    runs-on: [self-hosted, Windows, X64, meniscus-build]
+    timeout-minutes: 720
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Build pinned application and NSIS installer locally
+        shell: pwsh
+        env:
+          RUN_INTEGRATION: ${{ inputs.run_integration }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $source = "C:\D\M${{ github.run_id }}"
+          $build = "C:\D\B${{ github.run_id }}"
+          if ((Test-Path $source) -or (Test-Path $build)) { throw 'Use a new workflow run; existing build data is preserved.' }
+          git clone --no-hardlinks $env:GITHUB_WORKSPACE $source
+          if ($LASTEXITCODE -ne 0) { throw 'Local source checkout failed.' }
+          $qt = if ($env:MENISCUS_QT_ROOT) { $env:MENISCUS_QT_ROOT } else { 'C:\Qt\5.15.2\msvc2019_64' }
+          $integration = $env:RUN_INTEGRATION -eq 'true'
+          & "$source\packaging\build-windows.ps1" -BuildRoot $build -QtRoot $qt -RunIntegration:$integration
+          Write-Output "::notice::Build outputs remain on the controlled runner at $build. Clean-install Windows acceptance is still required."
