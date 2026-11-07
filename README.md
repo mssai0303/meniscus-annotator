@@ -93,10 +93,12 @@ current acquired slice; Paint/Erase provide touch-ups. For contrast choose
 
 The existing-mask correction route passed 337 actual-module checks on two permitted
 practice scans, 45 oblique fresh-process restore checks and 65 baseline cold-restore
-checks. The updated source package has
-249 technically verified starting masks and one explicitly blocked unresolved
-case; it is not a complete 250-case correction set. These predictions and all
-software-practice outputs remain unaccepted research annotations.
+checks. The dataset preparation session reports all 250 starting masks technically
+checked as of 7 November 2026. The final case uses separately documented
+compartment attribution through the additive correction-resolution registry,
+without changing V20 or the other cases. The full package must include that
+registry and its provenance. These predictions and all software-practice outputs
+remain unaccepted research annotations until the required expert review.
 
 ## Repository and release
 
