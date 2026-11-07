@@ -17,6 +17,8 @@ import zipfile
 import nibabel as nib
 import numpy as np
 
+from .correction_resolutions import resolve_registry
+
 APP_VERSION = '0.1.0'
 CASE_FIELDS = frozenset('schema_version dataset_version case_key participant_id visit_month original_visit_code source_visit_label knee_side sequence source_series_key series_instance_uid archive_series_number dicom_series_number source_study_date source_series_description dimensions_xyz spacing_xyz_mm origin_lps_mm direction_lps_columns expected_slice_count slice_index_convention image_sha256 annotation_status preparation_verifier'.split())
 INDEX_FIELDS = ['participant_id', 'visit_month', 'knee_side', 'case_key', 'relative_folder', 'expected_slice_count', 'annotation_status', 'image_sha256']
@@ -357,12 +359,48 @@ def resolve_starting_mask_path(dataset, starting_mask):
     return safe_relative(dataset.root, name)
 
 
+class BoundCorrectionJob(dict):
+    """Effective UI permissions with an explicit, unchanged base job identity.
+
+    canonical(self) still hashes these effective permissions normally. Saved
+    work instead records base_job_identity plus its separate case resolution.
+    This object is never serialized over the original source job.
+    """
+    def __init__(self, effective, source_job, bindings):
+        super().__init__(copy.deepcopy(effective))
+        self.source_job = copy.deepcopy(source_job)
+        self.base_job_identity = canonical(source_job)
+        self.resolution_bindings = copy.deepcopy(bindings)
+
+
+def bind_correction_resolutions(dataset, job):
+    """Verify additive permissions and expose them to the unchanged interface."""
+    if job is None:
+        return None
+    need(isinstance(job, dict), 'Job configuration must be a dictionary.')
+    source = job.source_job if isinstance(job, BoundCorrectionJob) else job
+    need(isinstance(source, dict) and source.get('schema_version') == 'meniscus_job/1'
+         and source.get('dataset_identity') == dataset.identity and isinstance(source.get('cases', {}), dict),
+         'Job configuration does not match this dataset or has invalid case rules.')
+    cases = {case.key: {'metadata': case.metadata, 'relative_folder': case.folder.relative_to(dataset.root).as_posix()}
+             for case in dataset.cases}
+    effective_rules, bindings, _ = resolve_registry(dataset.root, source, dataset.identity, cases, need, sha256, read_json)
+    effective = copy.deepcopy(source)
+    if effective_rules:
+        effective.setdefault('cases', {}).update(effective_rules)
+    if isinstance(job, BoundCorrectionJob):
+        need(job.base_job_identity == canonical(source) and dict(job) == effective and job.resolution_bindings == bindings,
+             'Correction resolution changed after this job was loaded. Preserve saved work and reconnect the original resolution; permissions were not silently replaced.')
+    return BoundCorrectionJob(effective, source, bindings) if bindings else copy.deepcopy(source)
+
+
 def validate_job(dataset, job, require_full_correction=False, verify_masks=True, allow_unresolved=False):
     """Read-only job/mask validation; never creates annotation work or approval.
 
     Generic historical jobs may list only some cases. Prepared correction
     packages must explicitly cover every case, so no omitted rule becomes blank.
     """
+    job = bind_correction_resolutions(dataset, job)
     need(isinstance(job, dict) and job.get('schema_version') == 'meniscus_job/1' and job.get('dataset_identity') == dataset.identity, 'Job configuration does not match this dataset.')
     rules = job.get('cases', {})
     need(isinstance(rules, dict) and set(rules).issubset(dataset.by_key), 'Job configuration refers to an unknown case or has invalid case rules.')
@@ -403,14 +441,16 @@ def validate_job(dataset, job, require_full_correction=False, verify_masks=True,
     need(allow_unresolved or not unresolved, 'Correction package is incomplete: an automated starting prediction is unresolved. It cannot default to blank annotation.')
     correction_count = sum(rule.get('annotation_mode') == 'correction' for rule in rules.values())
     complete = set(rules) == set(dataset.by_key) and correction_count == len(dataset.cases) and not unresolved and len(verified) == len(dataset.cases)
-    return {'dataset_identity': dataset.identity, 'listed_cases': len(rules), 'correction_cases': correction_count, 'verified_masks': len(verified), 'unresolved_cases': len(unresolved), 'correction_package_complete': complete, 'require_full_correction': require_full_correction, 'masks': verified, 'unresolved': unresolved}
+    return {'dataset_identity': dataset.identity, 'listed_cases': len(rules), 'correction_cases': correction_count, 'verified_masks': len(verified), 'unresolved_cases': len(unresolved), 'correction_package_complete': complete, 'require_full_correction': require_full_correction, 'masks': verified, 'unresolved': unresolved,
+            'base_job_identity': job.base_job_identity if isinstance(job, BoundCorrectionJob) else canonical(job),
+            'resolved_cases': len(job.resolution_bindings) if isinstance(job, BoundCorrectionJob) else 0}
 
 
 def load_job_config(path, dataset, require_full_correction=False, allow_unresolved=False):
-    """Load an explicit job unchanged, validating relative paths against dataset."""
+    """Keep source bytes unchanged; expose separately bound additive permissions."""
     job = read_json(path)
     validate_job(dataset, job, require_full_correction=require_full_correction, allow_unresolved=allow_unresolved)
-    return job
+    return bind_correction_resolutions(dataset, job)
 
 
 def correction_inputs_present(dataset):
@@ -453,7 +493,11 @@ class WorkStore:
         need(not within(self.root, dataset.root) and not within(dataset.root, self.root), 'Work folder must be separate from the original dataset.')
         need('dropbox' not in str(self.root).lower() and 'cloudstorage' not in str(self.root).lower() and 'onedrive' not in str(self.root).lower(), 'Choose a local work folder outside live cloud sync folders.')
         self.root.mkdir(parents=True, exist_ok=True)
-        self.job = copy.deepcopy(job)
+        self.job = bind_correction_resolutions(dataset, copy.deepcopy(job))
+        self.source_job = copy.deepcopy(self.job.source_job if isinstance(self.job, BoundCorrectionJob) else self.job)
+        self.job_identity = canonical(self.source_job) if self.source_job else None
+        self.base_job_identity = self.job_identity
+        self.resolution_bindings = copy.deepcopy(self.job.resolution_bindings if isinstance(self.job, BoundCorrectionJob) else {})
         if self.job is not None:
             validate_job(dataset, self.job, verify_masks=False, allow_unresolved=True)
         protocol = (self.job or {}).get('protocol', {'version': 'draft-practice-1', 'status': 'draft'})
@@ -473,8 +517,23 @@ class WorkStore:
     def case_folder(self, case):
         return self.cases_root / hashlib.sha256(case.key.encode()).hexdigest()[:24]
 
+    def case_resolution(self, case):
+        """Recheck the explicit binding before opening, saving or exporting it."""
+        binding = self.resolution_bindings.get(case.key)
+        if binding is not None:
+            need(isinstance(self.job, BoundCorrectionJob) and canonical(self.source_job) == self.job_identity
+                 and self.job.base_job_identity == self.job_identity,
+                 'Original job identity changed inside the active work configuration.')
+            current = bind_correction_resolutions(self.dataset, self.source_job)
+            need(isinstance(current, BoundCorrectionJob) and current.resolution_bindings.get(case.key) == binding,
+                 'Saved case resolution changed or is unavailable. Reconnect the original explicitly bound correction input.')
+            need(self.job.get('cases', {}).get(case.key) == current.get('cases', {}).get(case.key),
+                 'Active correction permissions differ from the explicit case resolution.')
+        return copy.deepcopy(binding)
+
     def open_case(self, case):
         need(case.key in self.dataset.by_key and self.dataset.by_key[case.key].identity == case.identity, 'Case does not belong to this dataset.')
+        self.case_resolution(case)
         require_case_prediction_available(self.job, case.key)
         return CaseSession(self, case)
 
@@ -484,7 +543,7 @@ class WorkStore:
         for checkpoint in checkpoints:
             try:
                 state = self._validate_checkpoint(checkpoint, case, read_arrays=False)[0]
-                expected_job = canonical(self.job) if self.job else None
+                expected_job = self.job_identity
                 expected_mode = (self.job or {}).get('cases', {}).get(case.key, {}).get('annotation_mode', 'blank')
                 if state.get('job_identity') != expected_job or state['initialization']['method'] != expected_mode:
                     return {'status': 'configuration_mismatch', 'previous_status': state['status'],
@@ -517,6 +576,13 @@ class WorkStore:
             need(sha256(path / name) == digest, 'Saved checkpoint is corrupt: ' + name)
         state = read_json(path / 'annotation.json')
         self._validate_state(state, case)
+        binding = state['initialization'].get('case_resolution')
+        if binding is not None:
+            need(manifest.get('base_job_identity') == self.job_identity and manifest.get('case_resolution') == binding,
+                 'Saved checkpoint case-resolution evidence is missing or mismatched.')
+        else:
+            need('case_resolution' not in manifest and 'base_job_identity' not in manifest,
+                 'Saved checkpoint has unbound correction-resolution evidence.')
         with (path / 'slice_review.csv').open(encoding='utf-8', newline='') as stream:
             reader = csv.DictReader(stream)
             need(reader.fieldnames == ['slice_index', 'displayed_slice', 'status', 'attention_flag', 'note'], 'Saved review CSV has unsupported columns.')
@@ -559,11 +625,17 @@ class WorkStore:
         need(type(state.get('last_slice')) is int and 0 <= state['last_slice'] < case.n_slices, 'Saved slice position is invalid.')
         need(state.get('status') in ('in_progress', 'needs_review', 'approved', 'practice_approved'), 'Saved annotation status is invalid.')
         initialization = state['initialization']
+        need(initialization.get('case_resolution') == self.case_resolution(case),
+             'Saved case resolution differs from the explicit original binding. Preserve the checkpoint and reconnect its original resolution.')
         if initialization['method'] == 'blank':
             need(initialization.get('starting_mask') is None, 'Blank annotation must not contain a starting prediction.')
         else:
             start = initialization.get('starting_mask')
             need(isinstance(start, dict) and all(isinstance(start.get(k), str) and start[k] for k in ('source', 'version', 'sha256')), 'Correction annotation lacks starting-mask provenance.')
+            if initialization.get('case_resolution') is not None:
+                permission = initialization['case_resolution']['resolution']['starting_mask']
+                need(start == {k: permission[k] for k in ('source', 'version', 'sha256')},
+                     'Saved correction initialization does not match its separate case-resolution permission.')
         if state['status'] in ('approved', 'practice_approved'):
             approval = state.get('approval')
             need(isinstance(approval, dict) and state.get('approver') == expected_actor and bool(approval.get('approved_utc')), 'Saved approval metadata is incomplete.')
@@ -589,6 +661,7 @@ def validity_array(state, uncertainty):
 
 class CaseSession:
     def __init__(self, store, case):
+        store.case_resolution(case)
         require_case_prediction_available(store.job, case.key)
         self.store, self.case = store, case
         self.folder = store.case_folder(case)
@@ -626,7 +699,7 @@ class CaseSession:
         need(mode in ('blank', 'correction'), 'Unsupported annotation mode in explicit job configuration.')
         protocol = job.get('protocol', {'version': 'draft-practice-1', 'status': 'draft'})
         need(protocol.get('version') and protocol.get('status') in ('draft', 'released'), 'Job protocol version/status is invalid.')
-        return {'schema_version': 'meniscus_annotation/1', 'app_version': APP_VERSION,
+        state = {'schema_version': 'meniscus_annotation/1', 'app_version': APP_VERSION,
                 'dataset_identity': self.store.dataset.identity, 'source_identity': self.case.identity,
                 'source_image_sha256': self.case.metadata['image_sha256'], 'case_key': self.case.key,
                 'source': copy.deepcopy(self.case.metadata), 'label_mapping': {'0': 'background', '1': 'medial meniscus', '2': 'lateral meniscus'},
@@ -636,15 +709,20 @@ class CaseSession:
                 'practice_context': copy.deepcopy(self.store.practice_context),
                 'annotation_purpose': 'software_practice' if self.store.practice_context is not None else 'research_annotation',
                 'annotator': assigned_annotator(job), 'approver': None, 'approval': None,
-                'initialization': {'method': mode, 'starting_mask': None}, 'job_identity': canonical(job) if job else None,
+                'initialization': {'method': mode, 'starting_mask': None}, 'job_identity': self.store.job_identity,
                 'last_slice': 0, 'status': 'in_progress', 'created_utc': now(), 'saved_utc': None,
                 'uncertainty_policy': 'Separate binary overlay may overlap anatomical labels; all uncertainty and attention flags must be resolved before approval. ' + ('SOFTWARE PRACTICE validity is zero for every voxel; review flags do not confirm anatomical labels or background.' if self.store.practice_context is not None else 'Training validity excludes uncertain and unreviewed/flagged voxels.'),
                 'technical_acceptance_scope': 'Identity, byte integrity, native geometry, label mapping and review completeness only; not anatomical correctness. Downstream training-loader integration is a separate requirement.'}
+        binding = self.store.case_resolution(self.case)
+        if binding is not None:
+            state['initialization']['case_resolution'] = binding
+        return state
 
     def blank_arrays(self):
         return (np.zeros(self.case.shape_xyz[::-1], dtype=np.uint8), np.zeros(self.case.shape_xyz[::-1], dtype=np.uint8))
 
     def load(self):
+        self.store.case_resolution(self.case)
         if self._loaded is not None:
             return self._loaded[0].copy(), self._loaded[1].copy(), self._loaded[2]
         labels, uncertainty = self.blank_arrays()
@@ -705,6 +783,7 @@ class CaseSession:
 
     def save(self, labels, uncertainty, seg_writer, approve=False, practice=False):
         need(not self.closed, 'This case session is closed.')
+        self.store.case_resolution(self.case)
         self.case.verify_source()
         if self.state['initialization']['method'] == 'correction' and self.state['initialization']['starting_mask'] is None:
             self.load()
@@ -760,6 +839,9 @@ class CaseSession:
             manifest = {'schema_version': 'meniscus_checkpoint/1', 'checkpoint': checkpoint_id, 'source_identity': self.case.identity,
                         'source_image_sha256': self.case.metadata['image_sha256'], 'files_sha256': {n: sha256(pending / n) for n in names},
                         'technical_checks': 'All NIfTI outputs reopened with nibabel and compared voxel-for-voxel to in-memory KJI arrays; full grid and qform/sform checked.'}
+            if 'case_resolution' in state['initialization']:
+                manifest['base_job_identity'] = self.store.job_identity
+                manifest['case_resolution'] = copy.deepcopy(state['initialization']['case_resolution'])
             write_json(pending / 'manifest.json', manifest)
             # Sync all payloads, including Slicer-written segmentation, before commit.
             for child in pending.iterdir():
@@ -804,6 +886,7 @@ def export_approved(store, destination, case_keys=None, include_practice=False):
     accepted = []
     for key in selected:
         case = store.dataset.by_key[key]
+        store.case_resolution(case)
         case.verify_source()
         # Export most recent preserved approved version, even if a later draft exists.
         found = None
@@ -813,7 +896,7 @@ def export_approved(store, destination, case_keys=None, include_practice=False):
                 allowed = ('approved', 'practice_approved') if include_practice else ('approved',)
                 if state['status'] not in allowed:
                     continue
-                expected_job = canonical(store.job) if store.job else None
+                expected_job = store.job_identity
                 need(state.get('job_identity') == expected_job, 'Saved approval uses a different job configuration. Supply the original explicit job before export.')
                 need(all(r['reviewed'] and not r['flag'] for r in state['review']) and not uncertainty.any(), 'Approval review/uncertainty records are incomplete.')
                 need(all(state['compartments'].get(k) is True for k in ('medial', 'lateral')), 'Approval compartment records are incomplete.')
@@ -848,9 +931,13 @@ def export_approved(store, destination, case_keys=None, include_practice=False):
                     original = store.case_folder(case) / ('starting-mask-' + init['sha256'] + '.nii.gz')
                     need(sha256(original) == init['sha256'], 'Case %s preserved starting mask is missing or corrupt.' % case.key)
                     archive.write(original, 'cases/' + export_key + '/original-starting-mask.nii.gz')
-                receipts.append({'case_key': case.key, 'folder': 'cases/' + export_key, 'checkpoint': checkpoint.name,
+                receipt = {'case_key': case.key, 'folder': 'cases/' + export_key, 'checkpoint': checkpoint.name,
                                  'source_identity': case.identity, 'source_image_sha256': case.metadata['image_sha256'],
-                                 'manifest_sha256': sha256(checkpoint / 'manifest.json'), 'status': state['status']})
+                                 'manifest_sha256': sha256(checkpoint / 'manifest.json'), 'status': state['status']}
+                if 'case_resolution' in state['initialization']:
+                    receipt['base_job_identity'] = store.job_identity
+                    receipt['case_resolution'] = copy.deepcopy(state['initialization']['case_resolution'])
+                receipts.append(receipt)
             manifest = {'schema_version': 'meniscus_results/1', 'created_utc': now(), 'app_version': APP_VERSION,
                         'dataset_identity': store.dataset.identity, 'dataset_version': store.dataset.version,
                         'practice_only': practice, 'software_practice': software_practice, 'cases': receipts,

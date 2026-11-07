@@ -14,6 +14,7 @@ import SimpleITK as sitk
 
 from native_mri_package import check_nifti, sha256, need
 from package_layout import checked_case_contents
+from correction_resolutions import resolve_registry, FILENAME as RESOLUTION_FILENAME
 
 LABEL_MAPPING = {'0': 'no predicted meniscus', '1': 'medial meniscus', '2': 'lateral meniscus'}
 IDENTITY_FIELDS = ('case_key', 'source_series_key', 'series_instance_uid', 'image_sha256')
@@ -54,6 +55,12 @@ def validate_correction_package(package, cases, catalog_by_key, layouts, allow_u
     rules = job.get('cases')
     need(isinstance(rules, dict) and set(rules) == set(catalog_by_key), 'correction_job_must_cover_every_case_no_blank_fallback')
     expected_files = {'correction_job.json'}
+    registry_cases = {case['case_key']: {'metadata': case, 'relative_folder': catalog_by_key[case['case_key']]['relative_folder']} for case in cases}
+    resolved_rules, resolution_bindings, registry = resolve_registry(package, job, dataset_identity, registry_cases, need, sha256, read_json)
+    rules = dict(rules)
+    rules.update(resolved_rules)
+    if registry is not None:
+        expected_files.add(RESOLUTION_FILENAME)
     ready, unresolved = 0, 0
     prediction_versions, model_versions = set(), set()
     for case in cases:
@@ -101,4 +108,7 @@ def validate_correction_package(package, cases, catalog_by_key, layouts, allow_u
         ready += 1
     need(len(prediction_versions) == 1 and len(model_versions) == 1, 'mixed_starting_prediction_pipeline_or_model_versions')
     need(allow_unresolved or not unresolved, 'correction_package_incomplete_unresolved_predictions')
-    return {'correction_package_complete': ready == len(cases) and unresolved == 0, 'matched_cases': len(cases), 'prepared_masks': ready, 'verified_masks': ready, 'unresolved_cases': unresolved, 'pipeline_versions': sorted(prediction_versions), 'model_versions': sorted(model_versions), 'dataset_identity': dataset_identity, 'scope': 'Unreviewed automated categorical starting inputs; no expert-confirmed anatomy or background.'}, expected_files
+    return {'correction_package_complete': ready == len(cases) and unresolved == 0, 'matched_cases': len(cases), 'prepared_masks': ready, 'verified_masks': ready, 'unresolved_cases': unresolved, 'pipeline_versions': sorted(prediction_versions), 'model_versions': sorted(model_versions), 'dataset_identity': dataset_identity,
+            'base_job_identity': canonical(job), 'resolved_cases': len(resolution_bindings),
+            'case_resolution_identities': sorted(binding['resolution_identity'] for binding in resolution_bindings.values()),
+            'scope': 'Unreviewed automated categorical starting inputs; no expert-confirmed anatomy or background.'}, expected_files

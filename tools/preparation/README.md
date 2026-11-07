@@ -106,3 +106,36 @@ not turn that partial package into a completed correction dataset. The applicati
 blocks opening the unresolved case before creating case work, while ready cases
 remain usable. Run `tools/check_correction_inputs.py` through the application
 core as an independent read-only contract check; no annotation work is created.
+
+### Additive resolution of an originally blocked case
+
+An explicitly documented later compartment assignment may resolve an originally
+unresolved rule without rewriting `correction_job.json`, changing its canonical
+identity, or rebinding existing ready-case checkpoints. Keep the original job
+byte-for-byte. Add `correction_resolutions.json` using
+`meniscus_correction_resolutions/1`: `base_job_identity`, `dataset_identity`, and
+`resolutions` keyed by the original case key. Each entry requires
+`source_identity`, `source_series_key`, `series_instance_uid`,
+`source_image_sha256`, `original_rule_identity`, `starting_mask`
+(`path`, `sha256`, `source`, `version`) and `provenance` (`path`, `sha256`). The
+paths must name that case's own `starting_mask.nii.gz` and `starting_mask.json`.
+The ready sidecar still uses the unreviewed `meniscus_starting_mask/1` schema;
+record the new case-specific assignment honestly in its transformation record.
+This extension cannot override any originally ready case or blank-mode rule.
+
+`MeniscusAnnotatorLib/correction_resolutions.py` is the authoritative shared
+permission contract; its standalone preparation copy is byte-identical. Both
+checkers verify the registry's original job, original unresolved rule, exact
+case/source identity, image hash, prepared mask hash, and provenance file hash.
+Their existing native-grid/label checks remain mandatory. The application
+exposes explicit effective permissions to its unchanged interface, while
+`WorkStore.source_job` and `WorkStore.job_identity` retain the original global
+configuration. `canonical()` continues hashing its actual input normally.
+
+Newly resolved work additionally records `initialization.case_resolution`, the
+full original case permission and a case-scoped resolution hash in its immutable
+checkpoint and export. Reopening, saving or exporting rejects a missing or
+changed resolution, even if the global job hash remains unchanged. Existing
+ready-case states have no new field and keep their original checkpoint binding.
+An already open blocked job must be explicitly reopened to load a newly added
+resolution; permissions never change silently in an active work session.
