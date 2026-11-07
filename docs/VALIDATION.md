@@ -1,119 +1,113 @@
 # Validation record — development version 0.1.0
 
-The focused application runs in the pinned **actual Slicer desktop runtime**.
-It is not a browser viewer or a screenshot mock-up. These results establish
-synthetic technical behaviour only. They do not establish anatomical correctness,
-acceptance of a real dataset, or Windows readiness.
+The focused application runs in the actual pinned Slicer desktop runtime. Mac
+verification uses **Intel Slicer 5.12.4 under Rosetta on Apple Silicon**, not a
+native ARM runtime. Technical checks establish file integrity, native geometry
+and software behaviour; they do not establish anatomical correctness, accepted
+research annotations or readiness for the full annotation batch.
 
-## Executed
+## Executed checks and their scope
 
-| Route | Environment | Result |
+| Route | Result | Scope |
 | --- | --- | --- |
-| Core synthetic checks | Apple Silicon Mac, Python3.9.6, NumPy1.26.4, nibabel5.3.2, pytest8.3.5 |47 passed |
-| Actual Slicer workflow | macOS27.2, Slicer5.12.4 r34645/4e21c19, Intel runtime under Rosetta, Python3.12.10, NumPy2.4.6, nibabel5.3.2, SimpleITK2.5.5 |142 assertions passed |
-| Fresh Slicer process resume | Same runtime; previous process closed through real window.close() |4 assertions passed |
-| Maintained checkpoint checker | Reopened synthetic work from actual Slicer run |Passed |
-| Windows 10 Horizon installation or interaction | Proposed Enterprise19045 x64 desktop; session access pending |Not run |
+| Application core and practice-context tests | 70 passed | Existing annotation behaviour and explicit practice-role isolation |
+| Layout, migration and apply tests | 55 passed | App/adapter source identity, both layouts and saved-work continuity |
+| Redesigned synthetic native workflow | 182 assertions per run passed | Actual Slicer editing, navigation, saving, approval/export and source preservation |
+| Fresh-process synthetic restore | 7 assertions passed | Case, slice, notes, masks and controls after restart |
+| Direct bootstrap startup | 5 assertions passed | Focused workspace without test-driven module selection |
+| Initial permitted two-scan practice workflow | 318 checks passed | Actual Mac application on the two permitted complete scans |
+| Initial practice restore | 36 checks passed | Reopening the saved practice work |
+| Targeted checks after superior-up display correction | 203 checks passed | Acquired-plane display, interaction and saved-grid behaviour on the permitted scans |
+| Post-correction practice restore | 36 checks passed | Restoring the post-correction practice state |
+| Final practice status | 27/27 passed | Final status covering both permitted scans |
+| Hosted Windows installer lifecycle | Passed | Installation, hashes, runtime imports, duplicate-install/locked-runtime guards and safe uninstall |
+| Redesigned Windows application acceptance | Paused; incomplete | No full acceptance claim |
 
-Raw synthetic-only receipts are committed in [evidence/](evidence/). The actual
-application screenshot in [Jeff's guide](USER_GUIDE.md) was inspected at1280×800
-logical pixels on Retina2×. A second requested1600×1000 capture was constrained
-by the Mac desktop (actual dimensions are recorded in the receipt); it must not be described as a1600×1000 test.
-Windows100/125/150/200% display scaling remains pending.
+The app/adapter total is **125 tests**. Broad collection of separate preparation
+tool tests could not run in the lean app environment because pydicom/SimpleITK
+were absent there; no preparation code or dependencies were changed, and no
+complete preparation-suite pass is claimed. The Slicer runtime includes its own
+SimpleITK for native saved-file checks.
 
-The native editor tests drive VTK mouse events through Paint, Erase and Draw.
-They verify every acquired plane's indexing, known voxel locations and single-
-acquired-slice changes on axis-aligned and oblique scans with different shapes,
-17/23 slices and anisotropic spacing. They check label replacement and exact
-undo/redo, independent uncertainty overlapping anatomy, preservation of that
-uncertainty during anatomy edits, and review invalidation after edits.
+The practice runs above overlap in coverage and must not be added into a single
+count. The later targeted checks verify the superior-up display correction; the
+earlier synthetic records remain identified by their own receipts and hashes.
+Raw synthetic-only receipts and screenshots are in [evidence/](evidence/).
+**Real MRI images, identities, private filenames, reports and logs remain outside
+Git.** Committed screenshots use synthetic inputs only.
 
-The complete sequence exercises load, edit, explicit review/advance, save,
-reopen, practice approval, a new draft after approval and export. Approval tests
-set synthetic consideration/review states programmatically and invoke the same
-save/approval implementation used by the confirmation UI; they are not Jeff's
-anatomical assessment. The real protocol remains draft by default.
+## Software-practice safeguards
 
-Saved NIfTI arrays and geometry are reopened with independent **SimpleITK** and
-compared to in-memory arrays; the nibabel writer/checker also checks qform/sform,
-spatial units, full extent and fixed integer labels. Editable .seg.nrrd files are
-reopened through Slicer storage and all three fixed segment IDs compared to the
-source-reference arrays. Exported approved voxels match the preserved approved
-checkpoint even after a later draft. ZIP CRC and payload hashes pass. Every
-source package file remains byte-for-byte unchanged.
+The two permitted scans are used in an explicitly configured SOFTWARE PRACTICE
+workspace with separate local work and results. Automated and manual practice
+have canonical non-Jeff actors; automated tests are never attributed to Jeff.
+Every validity voxel remains **zero**, including after software review/approval.
+Neither labelled voxels nor background are accepted research training targets.
+These checks are software and geometry verification, not an anatomical assessment
+or independent second-reader approval.
 
-Additional application tests exercise secondary-reformat editing rejection,
-notes typing without drawing/navigation shortcuts, pending-stroke flush before
-immediate close, save failure blocking a case switch, failed native volume load
-releasing the lock, repeated saves without MRML node-count growth, and actual
-window-close save plus fresh-process restoration of case/slice/notes/masks.
-Nonfatal Slicer subject-hierarchy warnings occurred during temporary node cleanup;
-all checks passed, including stable scene node count during repeated saves.
+A subsequent manual launch of the current code was confirmed ready. Its upright
+image was visually inspected and saved practice state was restored. Already-open
+windows do not update their loaded code automatically: save and close normally,
+then relaunch to load a change. No claim relies on silently restarting an older
+manual window.
 
-Core fault tests additionally cover corrupt-newest recovery, interrupted writes
-before/after directory commit, disk-space/permission errors, operating-system
-locks released after abrupt process exit, wrong/changed sources, absent/conflicting
-transforms, unknown units, invalid/cropped labels, metadata/hash mismatches,
-unsafe/symlink paths, explicit permitted correction and forbidden predictions.
-Core-only tests use a labelled synthetic writer marker; they do not claim to
-validate Slicer storage independently of the actual desktop tests above.
+## Native editing and output checks
 
-## Maintained responsibilities
+The synthetic workflow drives native Paint, Erase and Draw through view events.
+It checks each acquired plane and the 1..N slider/readout, first/last-slice edits,
+oblique single-slice isolation, label replacement, uncertainty overlap,
+Undo/Redo, review invalidation, empty-mask save/reopen and correction initialization.
+It also checks notes typing without shortcuts, orientation-only secondary views,
+failed-save/load recovery, writer locks, immutable approvals and approved export.
 
-`MeniscusAnnotatorLib/core.py` is the application output acceptance route.
-`tools/check_work.py` delegates to that same implementation; it is not a forked
-validator. The preparation workspace's current input contract/checker was read
-for the native grid/schema. Historical unfinished checkers were not reused as
-an acceptance route. No selection, exposure or research partition audit was
-repeated or included in the interface.
+The acquired-plane view is now superior-up. Display fitting and Reset view retain
+the requested acquired slice; neither the source grid nor exported arrays are
+reoriented, resampled or cropped. Independent saved-file readers compare voxels,
+complete extents, spacing, origin and direction. Technical acceptance also checks
+spatial units, qform/sform consistency, integer label values, fixed medial/lateral
+mapping, uncertainty/validity records and hashes. Editable segmentations reopen
+against the original reference grid. Source files remain unchanged.
 
-The actual downstream training loader was not available and has **not** passed
-integration. Before training, its owner must verify native geometry, class
-mapping and validity/uncertainty semantics using accepted exported examples.
-Geometry tests cannot detect every internally shifted or incorrectly drawn mask.
+**Draw** closes point-to-point clicks into a filled polygon on the current acquired
+slice; Paint/Erase provide touch-ups. To adjust brightness/contrast choose
+**Display and orientation → Window/level**, then left-drag. Right-drag zooms.
+The explicit window/level interaction replaces the earlier incorrect right-drag
+instruction. Choosing a drawing tool restores annotation interaction mode.
 
-## Release gates still open
+Actual synthetic captures at 1280×800 and 1440×900 logical pixels were inspected
+on Retina 2×. This is separate from Windows display scaling. Existing nonfatal
+Slicer subject-hierarchy warnings occurred during temporary-node cleanup; the
+reported assertions and repeated-save scene-node checks passed.
 
-1. Build/package the Windows application and first check installation permissions,
-   session persistence and synthetic rendering on the proposed Windows10 Enterprise
-   build19045 x64 Horizon desktop (16GB RAM,110GB free,NVIDIA A16-1Q/VMware).
-   Then run installation, editing, save/reopen and export-geometry tests.
-   Native Windows11 x64 acceptance remains a separate pending gate.
-   Check actual installer hash, graphics and all requested display scale factors.
-   Build success or Windows ARM emulation cannot satisfy this gate.
-2. Test Windows spaces, Unicode, supported path lengths and institutional install
-   restrictions. No tested Windows path or graphics compatibility is asserted.
-3. Reconcile the delivered real package against the adapter after preparation is
-   complete. The expected final dataset folder was absent during implementation;
-   no real-data import–edit–save–reopen–approve–export pass is claimed.
-4. Supply the agreed released anatomical protocol and approved practice cases.
-   Synthetic permitted correction, original-mask preservation and prediction-free
-   loading passed in the actual application; permitted real practice integration remains pending.
-5. Verify the real downstream loader and review the final installer licence
-   inventory/signing/distribution requirements.
+## Windows status
 
-The application is **not ready for all250 cases** until those gates have been
-closed and the end-to-end workflow repeated on the accepted Windows release.
+On Windows 10 Enterprise build 19045 x64 Horizon, the user reported successful
+normal-user write/readback and checksum persistence through disconnect/reconnect
+and sign-out/new login. The official pinned Slicer runtime opened; the synthetic
+saved-volume checks passed and reported NVIDIA A16-1Q with an OpenGL 3.2 context.
+The user confirmed the grayscale image display. This baseline probe was ordinary
+Slicer and does not establish acceptance of the redesigned annotation application.
+Explicit scrolling/full application acceptance remains incomplete and is paused
+for Mac review. Hosted installer lifecycle checks are also not interactive GUI
+acceptance.
 
-Actual desktop coverage also includes completely blank segmentations saved/reopened
-on the full source grid, ignored nearby phantom predictions with no hidden volume,
-and explicitly permitted synthetic correction with verified source/version/checksum
-and the original mask preserved separately.
+Windows 11 remains **untested**, not declared incompatible. No paid VM or large
+source build is required before completing available Windows 10 compatibility
+checks. Windows 100%, 125%, 150% and 200% scaling, offline installed operation,
+spaces/Unicode and supported path lengths still need their applicable checks.
 
+## Responsibilities and remaining gates
 
-## Current Mac workspace redesign
+`MeniscusAnnotatorLib/core.py` is the maintained application output acceptance
+route; `tools/check_work.py` delegates to it. Input preparation remains a separate
+responsibility. Selection/exposure audits were not repeated or included in the
+reader interface.
 
-The later redesigned module was checked separately from the earlier adapter/UI
-receipts above. See [MAC_PREVIEW.md](MAC_PREVIEW.md):182 current-code flat workflow
-assertions with preview settings enabled,182 legacy regression assertions, seven
-fresh-process restoration assertions and five direct-startup assertions passed.
-Actual1280×800 and1440×900 logical captures were inspected. Evidence is under
-`docs/evidence/mac-redesign-*`; module/helper hashes are recorded in the preview
-startup receipt. The redesigned interface is not substituted with an old screenshot.
-
-The repaired local preview loads only synthetic inputs and preserves its separate
-Practice_work directory. The real flat250-scan input package was completed by the
-preparation session; its production annotation workflow is not accepted by this
-Mac preview. Windows installer lifecycle progress is retained, and new Windows
-acceptance is paused until the user reviews the Mac interface. Windows11 remains
-untested; no incompatibility claim is made.
+The real input package is prepared with flat case folders, and legacy layout
+support is retained. Two permitted practice scans have now been exercised in the
+Mac app, but this does not accept the full research batch. A released anatomical
+protocol, Jeff's actual annotation/review, the final installed Windows workflow
+and downstream training-loader integration remain separate requirements.
+The actual downstream loader was not available and has not passed integration.
+Geometry checks cannot detect every internally shifted or incorrectly drawn mask.

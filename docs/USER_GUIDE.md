@@ -1,7 +1,8 @@
 # Jeff's annotation guide
 
-This is a development version. The Windows installer and Windows interaction
-checks are pending. Use the supplied synthetic package for software practice;
+This is a development version. A Windows installer candidate passed hosted
+installation/import/lifecycle checks; acceptance of the redesigned Windows
+application is paused and remains incomplete. Use the supplied synthetic package for software practice;
 it is not an anatomical teaching example. A released drawing protocol must be
 provided before research approval is enabled.
 
@@ -40,16 +41,22 @@ of the other. **Uncertain area** is purple and may overlap either meniscus; it
 is saved separately and never converted silently to background or a third
 training class. Erase uncertainty using that label's Erase tool.
 
-Paint by dragging. For Draw, left-click the contour points and right-click to
-apply. Undo/Redo applies across labels during the current editing session.
+Paint and Erase use left-button dragging. **Draw** is a point-to-point contour:
+left-click around the boundary, then right-click to close and apply a **filled
+polygon on the current acquired slice**. It is not a freehand line tool. Use
+Paint or Erase for edge touch-ups. Undo/Redo applies across labels during the
+current editing session.
 On reopening, recover work from saved checkpoints; the previous session's
 in-memory undo history is not restored.
 
 Use **Display and orientation** to show/hide labels, switch between outlines
 and transparent fill, change fill opacity, reset the view or show reformats.
-Use the slice slider, Previous/Next, mouse wheel or Go to for acquired-slice navigation. Ctrl+wheel zooms,
-middle-drag pans, and right-drag adjusts window/level. Zoom and window/level
-remain in effect while stepping through the case. **Cases** and **Tools** in the
+Use the slice slider, Previous/Next, mouse wheel or Go to for acquired-slice
+navigation. Ctrl+wheel or right-button dragging zooms; middle-button dragging
+pans. To adjust brightness and contrast, open **Display and orientation**,
+choose **Window/level**, then **left-drag on the image**. Choose Paint, Draw or
+Erase to return to annotation. Zoom and window/level remain in effect while
+stepping through the case. **Cases** and **Tools** in the
 header collapse the side panels. Panel widths and brush diameter are remembered.
 
 ## Review, save and approve
@@ -71,9 +78,14 @@ the last checkpoint may be lost.
 
 Before approval, review all slices, resolve all uncertainty/flags, and confirm
 both compartment checkboxes. **Approve case** then requires your deliberate
-confirmation. Jeff is recorded as both annotator and approver; this is not an
-independent second-reader review. Technical checks do not establish anatomical
+confirmation. In the ordinary assigned-annotation workflow, Jeff is recorded as
+both annotator and approver; this is not an independent second-reader review. Technical checks do not establish anatomical
 correctness. Without a released protocol, approval is clearly marked **practice**.
+
+The separate **SOFTWARE PRACTICE** workspace records explicit practice/test actors,
+not Jeff. Its review and approval actions exercise software only. Every voxel in
+its exported validity image remains zero, including after approval; neither
+labels nor background are accepted research training annotations.
 
 Editing an approved annotation creates a new draft. The previous approved
 checkpoint remains unchanged. Re-review changed slices and approve a new version
@@ -92,6 +104,8 @@ labels, separate uncertainty/validity images, slice-review tables, hashes and
 annotation/approval metadata. It uses the latest preserved eligible approval,
 even when a later unfinished draft exists. Never substitute a draft for an
 approved export. Training code must respect validity and uncertainty records.
+SOFTWARE PRACTICE exports use the `SOFTWARE_PRACTICE_ONLY-` prefix, remain separate, have all-zero validity images and
+must not be used as accepted research annotations.
 
 **Help → Annotation setup** is for a coordinator-supplied, dataset-bound JSON.
 It records the protocol and explicitly permitted correction mask. Without one,

@@ -5,9 +5,13 @@ A focused research annotation module and Windows custom-application build for
 grid, including tilted sagittal planes. No model is trained or downloaded.
 
 **Development preview; Windows acceptance is paused for Mac design review.** The actual Slicer desktop
-workflow has been exercised on synthetic scans on macOS under Rosetta. A wrapped Windows installer passed hosted installation/import/lifecycle checks;
-the redesigned interface has not yet completed Windows acceptance. The real input package is prepared with flat case folders; its full annotation
-workflow is not yet accepted. A released anatomical protocol has not been supplied. Do not
+workflow has been exercised on synthetic scans and two explicitly permitted
+software-practice MRI scans using Intel Slicer 5.12.4 under Rosetta on macOS.
+This is not a native ARM runtime; practice outputs are not accepted research
+annotations and their validity images are entirely zero. A wrapped Windows installer passed hosted installation/import/lifecycle checks;
+the redesigned interface has not yet completed Windows acceptance. The flat-folder
+input package has passed two-case Mac software-practice checks; the complete
+250-case production batch has not been accepted. A released anatomical protocol has not been supplied. Do not
 use this version as an accepted production release for 250 cases.
 
 - [Open the checked Mac preview](docs/MAC_PREVIEW.md)
@@ -33,7 +37,7 @@ Jeff will not need Python, pip, a console, a login or runtime downloads.
 In Slicer: Edit → Application Settings → Modules → Additional module paths →
 add this repository folder. Launch with the development entry point below to open **Meniscus Annotator**
 directly. The module opens the focused MRI layout. Use **Open dataset** to select a package.
-For an isolated development launch:
+For a development launch:
 
 ```text
 Slicer --no-splash --ignore-slicerrc --additional-module-paths <repository> --python-script <repository>/tools/start_workspace.py
@@ -56,13 +60,13 @@ anatomical drawing instructions. The source package has the actual proposed
 python -m venv .venv
 # Activate this environment, then:
 python -m pip install -r requirements-dev.txt
-python -m pytest tests/test_core.py -q
+python -m pytest tests/test_core.py tests/test_practice_context.py tests/test_layout_migration.py tests/test_layouts.py tests/test_layout_apply.py -q
 ```
 
 Run the actual editor test inside installed Slicer (with nibabel available):
 
 ```text
-Slicer --no-splash --ignore-slicerrc --additional-module-paths <repository> --python-script <repository>/tests/slicer_workflow.py
+Slicer --testing --no-splash --ignore-slicerrc --additional-module-paths <repository> --python-script <repository>/tests/slicer_workflow.py
 ```
 
 Set `MENISCUS_TEST_OUTPUT` to a new empty local directory. The test creates
@@ -70,6 +74,13 @@ only synthetic data and writes its results/screenshots there. It drives the
 native Paint, Erase and Draw tools through view events, checks oblique planes,
 reopens saved files, approves practice versions and exports/reopens ZIP results.
 It cannot establish anatomical correctness or replace Windows acceptance.
+The scoped app/adapter suite currently passes 125 tests. Practice-specific run
+counts and remaining limits are recorded in [VALIDATION.md](docs/VALIDATION.md);
+private MRI evidence is not committed.
+
+In the workspace, Draw closes point-to-point clicks into a filled polygon on the
+current acquired slice; Paint/Erase provide touch-ups. For contrast choose
+**Window/level** in Display and orientation, then left-drag. Right-drag zooms.
 
 ## Repository and release
 
