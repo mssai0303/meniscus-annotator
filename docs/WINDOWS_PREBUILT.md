@@ -154,6 +154,17 @@ package generation and uninstall checks remain enabled. GUI test fields must
 remain `NOT RUN` for that build. Windows 10 human interaction, correction,
 restart and export acceptance remain pending; Windows 11 is untested.
 
+That candidate is now published as
+[Windows test candidate 2](https://github.com/mssai0303/meniscus-annotator/releases/tag/v0.1.0-windows-correction-test.2)
+from source `cb5919bea6a69e26d2396b509d9f2dad71f8cc68`. Its 362,213,587-byte
+installer has SHA-256
+`d09b4898dadbf328eac86c6857ad7f2072106a4b03de70bedfee1e18179bb5f6`.
+Installation, payload/runtime checks, synthetic package generation and uninstall
+checks passed; desktop GUI fields remain NOT RUN. This immutable candidate's
+internal TestKit README still mentions removed Testing Start-menu shortcuts;
+maintainers should run the named executables from the installation folder.
+The reader application, reader guide and uninstall shortcuts are present.
+
 ## Hosted CI resources, limits and cost
 
 The manual-only `Windows prebuilt installer` workflow uses `windows-latest`,

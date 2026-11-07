@@ -48,7 +48,7 @@ original scope; direct-function export tests did not cover the broken dialog.
 | Existing-mask correction module workflow | 337 passed | Both permitted real scans, native existing-label erase/undo, Draw/Paint, review, save and export |
 | Correction fresh-process restore | 45 passed | Last case arrays, native geometry, original prediction and provenance |
 | Baseline correction cold restore | 65 passed | Separate process; exact baseline export arrays, geometry and original provenance; no new checkpoint |
-| Full correction package input check | 249 verified; 1 unresolved | All 250 explicit rules validated; unresolved case remains blocked and package incomplete |
+| Initial correction package input check | 249 verified; 1 unresolved at that check | Historical receipt before the separate case-resolution update described below |
 | Hosted Windows installer lifecycle | Passed | Installation, hashes, runtime imports, duplicate-install/locked-runtime guards and safe uninstall |
 | Redesigned Windows application acceptance | Paused; incomplete | No full acceptance claim |
 
@@ -101,11 +101,12 @@ against the original reference grid. Source files remain unchanged.
 Correction tests compare initial in-app arrays with the exact explicitly permitted
 nonzero mask, erase existing voxels from each compartment on the intended acquired
 slice, and compare exact arrays after Undo/Redo. Saved/exported original prediction
-bytes retain their source/version/SHA provenance. All 1,252 current package files
+bytes retain their source/version/SHA provenance. All 1,252 then-current package files
 matched the post-addition source manifest after testing; original 750 case files
 and index also matched the earlier immutable pre-addition receipt. These checks
-do not accept the predictions anatomically. One unresolved source mask remains a
-dataset completion gap and is never replaced by blank annotation.
+do not accept the predictions anatomically. At that check one unresolved source
+mask remained blocked; it was never replaced by blank annotation. The subsequent
+documented case resolution is a separate update, not part of that old receipt.
 
 **Draw** closes point-to-point clicks into a filled polygon on the current acquired
 slice; Paint/Erase provide touch-ups. To adjust brightness/contrast choose
@@ -126,9 +127,9 @@ and sign-out/new login. The official pinned Slicer runtime opened; the synthetic
 saved-volume checks passed and reported NVIDIA A16-1Q with an OpenGL 3.2 context.
 The user confirmed the grayscale image display. This baseline probe was ordinary
 Slicer and does not establish acceptance of the redesigned annotation application.
-Explicit scrolling/full application acceptance remains incomplete; correction
-packaging and tests are being updated. Hosted installer lifecycle checks are not interactive GUI
-acceptance.
+Explicit scrolling/full application acceptance remains incomplete. The correction
+installer has been built and published as a test candidate; hosted installer
+lifecycle checks are not interactive GUI acceptance.
 
 Windows 11 remains **untested**, not declared incompatible. No paid VM or large
 source build is required before completing available Windows 10 compatibility
@@ -172,3 +173,22 @@ case resolutions retain that location. Legacy and software-practice locations
 remain unchanged. Existing named jobs saved by earlier preview builds may need
 the coordinator to reconnect their original work folder explicitly; no old
 checkpoints are moved, relabelled or discarded.
+
+## Windows test candidate 2 and completed input preparation
+
+The source `cb5919bea6a69e26d2396b509d9f2dad71f8cc68` installer is available as
+[Windows test candidate 2](https://github.com/mssai0303/meniscus-annotator/releases/tag/v0.1.0-windows-correction-test.2).
+Its SHA-256 is `d09b4898dadbf328eac86c6857ad7f2072106a4b03de70bedfee1e18179bb5f6`.
+[Build 42394913240](https://github.com/mssai0303/meniscus-annotator/actions/runs/42394913240)
+passed installed payload integrity, source/runtime identity, synthetic package
+generation, duplicate-install protection, locked-runtime uninstall protection
+and safe uninstall. The local contract suite passed 226 tests. Desktop editing,
+restart and export checks were explicitly NOT RUN on the hosted runner because
+of its graphics limitation. Actual Windows 10 acceptance remains pending.
+
+The dataset preparation handoff now reports all 250 starting masks technically
+prepared. The previously blocked case uses the separately documented additive
+resolution contract; the original job and the other cases' bindings remain
+unchanged. This source includes that contract. The predictions remain unreviewed
+automated starting points; the package update is not expert approval or a new
+independent image review by this application-maintenance task.

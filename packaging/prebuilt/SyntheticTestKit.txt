@@ -4,29 +4,30 @@ These tools generate geometric phantoms, never locate participant MRI, and use
 only the module and dependencies installed with this application. A source
 checkout, system Python, terminal or runtime download is not required.
 
-Start menu > Meniscus Annotator 0.1.0 > Testing:
-  Create synthetic examples - creates two complete flat-layout correction cases in a new
+Maintainer tools are inside the installation folder, not in the reader's
+Start menu. Open that folder in File Explorer and run the named executable:
+  MeniscusAnnotatorExamples.exe - creates two complete flat-layout correction cases in a new
   OS-resolved local test folder, then shows its location. In the normal reader,
   choose Open dataset and that synthetic package for manual interface practice.
   Each has an explicit draft correction job and two coloured geometric patches
   on the middle acquired slice. The actor is an unverified practice user, never
   Jeff. The shapes are not anatomical teaching examples.
 
-  Run correction checks - uses a separate automated fixture through Open dataset,
+  MeniscusAnnotatorCorrectionChecks.exe - uses a separate automated fixture through Open dataset,
   exact starting-mask loading, native-plane paint/erase/undo/redo, save/reopen,
   practice approval, actual Export/Cancel dialog buttons and ZIP verification.
   Qt/VTK events are injected. The native destination picker is redirected into
   the isolated test output and still needs a human acceptance check.
 
-  Check correction resume - opens a fresh process after successful correction
+  MeniscusAnnotatorCorrectionResumeCheck.exe - opens a fresh process after successful correction
   checks, restoring both cases, edited voxels, review state and acquired slice.
 
-  Run synthetic workflow checks - exercises the installed module's native
+  MeniscusAnnotatorChecks.exe - exercises the installed module's native
   acquired-plane strokes, review, save/reopen, practice approval and export. The
   suite closes its own test window after checking close/save recovery. A result
   dialog reports the result and offers the generated report/screenshot folder.
 
-  Check synthetic resume - start this only after a successful workflow check.
+  MeniscusAnnotatorResumeCheck.exe - start this only after a successful workflow check.
   It opens a fresh process and verifies the previous synthetic case, slice,
   notes and native masks. The test profile is separate from Jeff's reader profile.
 
@@ -48,5 +49,5 @@ Python installation (set $install to the chosen installation folder):
   & (Join-Path $install 'MeniscusAnnotatorCorrectionResumeCheck.exe')
 
 RunSyntheticChecks.ps1 is an optional convenience for maintainers. Do not bypass
-institutional script restrictions; the native Start-menu entries are available.
+institutional script restrictions; the native executables above are available.
 Only use the regular reader for authorised real-data annotation.
