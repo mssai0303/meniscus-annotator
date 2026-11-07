@@ -1,0 +1,35 @@
+name: Diagnose installed Windows test launcher
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  diagnose:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Reuse exact candidate without rebuilding
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 42355078842
+          artifact-ids: 13567407180
+          merge-multiple: true
+          path: C:\D\Diagnostic\download
+      - name: Install verified candidate and inspect original test launcher
+        shell: pwsh
+        run: |
+          & .\packaging\prebuilt\diagnose-installed.ps1 -Root C:\D\Diagnostic
+      - name: Retain synthetic diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-installed-diagnostic-${{ github.run_id }}
+          retention-days: 1
+          if-no-files-found: warn
+          path: C:\D\Diagnostic\evidence
