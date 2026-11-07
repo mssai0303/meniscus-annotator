@@ -323,6 +323,108 @@ def write_native(path, array_kji, case):
     need(np.array_equal(np.asarray(checked.dataobj).transpose(2, 1, 0), array_kji), 'Reopened output differs from the in-memory annotation.')
 
 
+def resolve_starting_mask_path(dataset, starting_mask):
+    """Resolve explicit permissions without changing the canonical job dictionary.
+
+    Package-relative paths are anchored to the selected dataset, never CWD.
+    Explicit absolute paths remain supported for historical correction jobs.
+    """
+    name = starting_mask.get('path') if isinstance(starting_mask, dict) else None
+    need(isinstance(name, str) and bool(name.strip()), 'Correction job requires an explicit starting-mask path.')
+    path = Path(name)
+    if path.is_absolute():
+        return path.resolve()
+    return safe_relative(dataset.root, name)
+
+
+def validate_job(dataset, job, require_full_correction=False, verify_masks=True, allow_unresolved=False):
+    """Read-only job/mask validation; never creates annotation work or approval.
+
+    Generic historical jobs may list only some cases. Prepared correction
+    packages must explicitly cover every case, so no omitted rule becomes blank.
+    """
+    need(isinstance(job, dict) and job.get('schema_version') == 'meniscus_job/1' and job.get('dataset_identity') == dataset.identity, 'Job configuration does not match this dataset.')
+    rules = job.get('cases', {})
+    need(isinstance(rules, dict) and set(rules).issubset(dataset.by_key), 'Job configuration refers to an unknown case or has invalid case rules.')
+    protocol = job.get('protocol', {'version': 'draft-practice-1', 'status': 'draft'})
+    need(isinstance(protocol, dict) and isinstance(protocol.get('version'), str) and protocol['version'].strip() and protocol.get('status') in ('draft', 'released'), 'Job configuration requires an explicit protocol version and draft/released status.')
+    validate_practice_context(job.get('practice_context'), protocol)
+    if require_full_correction:
+        need('protocol' in job, 'Correction package job requires an explicit documented protocol version and status.')
+        need(set(rules) == set(dataset.by_key), 'Correction package job must explicitly list every case; omitted cases cannot default to blank.')
+    verified, unresolved = [], []
+    for key, rule in rules.items():
+        need(isinstance(rule, dict) and rule.get('annotation_mode', 'blank') in ('blank', 'correction'), 'Job configuration has an invalid annotation mode.')
+        if require_full_correction:
+            need(rule.get('annotation_mode') == 'correction', 'Correction package job must explicitly select correction for every case.')
+        availability = rule.get('availability', 'ready')
+        need(availability in ('ready', 'unresolved'), 'Correction job availability is invalid.')
+        if rule.get('annotation_mode', 'blank') == 'blank':
+            need(availability == 'ready', 'An unavailable prediction cannot silently become blank annotation.')
+            need(rule.get('starting_mask') is None, 'Prediction-free case rules must not include a starting mask.')
+            continue
+        if availability == 'unresolved':
+            need('starting_mask' in rule and rule['starting_mask'] is None and isinstance(rule.get('reason'), str) and rule['reason'].strip(), 'Unresolved correction cases require an explicit reason and no fabricated starting mask.')
+            unresolved.append({'case_key': key, 'reason': rule['reason']})
+            continue
+        start = rule.get('starting_mask')
+        need(isinstance(start, dict) and all(isinstance(start.get(k), str) and start[k].strip() for k in ('path', 'sha256', 'version', 'source')), 'Correction job requires an explicitly permitted mask path, checksum, source and version.')
+        # Resolve even metadata-only validation so unsafe package paths fail early.
+        original = resolve_starting_mask_path(dataset, start)
+        if verify_masks:
+            need(original.is_file(), 'Permitted starting mask is unavailable. Restore the verified correction input; this case cannot become blank annotation.')
+            need(sha256(original) == start['sha256'], 'Permitted starting mask checksum does not match the job.')
+            case = dataset.by_key[key]
+            image = check_nifti(original, case.shape_xyz, case.affine_ras, True)
+            labels = np.asarray(image.dataobj).transpose(2, 1, 0)
+            array_check(labels, np.zeros(case.shape_xyz[::-1], dtype=np.uint8), case)
+            verified.append({'case_key': key, 'sha256': start['sha256'], 'label_values': [int(v) for v in np.unique(labels)], 'native_grid_verified': True})
+    need(allow_unresolved or not unresolved, 'Correction package is incomplete: an automated starting prediction is unresolved. It cannot default to blank annotation.')
+    correction_count = sum(rule.get('annotation_mode') == 'correction' for rule in rules.values())
+    complete = set(rules) == set(dataset.by_key) and correction_count == len(dataset.cases) and not unresolved and len(verified) == len(dataset.cases)
+    return {'dataset_identity': dataset.identity, 'listed_cases': len(rules), 'correction_cases': correction_count, 'verified_masks': len(verified), 'unresolved_cases': len(unresolved), 'correction_package_complete': complete, 'require_full_correction': require_full_correction, 'masks': verified, 'unresolved': unresolved}
+
+
+def load_job_config(path, dataset, require_full_correction=False, allow_unresolved=False):
+    """Load an explicit job unchanged, validating relative paths against dataset."""
+    job = read_json(path)
+    validate_job(dataset, job, require_full_correction=require_full_correction, allow_unresolved=allow_unresolved)
+    return job
+
+
+def correction_inputs_present(dataset):
+    return any((case.folder / name).exists() or (case.folder / name).is_symlink()
+               for case in dataset.cases for name in ('starting_mask.nii.gz', 'starting_mask.json'))
+
+
+def load_dataset_job_config(dataset, remembered_path=None, fixed_job_path=None):
+    """Resolve the existing UI's job choice without a blank correction fallback.
+
+    Fixed software-practice launchers retain their immutable explicit job. In an
+    ordinary correction package, a remembered job must also cover every case in
+    correction mode; a stale blank/partial job cannot override package intent.
+    """
+    if fixed_job_path is not None:
+        fixed_job = load_job_config(fixed_job_path, dataset, allow_unresolved=True)
+        need(isinstance(fixed_job.get('practice_context'), dict) and fixed_job['practice_context'].get('purpose') == 'software_practice', 'Fixed software-practice configuration requires its explicit software-practice actor and protocol.')
+        return fixed_job, str(fixed_job_path)
+    package_job = dataset.root / 'correction_job.json'
+    packaged = package_job.exists() or package_job.is_symlink()
+    need(not package_job.is_symlink(), 'Package correction configuration must not be a symbolic link.')
+    has_masks = correction_inputs_present(dataset)
+    chosen = str(remembered_path) if remembered_path else (str(package_job) if packaged else None)
+    need(chosen is not None or not has_masks, 'Starting-mask files are present but correction_job.json is missing. Restore the explicit correction permissions; this package cannot default to blank annotation.')
+    if chosen is None:
+        return None, None
+    require_full = packaged or has_masks or Path(chosen).name == 'correction_job.json'
+    return load_job_config(chosen, dataset, require_full_correction=require_full, allow_unresolved=True), chosen
+
+
+def require_case_prediction_available(job, case_key):
+    rule = (job or {}).get('cases', {}).get(case_key, {})
+    need(rule.get('availability', 'ready') != 'unresolved', 'Starting automated mask is unresolved for this scan: ' + str(rule.get('reason', 'No technically verified starting mask is available.')) + ' This case is blocked; no blank annotation was created.')
+
+
 class WorkStore:
     def __init__(self, root, dataset, job=None):
         self.root = Path(root).resolve()
@@ -332,18 +434,7 @@ class WorkStore:
         self.root.mkdir(parents=True, exist_ok=True)
         self.job = copy.deepcopy(job)
         if self.job is not None:
-            need(isinstance(self.job, dict) and self.job.get('schema_version') == 'meniscus_job/1' and self.job.get('dataset_identity') == dataset.identity, 'Job configuration does not match this dataset.')
-            rules = self.job.get('cases', {})
-            need(isinstance(rules, dict) and set(rules).issubset(dataset.by_key), 'Job configuration refers to an unknown case or has invalid case rules.')
-            protocol = self.job.get('protocol', {'version': 'draft-practice-1', 'status': 'draft'})
-            need(isinstance(protocol, dict) and isinstance(protocol.get('version'), str) and protocol['version'].strip() and protocol.get('status') in ('draft', 'released'), 'Job configuration requires an explicit protocol version and draft/released status.')
-            for rule in rules.values():
-                need(isinstance(rule, dict) and rule.get('annotation_mode', 'blank') in ('blank', 'correction'), 'Job configuration has an invalid annotation mode.')
-                if rule.get('annotation_mode', 'blank') == 'blank':
-                    need(rule.get('starting_mask') is None, 'Prediction-free case rules must not include a starting mask.')
-                else:
-                    start = rule.get('starting_mask')
-                    need(isinstance(start, dict) and all(isinstance(start.get(k), str) and start[k].strip() for k in ('path', 'sha256', 'version', 'source')), 'Correction job requires an explicitly permitted mask path, checksum, source and version.')
+            validate_job(dataset, self.job, verify_masks=False, allow_unresolved=True)
         protocol = (self.job or {}).get('protocol', {'version': 'draft-practice-1', 'status': 'draft'})
         self.practice_context = validate_practice_context((self.job or {}).get('practice_context'), protocol)
         binding_path = self.root / 'dataset.json'
@@ -363,6 +454,7 @@ class WorkStore:
 
     def open_case(self, case):
         need(case.key in self.dataset.by_key and self.dataset.by_key[case.key].identity == case.identity, 'Case does not belong to this dataset.')
+        require_case_prediction_available(self.job, case.key)
         return CaseSession(self, case)
 
     def summary(self, case):
@@ -463,6 +555,7 @@ def validity_array(state, uncertainty):
 
 class CaseSession:
     def __init__(self, store, case):
+        require_case_prediction_available(store.job, case.key)
         self.store, self.case = store, case
         self.folder = store.case_folder(case)
         self.folder.mkdir(parents=True, exist_ok=True)
@@ -493,6 +586,7 @@ class CaseSession:
 
     def _new_state(self):
         job = self.store.job or {}
+        require_case_prediction_available(job, self.case.key)
         rule = job.get('cases', {}).get(self.case.key, {})
         mode = rule.get('annotation_mode', 'blank')
         need(mode in ('blank', 'correction'), 'Unsupported annotation mode in explicit job configuration.')
@@ -524,7 +618,8 @@ class CaseSession:
             rule = self.store.job['cases'][self.case.key]
             start = rule.get('starting_mask', {})
             need(all(start.get(k) for k in ('path', 'sha256', 'version', 'source')), 'Correction mode requires an explicitly permitted starting mask with source, version and checksum.')
-            original = Path(start['path']).resolve()
+            original = resolve_starting_mask_path(self.store.dataset, start)
+            need(original.is_file(), 'Permitted starting mask is unavailable. Restore the verified correction input; this case cannot become blank annotation.')
             need(sha256(original) == start['sha256'], 'Permitted starting mask checksum does not match the job.')
             im = check_nifti(original, self.case.shape_xyz, self.case.affine_ras, True)
             labels = np.asarray(im.dataobj).transpose(2, 1, 0).copy()

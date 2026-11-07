@@ -64,18 +64,18 @@ Current conservative uncertainty policy: resolve every uncertainty voxel and att
 
 ## Optional explicit job configuration: `meniscus_job/1`
 
-The source package contains no prediction permission or released drawing protocol, so its default is blank annotation with a draft practice protocol. The core accepts a separate explicit job dictionary, never a nearby prediction discovered on disk:
+Legacy MRI-only packages contain no prediction permission or released drawing protocol. They retain their former blank/practice behavior. A prepared correction package instead contains an explicit `correction_job.json`, with every case listed as `correction`; it must never rely on the unlisted-case blank default. The core accepts an explicit job dictionary, never an arbitrary nearby prediction discovered on disk:
 
 ```json
 {
   "schema_version": "meniscus_job/1",
   "dataset_identity": "<verified dataset SHA-256>",
-  "protocol": {"version": "<agreed version>", "status": "released"},
+  "protocol": {"version": "<documented protocol version>", "status": "draft"},
   "cases": {
     "<case_key>": {
       "annotation_mode": "correction",
       "starting_mask": {
-        "path": "<explicit local path>",
+        "path": "Cases/OAI_<ID>_M000_LEFT/starting_mask.nii.gz",
         "sha256": "<expected bytes SHA-256>",
         "source": "<source provenance>",
         "version": "<prediction version>"
@@ -85,7 +85,21 @@ The source package contains no prediction permission or released drawing protoco
 }
 ```
 
-Permitted annotation modes are `blank` and `correction`. Unlisted cases default to blank. A correction mask must pass native-grid checks, integer 0/1/2 mapping and its expected hash. Its original bytes are preserved once in the local case folder and included with an approved correction export. Starting-mask source/version/hash and canonical job hash are recorded in annotations. Reloading work under changed initialization permissions is blocked, so a prediction-free job cannot silently reopen a correction mask. Current focused UI may expose blank/practice workflow only; this core contract does not imply UI job import has been released.
+Permitted annotation modes are `blank` and `correction`. Generic historical jobs may still list only some cases; correction-package validation requires exact membership and explicit correction mode for every input case. A relative starting-mask path is safely anchored to `Dataset.root`, never the process working directory. Explicit absolute paths remain supported for historical jobs. Resolution does not rewrite the job dictionary or its canonical hash, so moving an intact package does not break portable job/work bindings.
+
+A correction mask must pass native-grid checks, integer 0/1/2 mapping and its expected hash. Its original bytes are preserved once in the separate local work folder and included with an approved correction export. Starting-mask source/version/hash and canonical job hash are recorded in annotations. Reloading work under changed initialization permissions is blocked, so an existing blank or differently configured work folder cannot silently become correction work. Choose a separate correction work folder when previous work used a different job.
+
+The existing UI `Help → Annotation setup…` action (dialog title `Load explicit annotation job`) validates jobs through `load_job_config`. Opening a dataset with no remembered job and no fixed software-practice launcher automatically validates its explicit root `correction_job.json`; invalid or incomplete permissions raise an error instead of silently selecting blank annotation. Known starting-mask files without an explicit job also block import instead of falling back to blank. In an ordinary correction package, a remembered or newly selected job must likewise cover every case in correction mode, so stale blank/partial settings cannot override package intent. Fixed software-practice launchers retain their explicitly scoped actor/job configuration. No new interface design is required for this adapter.
+
+Some existing predictions cannot establish the requested categorical source labels. An explicitly blocked case can remain visible in the unchanged MRI cohort using this narrow extension:
+
+```json
+{"annotation_mode":"correction", "availability":"unresolved", "reason":"<specific technical reason>", "starting_mask":null}
+```
+
+Such a rule never becomes blank. Opening it is rejected before a case work folder or label array is created. Ready cases in the same job remain usable. Read-only `validate_job(..., require_full_correction=True)` rejects any unresolved case by default; explicit `allow_unresolved=True` returns the ready/unresolved counts and `correction_package_complete=false`. Structurally valid partial preparation must not be called a complete correction dataset.
+
+Run `tools/check_correction_inputs.py --dataset PACKAGE --output PRIVATE_REPORT` for the application input route without editing or approving annotations. Use `--allow-unresolved` only when recording a documented partial package; it does not resolve the missing input.
 
 The protocol status is `draft|released`; version is required. Draft protocol permits only distinctly marked practice approval. A released anatomical protocol must be supplied explicitly by the responsible research team; the application does not invent drawing rules or independently certify that a protocol is suitable.
 

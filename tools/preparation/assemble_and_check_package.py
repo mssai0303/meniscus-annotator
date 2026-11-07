@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 from native_mri_package import validate_selection,check_nifti,sha256,need
 from package_layout import canonical_relative_folder,verify_relative_folder,checked_case_contents
+from correction_inputs import validate_correction_package
 
 # Reader-facing schemas are intentionally closed: selection/exposure/partition
 # attributes must never leak through an expanded private selection row.
@@ -54,8 +55,10 @@ def validate_catalog_paths(rows,catalog,layout='auto'):
  return catalog_by_key,paths_by_key,layouts
 
 def main():
- p=argparse.ArgumentParser();p.add_argument('--package',type=Path,required=True);p.add_argument('--selection',type=Path,required=True);p.add_argument('--reports',type=Path);p.add_argument('--receipt',type=Path,required=True);p.add_argument('--check-only',action='store_true');p.add_argument('--verify-existing',action='store_true',help='Validate existing README/index and write a new receipt without rewriting package files');p.add_argument('--layout',choices=['auto','flat','legacy'],default='auto');a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--package',type=Path,required=True);p.add_argument('--selection',type=Path,required=True);p.add_argument('--reports',type=Path);p.add_argument('--receipt',type=Path,required=True);p.add_argument('--check-only',action='store_true');p.add_argument('--verify-existing',action='store_true',help='Validate existing README/index and write a new receipt without rewriting package files');p.add_argument('--layout',choices=['auto','flat','legacy'],default='auto');p.add_argument('--correction',action='store_true',help='Require explicit correction job and unreviewed automated starting-mask provenance');p.add_argument('--allow-unresolved',action='store_true',help='Record a structurally valid INCOMPLETE correction package with blocked unresolved cases');a=p.parse_args()
  need(not(a.check_only and a.verify_existing),'conflicting_receipt_modes')
+ need(not a.allow_unresolved or a.correction,'unresolved_flag_requires_correction_mode')
+ need(not a.correction or a.verify_existing or a.check_only,'correction_package_requires_existing_readme_and_index')
  with a.selection.open(newline='') as f:rows=list(csv.DictReader(f))
  validate_selection(rows,250)
  groups={};kl={}
@@ -96,7 +99,7 @@ def main():
   catalog_row=catalog_by_key[r['case_key']]
   folder=a.package/rel(r)
   expected.update(rel(r)+'/'+n for n in ['image.nii.gz','case.json','slice_review.csv'])
-  checked_case_contents(folder,layouts[r['case_key']])
+  checked_case_contents(folder,layouts[r['case_key']],correction=a.correction,allow_unresolved=a.allow_unresolved)
   case=json.loads((folder/'case.json').read_text());image=folder/'image.nii.gz'
   affine=check_case_schema(case);cases.append(case)
   for k,v in [('case_key',r['case_key']),('participant_id',r['participant_id']),('visit_month',int(r['visit_month'])),('knee_side',r['knee_side']),('source_series_key',r['source_series_key']),('original_visit_code',r['archive_visit_folder']),('source_visit_label',r['source_visit_label']),('archive_series_number',r['archive_series_number']),('source_study_date',r['study_date']),('source_series_description',r['series_description_recorded']),('annotation_status','not_started'),('dataset_version','OAI_IWFS_250_v1_20261106'),('expected_slice_count',int(r['native_slices_recorded']))]:need(case[k]==v,'case_metadata_binding_mismatch_'+k)
@@ -117,6 +120,10 @@ def main():
   need([x['slice_index'] for x in review]==[str(k) for k in range(int(r['native_slices_recorded']))] and all(x['status']=='not_reviewed' for x in review),'slice_table_mismatch')
   slices+=len(review);images+=1
  check_global_sources(cases,reports)
+ correction=None
+ if a.correction:
+  correction,correction_files=validate_correction_package(a.package,cases,catalog_by_key,layouts,allow_unresolved=a.allow_unresolved)
+  expected.update(correction_files)
  need(not any(p.is_symlink() for p in a.package.rglob('*')),'symlink_in_reader_package')
  actual_files={str(p.relative_to(a.package)) for p in a.package.rglob('*') if p.is_file()}
  need(actual_files==expected,'unexpected_or_missing_package_files')
@@ -129,6 +136,10 @@ def main():
  need(actual_dirs==allowed_dirs,'unexpected_or_missing_directories')
  checksums={n:sha256(a.package/n) for n in sorted(expected)}
  receipt={'passed':True,'cases':images,'unique_participants':len({r['participant_id'] for r in rows}),'acquired_slices':slices,'files':len(checksums),'package_bytes':sum((a.package/n).stat().st_size for n in expected),'files_sha256':checksums,'selection_sha256':sha256(a.selection),'scope':'Complete input package and byte integrity; no completed annotations, segmentation validation, training readiness, or test independence implied.'}
+ if correction is not None:
+  receipt['correction']=correction
+  receipt['correction_package_complete']=correction['correction_package_complete']
+  receipt['scope']='Original MRI bytes plus explicit unreviewed starting predictions; passed means structural/byte checks, not complete availability when correction_package_complete is false. No completed annotations or anatomical accuracy implied.'
  if a.check_only:
   prior=json.loads(a.receipt.read_text());need(prior==receipt,'copied_package_differs_from_verified_staging')
  else:

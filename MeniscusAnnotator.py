@@ -12,6 +12,7 @@ import vtk
 import slicer
 from slicer.ScriptedLoadableModule import ScriptedLoadableModule, ScriptedLoadableModuleWidget
 from MeniscusAnnotatorLib import Dataset, WorkStore, ValidationError, export_approved
+from MeniscusAnnotatorLib.core import load_job_config, load_dataset_job_config, correction_inputs_present
 
 VERSION = '0.1.0'
 LABELS = {'medial': ('Medial meniscus', (0.30, 0.78, 0.92)),
@@ -601,8 +602,8 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
                     return
                 location = str(Path(chosen) / version)
         job_path = str(self.settings.value('Meniscus/job/' + ds.identity, ''))
-        if self._practiceConfig: job_path = self._practiceConfig['job_path']
-        job = json.loads(Path(job_path).read_text(encoding='utf-8')) if job_path else None
+        fixed_job = self._practiceConfig['job_path'] if self._practiceConfig else None
+        job, job_path = load_dataset_job_config(ds, remembered_path=job_path, fixed_job_path=fixed_job)
         if self._practiceConfig and (not job or job.get('practice_context',{}).get('purpose')!='software_practice'):
             raise ValidationError('The software-practice actor and protocol configuration is missing or invalid.')
         store = WorkStore(location, ds, job=job)
@@ -630,7 +631,8 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         if not path:
             return
         def load():
-            job = json.loads(Path(path).read_text(encoding='utf-8'))
+            require_full = (self.dataset.root / 'correction_job.json').exists() or correction_inputs_present(self.dataset) or Path(path).name == 'correction_job.json'
+            job = load_job_config(path, self.dataset, require_full_correction=require_full, allow_unresolved=True)
             self.closeCase()
             self.store = WorkStore(self.store.root, self.dataset, job=job)
             self.settings.setValue('Meniscus/job/' + self.dataset.identity, str(path))

@@ -9,6 +9,7 @@ import re
 FLAT = 'flat'
 LEGACY = 'legacy'
 CASE_FILES = frozenset(('image.nii.gz', 'case.json', 'slice_review.csv'))
+STARTING_MASK_FILES = frozenset(('starting_mask.nii.gz', 'starting_mask.json'))
 
 
 def _token(value, name):
@@ -47,7 +48,7 @@ def verify_relative_folder(relative, metadata):
     raise ValueError('case_folder_identity_mismatch')
 
 
-def checked_case_contents(folder, layout):
+def checked_case_contents(folder, layout, correction=False, allow_unresolved=False):
     if layout not in (FLAT, LEGACY):
         raise ValueError('unsupported_folder_layout')
     folder = Path(folder)
@@ -55,6 +56,14 @@ def checked_case_contents(folder, layout):
         raise ValueError('case_folder_missing_or_symlink')
     contents = {path.name for path in folder.iterdir()}
     allowed = set(CASE_FILES)
+    if correction:
+        # A documented unresolved case has provenance only, never an empty mask.
+        if 'starting_mask.nii.gz' in contents:
+            allowed.update(STARTING_MASK_FILES)
+        elif allow_unresolved:
+            allowed.add('starting_mask.json')
+        else:
+            raise ValueError('missing_prepared_starting_mask')
     annotation_folder = folder / 'annotations'
     if annotation_folder.exists() or annotation_folder.is_symlink():
         if layout != LEGACY:
@@ -64,6 +73,6 @@ def checked_case_contents(folder, layout):
         allowed.add('annotations')
     if contents != allowed:
         raise ValueError('unexpected_or_missing_case_contents')
-    if any((folder / name).is_symlink() or not (folder / name).is_file() for name in CASE_FILES):
+    if any((folder / name).is_symlink() or not (folder / name).is_file() for name in allowed if name != 'annotations'):
         raise ValueError('case_file_missing_or_symlink')
     return contents
