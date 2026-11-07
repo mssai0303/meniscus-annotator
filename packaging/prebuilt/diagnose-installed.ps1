@@ -1,6 +1,6 @@
 # Diagnostic only: install the already built, verified candidate unchanged.
 [CmdletBinding()]
-param([string]$Root = 'C:\D\Diagnostic', [switch]$RepairTestLauncher)
+param([string]$Root = 'C:\D\Diagnostic', [switch]$RepairTestLauncher, [switch]$DiagnosticTestHomeModule)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $DiagnosticStarted = Get-Date
@@ -24,6 +24,19 @@ if ($RepairTestLauncher) {
   $CanonicalTestIni = (Get-Content -Raw (Join-Path $Installed 'bin\MeniscusAnnotatorChecksLauncherSettings.ini')) -replace '(?m)^MENISCUS_TEST_ACTION=.*\r?\n', ''
   $CanonicalTestIni | Set-Content -Encoding UTF8 (Join-Path $Installed 'bin\MeniscusAnnotatorTestLauncherSettings.ini')
   [ordered]@{scope='Ephemeral diagnostic additions; original candidate installer is NOT repaired';added_files=@('MeniscusAnnotatorTest.exe','bin/MeniscusAnnotatorTestLauncherSettings.ini')} | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $Evidence 'diagnostic-repair.json')
+}
+if ($DiagnosticTestHomeModule) {
+  # A single explicitly recorded ephemeral variation; application/executable
+  # bytes stay unchanged. Keep the separate MeniscusAnnotatorTest profile.
+  $TestDefaults = Join-Path $Installed 'share\Slicer-5.12\MeniscusAnnotatorTestDefaultSettings.ini'
+  $BeforeHomeHash = (Get-FileHash -LiteralPath $TestDefaults -Algorithm SHA256).Hash.ToLower()
+  $DefaultsText = Get-Content -Raw $TestDefaults
+  if ($DefaultsText -notmatch '(?m)^HomeModule=\r?$') { throw 'Unexpected starting Test HomeModule setting; no variation applied.' }
+  $DefaultsText = $DefaultsText -replace '(?m)^HomeModule=\r?$', 'HomeModule=MeniscusAnnotator'
+  [IO.File]::WriteAllText($TestDefaults, $DefaultsText, [Text.UTF8Encoding]::new($false))
+  $AfterHomeHash = (Get-FileHash -LiteralPath $TestDefaults -Algorithm SHA256).Hash.ToLower()
+  [ordered]@{scope='Ephemeral diagnostic hypothesis only; original candidate installer and application source are unchanged';relative_file='share/Slicer-5.12/MeniscusAnnotatorTestDefaultSettings.ini';original_sha256=$BeforeHomeHash;modified_sha256=$AfterHomeHash;setting='HomeModule';before='';after='MeniscusAnnotator';settings_profile='MeniscusAnnotatorTest'} | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $Evidence 'diagnostic-test-home-module.json')
+  Copy-Item -LiteralPath $TestDefaults -Destination $Evidence
 }
 $env:MENISCUS_TEST_AUTOCLOSE = '1'
 $env:PYTHONDONTWRITEBYTECODE = '1'

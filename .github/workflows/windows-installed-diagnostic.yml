@@ -6,6 +6,10 @@ on:
         description: Add the missing canonical test launcher pair to an ephemeral installed copy, then test correction and resume
         type: boolean
         default: false
+      diagnostic_test_home_module:
+        description: Diagnostic only - match Test HomeModule to the normal module, keeping separate settings
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -30,9 +34,10 @@ jobs:
         shell: pwsh
         env:
           REPAIR_TEST_LAUNCHER: ${{ inputs.repair_test_launcher }}
+          DIAGNOSTIC_TEST_HOME_MODULE: ${{ inputs.diagnostic_test_home_module }}
         run: |
           $repair = $env:REPAIR_TEST_LAUNCHER -eq 'true'
-          & .\packaging\prebuilt\diagnose-installed.ps1 -Root C:\D\Diagnostic -RepairTestLauncher:$repair
+          & .\packaging\prebuilt\diagnose-installed.ps1 -Root C:\D\Diagnostic -RepairTestLauncher:$repair -DiagnosticTestHomeModule:($env:DIAGNOSTIC_TEST_HOME_MODULE -eq 'true')
       - name: Retain synthetic diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
