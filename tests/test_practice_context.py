@@ -55,7 +55,7 @@ def test_software_practice_save_reopen_export_is_honestly_attributed(data, tmp_p
         with pytest.raises(ValidationError, match='SOFTWARE PRACTICE'):
             session.save(labels, uncertainty, writer, approve=True, practice=False)
         checkpoint = session.save(labels, uncertainty, writer, approve=True, practice=True)
-        metadata = json.loads((checkpoint / 'annotation.json').read_text())
+        metadata = json.loads((checkpoint / 'annotation.json').read_text(encoding='utf-8'))
         assert metadata['annotator'] == metadata['approver'] == ACTORS[actor_type]
         assert metadata['practice_context'] == job['practice_context']
         assert metadata['annotation_purpose'] == 'software_practice'
@@ -100,7 +100,7 @@ def test_software_practice_binding_cannot_be_opened_as_production_or_other_actor
         WorkStore(location, data)
     with pytest.raises(ValidationError, match='practice scope'):
         WorkStore(location, data, job_for(data, 'human_unverified'))
-    assert json.loads((location / 'dataset.json').read_text())['practice_context']['actor_type'] == 'automated'
+    assert json.loads((location / 'dataset.json').read_text(encoding='utf-8'))['practice_context']['actor_type'] == 'automated'
 
 
 def test_existing_production_work_cannot_receive_software_practice(data, tmp_path):
@@ -147,7 +147,21 @@ def test_corrupt_or_promoted_practice_state_rejected(data, tmp_path, change):
             store._validate_state(state, case)
 
 
-def test_default_jeff_work_and_legacy_missing_context_remain_readable(data, tmp_path):
+@pytest.mark.parametrize('default_encoding', ['utf-8', 'cp1252'])
+def test_default_jeff_work_and_legacy_missing_context_remain_readable(data, tmp_path, monkeypatch, default_encoding):
+    # Emulate a Windows locale even on the Mac/Linux test host. JSON fixtures
+    # must use UTF-8 explicitly, as the actual checkpoint reader/writer does.
+    original_read, original_write = Path.read_text, Path.write_text
+    def locale_read(path, *args, **kwargs):
+        if not args and kwargs.get('encoding') is None:
+            kwargs['encoding'] = default_encoding
+        return original_read(path, *args, **kwargs)
+    def locale_write(path, text, *args, **kwargs):
+        if not args and kwargs.get('encoding') is None:
+            kwargs['encoding'] = default_encoding
+        return original_write(path, text, *args, **kwargs)
+    monkeypatch.setattr(Path, 'read_text', locale_read)
+    monkeypatch.setattr(Path, 'write_text', locale_write)
     location = tmp_path / 'Ordinary annotation'
     store = WorkStore(location, data)
     case = data.cases[0]
@@ -159,17 +173,17 @@ def test_default_jeff_work_and_legacy_missing_context_remain_readable(data, tmp_
         assert session.state['approval']['deliberate_approval_required_by_ui'] is True
         assert 'approval_type' not in session.state['approval']
         assert np.asarray(nib.load(checkpoint / 'validity.nii.gz').dataobj).all()
-    binding = json.loads((location / 'dataset.json').read_text())
+    binding = json.loads((location / 'dataset.json').read_text(encoding='utf-8'))
     assert 'practice_context' not in binding
     state_path = checkpoint / 'annotation.json'
-    legacy = json.loads(state_path.read_text())
+    legacy = json.loads(state_path.read_text(encoding='utf-8'))
     legacy.pop('practice_context')
     legacy.pop('annotation_purpose')
-    state_path.write_text(json.dumps(legacy))
+    state_path.write_text(json.dumps(legacy), encoding='utf-8')
     manifest_path = checkpoint / 'manifest.json'
-    manifest = json.loads(manifest_path.read_text())
+    manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
     manifest['files_sha256']['annotation.json'] = sha256(state_path)
-    manifest_path.write_text(json.dumps(manifest))
+    manifest_path.write_text(json.dumps(manifest), encoding='utf-8')
     with store.open_case(case) as reopened:
         assert reopened.state['annotator'] == reopened.state['approver'] == 'Jeff'
         assert reopened.load()[0].shape == labels.shape

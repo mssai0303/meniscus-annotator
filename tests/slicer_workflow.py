@@ -549,7 +549,7 @@ def run():
         events()
         check('actual window close releases case session', widget.session is None)
         latest = widget.store._checkpoints(widget.store.case_folder(case))[0]
-        state = json.loads((latest / 'annotation.json').read_text())
+        state = json.loads((latest / 'annotation.json').read_text(encoding='utf-8'))
         check('actual window close saves latest notes', state['notes'] == 'Synthetic close persistence probe')
     elif os.environ.get('MENISCUS_TEST_KEEP_OPEN') != '1':
         widget.closeCase()
@@ -569,7 +569,7 @@ except Exception:
     except Exception:
         pass
 finally:
-    (OUTPUT / 'slicer-workflow.json').write_text(json.dumps(REPORT, indent=2) + '\n')
+    (OUTPUT / 'slicer-workflow.json').write_text(json.dumps(REPORT, indent=2) + '\n', encoding='utf-8')
     print('MENISCUS_TEST_REPORT=' + str(OUTPUT / 'slicer-workflow.json'))
     if os.environ.get('MENISCUS_TEST_KEEP_OPEN') != '1':
         slicer.app.exit(0 if REPORT.get('passed') else 1)

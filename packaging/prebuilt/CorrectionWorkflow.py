@@ -75,7 +75,7 @@ def run(output, previous=None):
         widget.openDataset(str(package), work_root=str(work))
         events()
         check('ordinary open automatically loads package correction job', bool(widget.store.job))
-        expected = json.loads((original / 'expected-correction.json').read_text()) if previous else {}
+        expected = json.loads((original / 'expected-correction.json').read_text(encoding='utf-8')) if previous else {}
         for case in widget.dataset.cases:
             widget.openCase(case.key)
             events()
@@ -128,7 +128,7 @@ def run(output, previous=None):
                                   'review': widget.session.state['review'], 'slice': k}
             widget.closeCase()
         if not previous:
-            (output / 'expected-correction.json').write_text(json.dumps(expected, indent=2) + '\n')
+            (output / 'expected-correction.json').write_text(json.dumps(expected, indent=2) + '\n', encoding='utf-8')
             exports = output / 'Correction exports'
             report['cancel_dialog'] = drive_export_dialog(widget, exports, action='cancel')
             check('Cancel exports nothing', not list(exports.rglob('*.zip')))
