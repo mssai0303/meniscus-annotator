@@ -1,7 +1,7 @@
 # Build a real NSIS installer around the official prebuilt Slicer runtime.
 # Maintainer-only; requires PowerShell 7 and Python 3.9+, not a Slicer superbuild.
 [CmdletBinding()]
-param([string]$BuildRoot = 'C:\D\MP', [switch]$TestInstall, [switch]$RunIntegration)
+param([string]$BuildRoot = 'C:\D\MP', [switch]$TestInstall, [switch]$RunIntegration, [switch]$FastPackage)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 if ($env:OS -ne 'Windows_NT') { throw 'Use a Windows x64 build host for this script.' }
@@ -65,9 +65,12 @@ if ($Distribution.application_source_dirty -or $Distribution.application_commit 
   throw 'Installer builds require a clean recorded source commit. Commit the reviewed source before packaging.'
 }
 $Output = Join-Path $BuildRoot 'MeniscusAnnotator-0.1.0-Windows-x64.exe'
-Checked $Nsis @('/V2',"/DPAYLOAD=$Payload","/DOUTPUT=$Output",
+$NsisArguments = @('/V2',"/DPAYLOAD=$Payload","/DOUTPUT=$Output",
   "/DUNINSTALL_FILES=$(Join-Path $BuildRoot 'uninstall-files.nsh')",
-  "/DLICENSE_FILE=$(Join-Path $Repo 'LICENSE')",(Join-Path $PSScriptRoot 'installer.nsi'))
+  "/DLICENSE_FILE=$(Join-Path $Repo 'LICENSE')")
+if ($FastPackage) { $NsisArguments += '/DFAST_PACKAGE' }
+$NsisArguments += (Join-Path $PSScriptRoot 'installer.nsi')
+Checked $Nsis $NsisArguments
 $receipt = [ordered]@{
   schema_version='meniscus_installer_build/1'; route=$Lock.route; app_version='0.1.0'
   runner_os=[Environment]::OSVersion.VersionString; runner_image=$env:ImageVersion
@@ -75,6 +78,7 @@ $receipt = [ordered]@{
   application_commit=$Distribution.application_commit
   application_source_sha256=$Distribution.application_source_sha256
   application_source_dirty=$Distribution.application_source_dirty
+  compression_mode=$(if ($FastPackage) { 'zlib-development-fast' } else { 'solid-lzma' })
   installer_filename=(Split-Path -Leaf $Output); installer_bytes=(Get-Item $Output).Length
   installer_sha256=(Get-FileHash $Output -Algorithm SHA256).Hash.ToLower()
   nsis='3.13'; sevenzip='26.05'; install_test='NOT RUN'; runtime_import_test='NOT RUN'
@@ -106,9 +110,12 @@ if ($TestInstall) {
   $TestBase = Join-Path $env:LOCALAPPDATA 'Meniscus Annotator synthetic tests'
   $env:MENISCUS_TEST_AUTOCLOSE = '1'
   $env:MENISCUS_TEST_RUN_ID = [Guid]::NewGuid().ToString('N')
-  $examples = Start-Process -FilePath (Join-Path $Installed 'MeniscusAnnotatorExamples.exe') -PassThru
+  $GenerationEvidence = Join-Path $BuildRoot 'synthetic-generation'
+  New-Item -ItemType Directory -Force $GenerationEvidence | Out-Null
+  $examples = Start-Process -FilePath (Join-Path $Installed 'MeniscusAnnotatorExamples.exe') -RedirectStandardOutput (Join-Path $GenerationEvidence 'stdout.txt') -RedirectStandardError (Join-Path $GenerationEvidence 'stderr.txt') -PassThru
   if (-not $examples.WaitForExit(120000)) { $examples.Kill($true); throw 'Installed synthetic generator exceeded 120 seconds.' }
   $createdReport = Join-Path (Join-Path $TestBase $env:MENISCUS_TEST_RUN_ID) 'installed-tests.json'
+  if (Test-Path $createdReport) { Copy-Item $createdReport $GenerationEvidence }
   if ($examples.ExitCode -ne 0 -or -not (Test-Path $createdReport)) { throw 'Installed synthetic generator did not complete.' }
   $created = Get-Content -Raw $createdReport | ConvertFrom-Json
   if (-not $created.passed -or $created.folder_layout -ne 'flat' -or $created.annotation_mode -ne 'correction') { throw 'Installed synthetic correction package validation failed.' }
@@ -119,11 +126,11 @@ if ($TestInstall) {
     foreach ($action in @('correction','correction-resume')) {
       $env:MENISCUS_TEST_RUN_ID = [Guid]::NewGuid().ToString('N')
       $correctionRoot = Join-Path $TestBase $env:MENISCUS_TEST_RUN_ID
-      $entry = if ($action -eq 'correction') { 'MeniscusAnnotatorCorrectionChecks.exe' } else { 'MeniscusAnnotatorCorrectionResumeCheck.exe' }
-      $correction = Start-Process -FilePath (Join-Path $Installed $entry) -PassThru
-      if (-not $correction.WaitForExit(300000)) { $correction.Kill($true); throw "Installed $action checks exceeded five minutes." }
       $correctionEvidence = Join-Path $BuildRoot "synthetic-$action"
       New-Item -ItemType Directory -Force $correctionEvidence | Out-Null
+      $entry = if ($action -eq 'correction') { 'MeniscusAnnotatorCorrectionChecks.exe' } else { 'MeniscusAnnotatorCorrectionResumeCheck.exe' }
+      $correction = Start-Process -FilePath (Join-Path $Installed $entry) -RedirectStandardOutput (Join-Path $correctionEvidence 'stdout.txt') -RedirectStandardError (Join-Path $correctionEvidence 'stderr.txt') -PassThru
+      if (-not $correction.WaitForExit(300000)) { $correction.Kill($true); throw "Installed $action checks exceeded five minutes." }
       if (Test-Path $correctionRoot) {
         Get-ChildItem $correctionRoot -Recurse -File | Where-Object { $_.Name -in @('correction-workflow.json','installed-tests.json') -or $_.Extension -eq '.png' } | Copy-Item -Destination $correctionEvidence
       }

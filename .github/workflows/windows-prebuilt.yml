@@ -7,6 +7,11 @@ on:
         required: true
         default: true
         type: boolean
+      fast_package:
+        description: Use faster zlib compression for a development candidate; payload and acceptance checks are unchanged
+        required: true
+        default: false
+        type: boolean
 permissions:
   contents: read
 concurrency:
@@ -33,9 +38,11 @@ jobs:
         shell: pwsh
         env:
           RUN_INTEGRATION: ${{ inputs.run_integration }}
+          FAST_PACKAGE: ${{ inputs.fast_package }}
         run: |
           $integration = $env:RUN_INTEGRATION -eq 'true'
-          & .\packaging\prebuilt\build.ps1 -BuildRoot $env:MENISCUS_BUILD_ROOT -TestInstall -RunIntegration:$integration
+          $fast = $env:FAST_PACKAGE -eq 'true'
+          & .\packaging\prebuilt\build.ps1 -BuildRoot $env:MENISCUS_BUILD_ROOT -TestInstall -RunIntegration:$integration -FastPackage:$fast
       - name: Retain private installer and evidence for one day
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -49,9 +56,13 @@ jobs:
             C:\D\MP\installer-build.json
             C:\D\MP\download-receipts.jsonl
             C:\D\MP\installed-runtime-check.json
+            C:\D\MP\synthetic-generation\*.json
+            C:\D\MP\synthetic-generation\*.txt
             C:\D\MP\synthetic-integration\*.json
             C:\D\MP\synthetic-integration\*.png
             C:\D\MP\synthetic-resume\*.json
             C:\D\MP\synthetic-correction\*.json
             C:\D\MP\synthetic-correction\*.png
+            C:\D\MP\synthetic-correction\*.txt
             C:\D\MP\synthetic-correction-resume\*.json
+            C:\D\MP\synthetic-correction-resume\*.txt

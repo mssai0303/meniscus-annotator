@@ -1,6 +1,11 @@
 name: Diagnose installed Windows test launcher
 on:
   workflow_dispatch:
+    inputs:
+      repair_test_launcher:
+        description: Add the missing canonical test launcher pair to an ephemeral installed copy, then test correction and resume
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -23,8 +28,11 @@ jobs:
           path: C:\D\Diagnostic\download
       - name: Install verified candidate and inspect original test launcher
         shell: pwsh
+        env:
+          REPAIR_TEST_LAUNCHER: ${{ inputs.repair_test_launcher }}
         run: |
-          & .\packaging\prebuilt\diagnose-installed.ps1 -Root C:\D\Diagnostic
+          $repair = $env:REPAIR_TEST_LAUNCHER -eq 'true'
+          & .\packaging\prebuilt\diagnose-installed.ps1 -Root C:\D\Diagnostic -RepairTestLauncher:$repair
       - name: Retain synthetic diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

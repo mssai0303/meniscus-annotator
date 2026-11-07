@@ -19,8 +19,12 @@ InstallDir "$LOCALAPPDATA\Programs\Meniscus Annotator\0.1.0"
 RequestExecutionLevel user
 ManifestDPIAware true
 ManifestLongPathAware true
+!ifdef FAST_PACKAGE
+SetCompressor zlib
+!else
 SetCompressor /SOLID lzma
 SetCompressorDictSize 32
+!endif
 Icon "${PAYLOAD}\MeniscusAnnotator.ico"
 UninstallIcon "${PAYLOAD}\MeniscusAnnotator.ico"
 !define MUI_ABORTWARNING

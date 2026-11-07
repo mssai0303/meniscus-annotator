@@ -111,7 +111,10 @@ def prepare(runtime, installer, output, cache):
     shutil.copy2(HERE / 'SyntheticTestKit.txt', kit / 'README.txt')
     shutil.copy2(HERE / 'RunSyntheticChecks.ps1', kit / 'RunSyntheticChecks.ps1')
     shutil.copy2(output / 'bin' / 'SlicerApp-real.exe', output / 'bin' / 'MeniscusAnnotatorTestApp-real.exe')
-    for stem, action in (('MeniscusAnnotatorChecks', 'workflow'), ('MeniscusAnnotatorResumeCheck', 'resume'), ('MeniscusAnnotatorExamples', 'create'), ('MeniscusAnnotatorCorrectionChecks', 'correction'), ('MeniscusAnnotatorCorrectionResumeCheck', 'correction-resume')):
+    # The real application derives this canonical settings filename from
+    # MeniscusAnnotatorTestApp-real.exe, even when an action alias launched it.
+    # Both the canonical pair and action aliases must exist.
+    for stem, action in (('MeniscusAnnotatorTest', 'workflow'), ('MeniscusAnnotatorChecks', 'workflow'), ('MeniscusAnnotatorResumeCheck', 'resume'), ('MeniscusAnnotatorExamples', 'create'), ('MeniscusAnnotatorCorrectionChecks', 'correction'), ('MeniscusAnnotatorCorrectionResumeCheck', 'correction-resume')):
         shutil.copy2(output / 'Slicer.exe', output / (stem + '.exe'))
         test_config = config.replace('/bin/MeniscusAnnotatorApp-real.exe', '/bin/MeniscusAnnotatorTestApp-real.exe')
         test_config = test_config.replace('name=MeniscusAnnotator\n', 'name=MeniscusAnnotatorTest\n')

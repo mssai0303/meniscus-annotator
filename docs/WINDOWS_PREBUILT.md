@@ -70,6 +70,12 @@ workflow. Correction checks drive the actual Export/Cancel dialog buttons; the
 native destination picker is redirected to the generated test folder. This is
 injected-event automation, not human Windows interaction acceptance.
 
+For development iterations, `-FastPackage` (workflow `fast_package=true`) selects
+NSIS zlib compression. The default remains solid LZMA. This changes installer
+compression/size, not the payload or acceptance checks; the build receipt records
+`compression_mode`. The optional mode follows the
+[NSIS SetCompressor syntax](https://nsis.sourceforge.io/Docs/Chapter4.html#varconstantsetcompressor).
+
 Outputs: `MeniscusAnnotator-0.1.0-Windows-x64.exe`, `installer-build.json` and
 `installed-runtime-check.json` in the build folder. The receipt records the
 installer SHA256, source commit, application-source fingerprint, host and checks

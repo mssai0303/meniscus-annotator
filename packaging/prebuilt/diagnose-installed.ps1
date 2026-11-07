@@ -1,6 +1,6 @@
 # Diagnostic only: install the already built, verified candidate unchanged.
 [CmdletBinding()]
-param([string]$Root = 'C:\D\Diagnostic')
+param([string]$Root = 'C:\D\Diagnostic', [switch]$RepairTestLauncher)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $Evidence = Join-Path $Root 'evidence'
@@ -16,10 +16,18 @@ python (Join-Path $PSScriptRoot 'verify-installed.py') $Installed
 if ($LASTEXITCODE -ne 0) { throw 'Installed byte verification failed.' }
 Copy-Item (Join-Path $Installed 'BUILD-IDENTITY.json') $Evidence
 Copy-Item (Join-Path $Installed 'bin\MeniscusAnnotatorExamplesLauncherSettings.ini') $Evidence
+if ($RepairTestLauncher) {
+  # Diagnostic addition only. No existing installed byte is modified. The
+  # future assembler creates this canonical pair alongside the action aliases.
+  Copy-Item (Join-Path $Installed 'MeniscusAnnotatorChecks.exe') (Join-Path $Installed 'MeniscusAnnotatorTest.exe')
+  Copy-Item (Join-Path $Installed 'bin\MeniscusAnnotatorChecksLauncherSettings.ini') (Join-Path $Installed 'bin\MeniscusAnnotatorTestLauncherSettings.ini')
+  [ordered]@{scope='Ephemeral diagnostic additions; original candidate installer is NOT repaired';added_files=@('MeniscusAnnotatorTest.exe','bin/MeniscusAnnotatorTestLauncherSettings.ini')} | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $Evidence 'diagnostic-repair.json')
+}
 $env:MENISCUS_TEST_AUTOCLOSE = '1'
 $env:PYTHONDONTWRITEBYTECODE = '1'
 $Results = @()
-foreach ($Where in @('repository','installed')) {
+$Locations = if ($RepairTestLauncher) { @('installed') } else { @('repository','installed') }
+foreach ($Where in $Locations) {
   $Working = if ($Where -eq 'repository') { $Repo } else { $Installed }
   $env:MENISCUS_TEST_RUN_ID = [Guid]::NewGuid().ToString('N')
   $Out = Join-Path $Evidence "create-$Where.stdout.txt"
@@ -60,6 +68,16 @@ $ProbeProcess = Start-Process -FilePath (Join-Path $Installed 'MeniscusAnnotator
 $ProbeExited = $ProbeProcess.WaitForExit(45000)
 if (-not $ProbeExited) { $ProbeProcess.Kill($true); $ProbeProcess.WaitForExit() }
 $Results += [ordered]@{action='diagnostic_probe';exited=$ProbeExited;exit_code=$ProbeProcess.ExitCode}
+if ($RepairTestLauncher) {
+  foreach ($Action in @('correction','correction-resume')) {
+    $Entry = if ($Action -eq 'correction') { 'MeniscusAnnotatorCorrectionChecks.exe' } else { 'MeniscusAnnotatorCorrectionResumeCheck.exe' }
+    $env:MENISCUS_TEST_RUN_ID = [Guid]::NewGuid().ToString('N')
+    $Child = Start-Process -FilePath (Join-Path $Installed $Entry) -WorkingDirectory $Installed -RedirectStandardOutput (Join-Path $Evidence "$Action.stdout.txt") -RedirectStandardError (Join-Path $Evidence "$Action.stderr.txt") -PassThru
+    $Exited = $Child.WaitForExit(60000)
+    if (-not $Exited) { $Child.Kill($true); $Child.WaitForExit() }
+    $Results += [ordered]@{action=$Action;diagnostic_repair=$true;run_id=$env:MENISCUS_TEST_RUN_ID;exited=$Exited;exit_code=$Child.ExitCode}
+  }
+}
 $Results | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 (Join-Path $Evidence 'processes.json')
 $PossibleRoots = @((Join-Path $env:LOCALAPPDATA 'Meniscus Annotator synthetic tests'))
 if (Test-Path $env:MENISCUS_DIAGNOSTIC_OUTPUT) {
