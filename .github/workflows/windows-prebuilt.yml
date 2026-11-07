@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       run_integration:
-        description: Also attempt synthetic Slicer rendering tests on hosted Windows Server (not Windows11 acceptance)
+        description: Run installed synthetic correction, real Export dialog, restart and general workflow checks (not human Windows acceptance)
         required: true
-        default: false
+        default: true
         type: boolean
 permissions:
   contents: read
@@ -22,6 +22,13 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+      - name: Check correction contract before packaging
+        shell: pwsh
+        run: |
+          python -m pip install -r requirements-dev.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Test dependency installation failed.' }
+          python -m pytest tests/test_core.py tests/test_correction_jobs.py tests/test_practice_context.py tests/test_layouts.py tests/test_reader_identity.py tests/test_ui_guards.py packaging/prebuilt/tests -q
+          if ($LASTEXITCODE -ne 0) { throw 'Correction contract tests failed.' }
       - name: Build and test installation with pinned prebuilt runtime
         shell: pwsh
         env:
@@ -33,7 +40,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: MeniscusAnnotator-0.1.0-Windows-x64
+          name: MeniscusAnnotator-0.1.0-Windows-x64-${{ github.sha }}
           retention-days: 1
           compression-level: 0
           if-no-files-found: warn
@@ -45,3 +52,6 @@ jobs:
             C:\D\MP\synthetic-integration\*.json
             C:\D\MP\synthetic-integration\*.png
             C:\D\MP\synthetic-resume\*.json
+            C:\D\MP\synthetic-correction\*.json
+            C:\D\MP\synthetic-correction\*.png
+            C:\D\MP\synthetic-correction-resume\*.json

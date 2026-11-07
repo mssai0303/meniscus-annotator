@@ -64,20 +64,29 @@ its actual installed runtime without a main window to check imports/identity.
 It also checks duplicate-install rejection, safe refusal while a runtime file is
 locked, and uninstall preservation using an unrelated synthetic text file. The
 headless runtime import check has a bounded two-minute timeout.
-`-RunIntegration` additionally attempts the existing native Slicer synthetic
-rendering workflow; Windows11 interaction acceptance is still separate.
+`-RunIntegration` additionally attempts the installed correction route and its
+fresh-process restoration, followed by the general native Slicer synthetic
+workflow. Correction checks drive the actual Export/Cancel dialog buttons; the
+native destination picker is redirected to the generated test folder. This is
+injected-event automation, not human Windows interaction acceptance.
 
 Outputs: `MeniscusAnnotator-0.1.0-Windows-x64.exe`, `installer-build.json` and
 `installed-runtime-check.json` in the build folder. The receipt records the
-installer SHA256, host and checks actually completed. Assembly checks on Mac
+installer SHA256, source commit, application-source fingerprint, host and checks
+actually completed. Dirty or unrecorded source checkouts are rejected before
+building the installer. `BUILD-IDENTITY.json` in the installation records the
+source commit and exact application file hashes without changing the checkpoint
+format's application version. The filename/version 0.1.0 alone must never be
+used to identify an accepted build. Assembly checks on Mac
 establish content/byte integrity only; they do not verify Windows execution.
 This process is reproducible from pinned inputs and a recorded source commit;
 installer timestamps may differ, so bit-identical output is not promised.
 
 ## Installed synthetic test kit
 
-The payload whitelists `tests/slicer_workflow.py` and `tools/make_synthetic.py`
-under `TestKit/`, with a small installed runner. It contains no second copy of
+The payload whitelists `tests/slicer_workflow.py`, `tests/slicer_export_dialog.py`,
+`tools/make_synthetic.py`, and the procedural correction fixture/workflow from
+`packaging/prebuilt/` under `TestKit/`, with a small installed runner. It contains no second copy of
 the application/core implementation: imports must resolve from the installed
 `qt-scripted-modules` directory. Native test launchers use a separate
 `MeniscusAnnotatorTest` Qt profile and fresh OS-resolved local test folders,
@@ -85,7 +94,9 @@ outside installation and ordinary annotation work. No MRI input picker or
 source checkout is used. Generation explicitly uses the flat layout.
 
 The versioned Start-menu Testing folder offers **Create synthetic examples**,
-**Run synthetic workflow checks** and **Check synthetic resume**. The last item
+**Run correction checks**, **Check correction resume**, **Run synthetic workflow
+checks** and **Check synthetic resume**. Generated examples contain explicit
+practice correction jobs and both labels. The resume items each
 requires a prior successful workflow run and reopens only that managed synthetic
 run in a fresh process. The procedural geometric examples are not anatomical
 teaching material. Reports state technical scope separately from anatomy and
@@ -99,25 +110,31 @@ $install = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Pro
 & (Join-Path $install 'MeniscusAnnotatorExamples.exe')
 & (Join-Path $install 'MeniscusAnnotatorChecks.exe')
 & (Join-Path $install 'MeniscusAnnotatorResumeCheck.exe')
+& (Join-Path $install 'MeniscusAnnotatorCorrectionChecks.exe')
+& (Join-Path $install 'MeniscusAnnotatorCorrectionResumeCheck.exe')
 ```
 
 These commands use the bundled runtime, with no external Python or downloads.
 `TestKit/RunSyntheticChecks.ps1` is an optional convenience, without administrator
 requests or execution-policy bypasses. Routine annotation does not need it.
 
-The test-kit whitelist/profile assembly has been checked on the development
-host. Its new installed entrypoints have not yet been executed: Windows builds
-and acceptance are on hold while the user reviews the redesigned Mac preview.
-The earlier lifecycle receipt does not cover these added test-kit entrypoints.
+The newer correction entrypoints and refreshed installer require Windows
+execution. Their presence in source is not a passing result. The older lifecycle
+receipt at commit `6a562ef` predates the flat correction adapter and is not usable
+evidence for the current dataset. Preserve that receipt as historical evidence.
 
 ## Hosted CI resources, limits and cost
 
 The manual-only `Windows prebuilt installer` workflow uses `windows-latest`,
 a 20-minute job timeout and one concurrent packaging job. It runs installation,
-byte-integrity and runtime-import checks; synthetic rendering is optional. A
+byte-integrity and runtime-import checks. The manual dispatch defaults to
+`run_integration=true` for correction, Export-dialog and restart tests; it also
+runs the correction contract tests before packaging. Synthetic rendering can be
+disabled for diagnosis, but a build without it is not correction-accepted. A
 hosted Windows Server runner is not a Windows11 laptop and has no guaranteed
 medical-viewer-capable GPU. No Windows VM is installed on the development Mac.
-Private installer/evidence artifacts expire after one day; no public release is
+Private installer/evidence artifacts include the source commit in their artifact
+name and expire after one day; no public release is
 created by this workflow.
 
 Current [GitHub runner specifications](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)

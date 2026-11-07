@@ -10,15 +10,35 @@ provided before research approval is enabled.
 
 ## Open and resume
 
-After installing an accepted Windows release, download the **complete dataset
-folder**, then choose **Open dataset** and select its top-level folder. Keep
+After installing an accepted Windows release, download the **complete assigned pilot
+folder**, then choose **Open dataset** and select its top-level folder. The
+coordinator supplies only assigned pilot cases, not the full selection containing
+reserved test cases. Keep
 `README.txt`, `case_index.csv` and all `Cases` subfolders together. The application
 checks identities, hashes and geometry before offering editing.
 
 A prepared correction package includes an explicit `correction_job.json`. Its
 verified starting masks load as unreviewed predictions to correct, not completed
 annotations. Missing or unresolved masks are blocked instead of replaced with
-blank labels. MRI-only packages without correction permissions start blank.
+blank labels. MRI-only packages without a job require an explicit confirmation
+before drawing from blank; the default is No. If you expected predictions,
+cancel and obtain the correction package. Confirm the assigned reader identity
+before opening ordinary work. Do not confirm another person's name for testing.
+
+The header always identifies **Correction · Existing automated mask** or
+**Blank annotation · No starting mask**. A slice outside the predicted meniscus
+can have no coloured overlay even when the mask is loaded; inspect the acquired
+stack rather than using a fixed slice number as a pass/fail rule.
+
+For correction: inspect the MRI with the overlay both hidden and visible, check
+the medial/lateral assignments, erase extra predicted tissue and add missing
+tissue under the supplied drawing protocol. **Erase affects the active label
+only**. Inspect every acquired slice, including slices outside the starting
+prediction. The predictions are suggestions, not expert-approved anatomy.
+
+Rows marked **Blocked** cannot be edited and Next case skips them. **Saved work
+needs attention** means an existing checkpoint is incompatible or unavailable;
+preserve the work folder and contact the coordinator instead of starting over.
 
 The first connection proposes your operating system's Documents folder:
 `Documents/Meniscus_annotation_work/<dataset_version>/`. You can choose another
@@ -30,6 +50,12 @@ OAI ID, visit or side; use the progress filter as needed. **Resume work** opens
 the previous dataset/case. The last acquired slice is remembered. If you move
 the downloaded dataset, choose **Open dataset** at its new location. The original
 identity and hashes must match the existing work folder.
+
+Keep the assigned job and protocol unchanged once work starts. They are bound
+to saved checkpoints. Do not use **Help → Annotation setup** to substitute a
+different job during a pilot; the coordinator must arrange a separate work
+folder or a validated migration. A draft pilot produces practice results, not
+approved training annotations.
 
 ## Draw and inspect
 

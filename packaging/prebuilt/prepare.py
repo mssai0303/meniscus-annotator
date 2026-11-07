@@ -99,16 +99,19 @@ def prepare(runtime, installer, output, cache):
     # Whitelist procedural fixtures and the maintained native suite only. No
     # source checkout/application copy is placed in TestKit.
     kit = output / 'TestKit'
-    for relative in ('tests/slicer_workflow.py', 'tools/make_synthetic.py'):
+    for relative in ('tests/slicer_workflow.py', 'tests/slicer_export_dialog.py', 'tools/make_synthetic.py'):
         destination = kit / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO / relative, destination)
     (kit / 'tools' / '__init__.py').write_text('"""Procedural synthetic fixtures only."""\n', encoding='utf-8')
+    (kit / 'tests' / '__init__.py').write_text('"""Synthetic software tests only."""\n', encoding='utf-8')
+    for name in ('make_correction_synthetic.py', 'CorrectionWorkflow.py'):
+        shutil.copy2(HERE / name, kit / name)
     shutil.copy2(HERE / 'RunInstalledTests.py', kit / 'RunInstalledTests.py')
     shutil.copy2(HERE / 'SyntheticTestKit.txt', kit / 'README.txt')
     shutil.copy2(HERE / 'RunSyntheticChecks.ps1', kit / 'RunSyntheticChecks.ps1')
     shutil.copy2(output / 'bin' / 'SlicerApp-real.exe', output / 'bin' / 'MeniscusAnnotatorTestApp-real.exe')
-    for stem, action in (('MeniscusAnnotatorChecks', 'workflow'), ('MeniscusAnnotatorResumeCheck', 'resume'), ('MeniscusAnnotatorExamples', 'create')):
+    for stem, action in (('MeniscusAnnotatorChecks', 'workflow'), ('MeniscusAnnotatorResumeCheck', 'resume'), ('MeniscusAnnotatorExamples', 'create'), ('MeniscusAnnotatorCorrectionChecks', 'correction'), ('MeniscusAnnotatorCorrectionResumeCheck', 'correction-resume')):
         shutil.copy2(output / 'Slicer.exe', output / (stem + '.exe'))
         test_config = config.replace('/bin/MeniscusAnnotatorApp-real.exe', '/bin/MeniscusAnnotatorTestApp-real.exe')
         test_config = test_config.replace('name=MeniscusAnnotator\n', 'name=MeniscusAnnotatorTest\n')
@@ -140,12 +143,22 @@ def prepare(runtime, installer, output, cache):
             raise ValueError('Original runtime file changed: ' + name)
     try:
         revision = subprocess.check_output(['git', '-C', str(REPO), 'rev-parse', 'HEAD'], text=True).strip()
+        dirty = bool(subprocess.check_output(['git', '-C', str(REPO), 'status', '--porcelain', '--untracked-files=normal'], text=True).strip())
     except Exception:
         revision = 'unrecorded-local-source'
+        dirty = True
+    source_files = {p.relative_to(module_dir).as_posix(): digest(p)
+                    for p in sorted(module_dir.rglob('*'))
+                    if p.is_file() and (p.name == 'MeniscusAnnotator.py' or 'MeniscusAnnotatorLib' in p.parts)}
+    source_hash = hashlib.sha256(json.dumps(source_files, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    identity = {'application_version': '0.1.0', 'application_commit': revision,
+                'application_source_dirty': dirty, 'application_source_sha256': source_hash,
+                'application_files_sha256': source_files}
+    (output / 'BUILD-IDENTITY.json').write_text(json.dumps(identity, indent=2) + '\n', encoding='utf-8')
     files = {str(f.relative_to(output)).replace('\\', '/'): digest(f)
              for f in sorted(output.rglob('*')) if f.is_file()}
     manifest = {'schema_version': 'meniscus_distribution/1', 'application_version': '0.1.0',
-                'application_commit': revision, 'route': LOCK['route'],
+                **identity, 'route': LOCK['route'],
                 'slicer_installer_sha512': LOCK['slicer']['sha512'],
                 'original_runtime_files_unchanged': len(original_files),
                 'files_sha256': files,

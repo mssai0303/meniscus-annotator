@@ -13,6 +13,12 @@ try:
     import SimpleITK
     import MeniscusAnnotatorLib
     root = Path(__file__).resolve().parent
+    distribution = json.loads((root / 'distribution.json').read_text(encoding='utf-8'))
+    from MeniscusAnnotatorLib.build_identity import capture_source_identity
+    source_identity = capture_source_identity()
+    assert source_identity.get('packaged_source_matches') is True
+    assert source_identity['application_source_sha256'] == distribution['application_source_sha256']
+    assert source_identity['application_commit'] == distribution['application_commit']
     assert Path(MeniscusAnnotatorLib.__file__).resolve().is_relative_to(root)
     assert MeniscusAnnotatorLib.APP_VERSION == '0.1.0'
     assert nibabel.__version__ == '5.3.2'
@@ -22,6 +28,10 @@ try:
                    runtime_version=slicer.app.applicationVersion,
                    runtime_revision=slicer.app.repositoryRevision,
                    runtime_name=slicer.app.applicationName,
+                   application_commit=distribution['application_commit'],
+                   application_source_sha256=distribution['application_source_sha256'],
+                   application_source_dirty=distribution['application_source_dirty'],
+                   packaged_source_matches=source_identity['packaged_source_matches'],
                    python=sys.version, numpy=numpy.__version__, nibabel=nibabel.__version__,
                    SimpleITK=SimpleITK.Version_VersionString())
     exit_code = 0

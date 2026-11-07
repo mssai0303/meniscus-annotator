@@ -7,6 +7,9 @@ Set-StrictMode -Version Latest
 if ($env:OS -ne 'Windows_NT') { throw 'Use a Windows x64 build host for this script.' }
 if ($BuildRoot -match ' ') { throw 'Choose a build directory without spaces for build tooling. Installed runtime paths may contain spaces.' }
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$Git = (Get-Command git.exe -ErrorAction Stop).Source
+$sourceStatus = & $Git -C $Repo status --porcelain --untracked-files=normal
+if ($LASTEXITCODE -ne 0 -or $sourceStatus) { throw 'Use a clean recorded source checkout before downloading or packaging.' }
 $Lock = Get-Content -Raw (Join-Path $PSScriptRoot 'dependencies.json') | ConvertFrom-Json
 $Python = (Get-Command python.exe -ErrorAction Stop).Source
 # Keep the maintainer interpreter consistent with the bundled runtime's UTF-8 mode.
@@ -57,6 +60,10 @@ $Nsis = Join-Path $BuildRoot 'tools\nsis-3.13\makensis.exe'
 $Payload = Join-Path $BuildRoot 'Payload'
 Checked $Python @((Join-Path $PSScriptRoot 'prepare.py'),'--runtime-extracted',$Extracted,
   '--installer',$SlicerInstaller,'--output',$Payload,'--cache',$Downloads)
+$Distribution = Get-Content -Raw (Join-Path $Payload 'distribution.json') | ConvertFrom-Json
+if ($Distribution.application_source_dirty -or $Distribution.application_commit -eq 'unrecorded-local-source') {
+  throw 'Installer builds require a clean recorded source commit. Commit the reviewed source before packaging.'
+}
 $Output = Join-Path $BuildRoot 'MeniscusAnnotator-0.1.0-Windows-x64.exe'
 Checked $Nsis @('/V2',"/DPAYLOAD=$Payload","/DOUTPUT=$Output",
   "/DUNINSTALL_FILES=$(Join-Path $BuildRoot 'uninstall-files.nsh')",
@@ -65,10 +72,14 @@ $receipt = [ordered]@{
   schema_version='meniscus_installer_build/1'; route=$Lock.route; app_version='0.1.0'
   runner_os=[Environment]::OSVersion.VersionString; runner_image=$env:ImageVersion
   runtime_download_sha512=$Lock.slicer.sha512
+  application_commit=$Distribution.application_commit
+  application_source_sha256=$Distribution.application_source_sha256
+  application_source_dirty=$Distribution.application_source_dirty
   installer_filename=(Split-Path -Leaf $Output); installer_bytes=(Get-Item $Output).Length
   installer_sha256=(Get-FileHash $Output -Algorithm SHA256).Hash.ToLower()
   nsis='3.13'; sevenzip='26.05'; install_test='NOT RUN'; runtime_import_test='NOT RUN'
-  synthetic_desktop_test='NOT RUN'; Windows11_interactive_acceptance='NOT RUN'; Horizon_Windows10_19045_acceptance='NOT RUN'
+  synthetic_desktop_test='NOT RUN'; synthetic_correction_test='NOT RUN'; synthetic_correction_resume_test='NOT RUN'
+  Windows11_interactive_acceptance='NOT RUN'; Horizon_Windows10_19045_acceptance='NOT RUN'
 }
 try {
 if ($TestInstall) {
@@ -100,9 +111,28 @@ if ($TestInstall) {
   $createdReport = Join-Path (Join-Path $TestBase $env:MENISCUS_TEST_RUN_ID) 'installed-tests.json'
   if ($examples.ExitCode -ne 0 -or -not (Test-Path $createdReport)) { throw 'Installed synthetic generator did not complete.' }
   $created = Get-Content -Raw $createdReport | ConvertFrom-Json
-  if (-not $created.passed -or $created.folder_layout -ne 'flat') { throw 'Installed synthetic package validation failed.' }
+  if (-not $created.passed -or $created.folder_layout -ne 'flat' -or $created.annotation_mode -ne 'correction') { throw 'Installed synthetic correction package validation failed.' }
   $receipt['installed_synthetic_generation_test']=$created
   if ($RunIntegration) {
+    # Run the actual packaged correction route first, including visible Export
+    # OK/Cancel buttons and a separate-process restore. Synthetic inputs only.
+    foreach ($action in @('correction','correction-resume')) {
+      $env:MENISCUS_TEST_RUN_ID = [Guid]::NewGuid().ToString('N')
+      $correctionRoot = Join-Path $TestBase $env:MENISCUS_TEST_RUN_ID
+      $entry = if ($action -eq 'correction') { 'MeniscusAnnotatorCorrectionChecks.exe' } else { 'MeniscusAnnotatorCorrectionResumeCheck.exe' }
+      $correction = Start-Process -FilePath (Join-Path $Installed $entry) -PassThru
+      if (-not $correction.WaitForExit(300000)) { $correction.Kill($true); throw "Installed $action checks exceeded five minutes." }
+      $correctionEvidence = Join-Path $BuildRoot "synthetic-$action"
+      New-Item -ItemType Directory -Force $correctionEvidence | Out-Null
+      if (Test-Path $correctionRoot) {
+        Get-ChildItem $correctionRoot -Recurse -File | Where-Object { $_.Name -in @('correction-workflow.json','installed-tests.json') -or $_.Extension -eq '.png' } | Copy-Item -Destination $correctionEvidence
+      }
+      if ($correction.ExitCode -ne 0) { throw "Installed $action integration failed; inspect its reports." }
+      $correctionReport = Get-Content -Raw (Join-Path $correctionRoot 'installed-tests.json') | ConvertFrom-Json
+      if (-not $correctionReport.passed -or $correctionReport.application_source_sha256 -ne $Distribution.application_source_sha256) { throw "Installed $action result or source identity failed." }
+      $receiptKey = if ($action -eq 'correction') { 'synthetic_correction_test' } else { 'synthetic_correction_resume_test' }
+      $receipt[$receiptKey]=$correctionReport
+    }
     # Exercise only the installed TestKit. No source checkout can shadow the app.
     $env:MENISCUS_TEST_RUN_ID = [Guid]::NewGuid().ToString('N')
     $fullRoot = Join-Path $TestBase $env:MENISCUS_TEST_RUN_ID

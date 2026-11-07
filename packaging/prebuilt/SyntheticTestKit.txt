@@ -5,10 +5,21 @@ only the module and dependencies installed with this application. A source
 checkout, system Python, terminal or runtime download is not required.
 
 Start menu > Meniscus Annotator 0.1.0 > Testing:
-  Create synthetic examples - creates two complete flat-layout volumes in a new
+  Create synthetic examples - creates two complete flat-layout correction cases in a new
   OS-resolved local test folder, then shows its location. In the normal reader,
   choose Open dataset and that synthetic package for manual interface practice.
-  The shapes are not anatomical teaching examples.
+  Each has an explicit draft correction job and two coloured geometric patches
+  on the middle acquired slice. The actor is an unverified practice user, never
+  Jeff. The shapes are not anatomical teaching examples.
+
+  Run correction checks - uses a separate automated fixture through Open dataset,
+  exact starting-mask loading, native-plane paint/erase/undo/redo, save/reopen,
+  practice approval, actual Export/Cancel dialog buttons and ZIP verification.
+  Qt/VTK events are injected. The native destination picker is redirected into
+  the isolated test output and still needs a human acceptance check.
+
+  Check correction resume - opens a fresh process after successful correction
+  checks, restoring both cases, edited voxels, review state and acquired slice.
 
   Run synthetic workflow checks - exercises the installed module's native
   acquired-plane strokes, review, save/reopen, practice approval and export. The
@@ -22,7 +33,9 @@ Start menu > Meniscus Annotator 0.1.0 > Testing:
 Every invocation uses a fresh folder under the operating system's local app-data
 location / Meniscus Annotator synthetic tests. Input examples, work, exports and
 reports stay there, outside the installation and ordinary annotation work.
-Reports are installed-tests.json and (for workflow/resume) slicer-workflow.json.
+Reports are installed-tests.json, correction-workflow.json (correction routes),
+and slicer-workflow.json (general workflow/resume). Reports include the installed
+source commit and source fingerprint; the 0.1.0 label alone is not build identity.
 Uncertainty and practice results remain explicitly marked. Technical acceptance
 is not anatomical correctness, independent review or training-loader acceptance.
 
@@ -31,6 +44,8 @@ Python installation (set $install to the chosen installation folder):
   & (Join-Path $install 'MeniscusAnnotatorExamples.exe')
   & (Join-Path $install 'MeniscusAnnotatorChecks.exe')
   & (Join-Path $install 'MeniscusAnnotatorResumeCheck.exe')
+  & (Join-Path $install 'MeniscusAnnotatorCorrectionChecks.exe')
+  & (Join-Path $install 'MeniscusAnnotatorCorrectionResumeCheck.exe')
 
 RunSyntheticChecks.ps1 is an optional convenience for maintainers. Do not bypass
 institutional script restrictions; the native Start-menu entries are available.

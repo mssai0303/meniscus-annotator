@@ -8,6 +8,30 @@ research annotations or readiness for the full annotation batch.
 
 ## Executed checks and their scope
 
+### Correction pilot repairs — 7 November 2026
+
+The Export dialog previously had no usable buttons despite direct-function
+export tests passing. That distinction is now tested explicitly. Actual Mac
+Slicer modal interactions passed 19 checks: visible controls, Cancel/Escape,
+Export/Return, selected-only ZIP contents, unchanged synthetic inputs and
+blank-start/reader confirmations defaulting to No. These are automated Qt
+events, not a human usability test; the native export folder picker is excluded.
+
+The scoped application, adapter and packaging suite passed 187 tests. A prepared
+Windows test-kit correction workflow was exercised on Mac/Rosetta with 33
+checks and 16 fresh-process restoration checks. The maintained synthetic blank
+workflow also passed 182 checks and 7 restoration checks using an explicit
+software-practice actor. Build identity was checked independently on five
+synthetic receipt scenarios. These counts describe overlapping test scopes and
+must not be added as independent validation.
+
+No new real MRI was opened during these repairs. Windows package construction,
+hosted integration and interactive Horizon acceptance must each have their own
+receipt before being claimed complete. Historical tests below retain their
+original scope; direct-function export tests did not cover the broken dialog.
+
+### Earlier development evidence
+
 | Route | Result | Scope |
 | --- | --- | --- |
 | Application core and practice-context tests | 70 passed | Existing annotation behaviour and explicit practice-role isolation |
@@ -102,8 +126,8 @@ and sign-out/new login. The official pinned Slicer runtime opened; the synthetic
 saved-volume checks passed and reported NVIDIA A16-1Q with an OpenGL 3.2 context.
 The user confirmed the grayscale image display. This baseline probe was ordinary
 Slicer and does not establish acceptance of the redesigned annotation application.
-Explicit scrolling/full application acceptance remains incomplete and is paused
-for Mac review. Hosted installer lifecycle checks are also not interactive GUI
+Explicit scrolling/full application acceptance remains incomplete; correction
+packaging and tests are being updated. Hosted installer lifecycle checks are not interactive GUI
 acceptance.
 
 Windows 11 remains **untested**, not declared incompatible. No paid VM or large

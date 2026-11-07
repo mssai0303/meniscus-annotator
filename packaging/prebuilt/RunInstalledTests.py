@@ -16,7 +16,8 @@ INSTALL = Path(os.environ['SLICERRC']).resolve().parents[1]
 KIT = INSTALL / 'TestKit'
 ROOT = Path(qt.QStandardPaths.writableLocation(qt.QStandardPaths.GenericDataLocation)) / 'Meniscus Annotator synthetic tests'
 STATE = ROOT / 'last-workflow.json'
-ACTIONS = {'workflow', 'resume', 'create'}
+CORRECTION_STATE = ROOT / 'last-correction-workflow.json'
+ACTIONS = {'workflow', 'resume', 'create', 'correction', 'correction-resume'}
 
 
 def text_file(path, value):
@@ -37,9 +38,16 @@ def installed_modules():
     for module in (MeniscusAnnotator, MeniscusAnnotatorLib):
         if not Path(module.__file__).resolve().is_relative_to(expected):
             raise RuntimeError('Synthetic checks must load the installed application module.')
+    distribution = json.loads((INSTALL / 'distribution.json').read_text(encoding='utf-8'))
+    identity = MeniscusAnnotator.SOURCE_IDENTITY
+    if identity.get('packaged_source_matches') is not True or identity['application_source_sha256'] != distribution['application_source_sha256']:
+        raise RuntimeError('Loaded application source differs from the packaged build identity.')
     return {'application_module': str(Path(MeniscusAnnotator.__file__).resolve()),
             'core_module': str(Path(MeniscusAnnotatorLib.__file__).resolve()),
-            'application_version': MeniscusAnnotatorLib.APP_VERSION}
+            'application_version': MeniscusAnnotatorLib.APP_VERSION,
+            'application_commit': distribution['application_commit'],
+            'application_source_sha256': distribution['application_source_sha256'],
+            'application_source_dirty': distribution['application_source_dirty']}
 
 
 def source_helpers():
@@ -88,14 +96,35 @@ def start():
         make_synthetic = source_helpers()
         if action == 'create':
             package = output / 'Synthetic practice dataset'
-            make_synthetic(package, layout='flat')
+            from make_correction_synthetic import make_correction_synthetic
+            make_correction_synthetic(package, automated=False)
             from MeniscusAnnotatorLib import Dataset
             dataset = Dataset(package)
             if not dataset.cases or any(not c.key.startswith('SYNTHETIC_') for c in dataset.cases):
                 raise RuntimeError('Generated package is not the expected synthetic fixture.')
-            receipt.update(passed=True, package=str(package), cases=len(dataset.cases), folder_layout='flat')
+            receipt.update(passed=True, package=str(package), cases=len(dataset.cases), folder_layout='flat', annotation_mode='correction')
             text_file(output / 'installed-tests.json', receipt)
             finish('Synthetic practice package created. Open the normal Meniscus Annotator application and choose this package with Open dataset.', package, True)
+            return
+        if action in ('correction', 'correction-resume'):
+            previous_root = None
+            if action == 'correction-resume':
+                previous = json.loads(CORRECTION_STATE.read_text(encoding='utf-8'))
+                previous_id = checked_run_id(previous['run_id'])
+                previous_root = ROOT / previous_id
+                marker = json.loads((previous_root / 'installed-tests.json').read_text(encoding='utf-8'))
+                if marker.get('action') != 'correction' or not marker.get('passed') or marker.get('run_id') != previous_id:
+                    raise ValueError('No completed synthetic correction workflow is available for restart.')
+                if marker.get('application_source_sha256') != receipt['application_source_sha256']:
+                    raise ValueError('Restart checks require the same installed application build.')
+            from CorrectionWorkflow import run
+            runpy.run_path(str(INSTALL / 'WorkflowShell.py'))['focus_workflow_shell']()
+            report = run(output, previous=previous_root)
+            receipt.update(passed=bool(report.get('passed')), checks=len(report.get('checks', [])), report='correction-workflow.json')
+            text_file(output / 'installed-tests.json', receipt)
+            if receipt['passed'] and action == 'correction':
+                text_file(CORRECTION_STATE, {'run_id': run_id})
+            finish(('Passed ' if receipt['passed'] else 'Failed during ') + str(receipt['checks']) + ' synthetic correction checks.', output, receipt['passed'])
             return
         if action == 'resume':
             previous = json.loads(STATE.read_text(encoding='utf-8'))

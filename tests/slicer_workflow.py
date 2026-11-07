@@ -168,6 +168,16 @@ def run():
     make_synthetic(dataset_root, layout=layout)
     # Nearby masks are intentionally present but never configured as permitted input.
     fixture_dataset = Dataset(dataset_root)
+    # Explicit automated practice attribution: never confirm that a synthetic
+    # test is the human reader, and never rely on an implicit blank fallback.
+    software_context = {'purpose': 'software_practice', 'actor_type': 'automated',
+                        'actor': 'Software QA (automated)'}
+    blank_job = {'schema_version': 'meniscus_job/1', 'dataset_identity': fixture_dataset.identity,
+                 'protocol': {'version': 'SYNTHETIC-BLANK-SOFTWARE-1', 'status': 'draft'},
+                 'practice_context': software_context,
+                 'cases': {case.key: {'annotation_mode': 'blank'} for case in fixture_dataset.cases}}
+    blank_job_path = OUTPUT / 'synthetic_software_job.json'
+    blank_job_path.write_text(json.dumps(blank_job, indent=2) + '\n', encoding='utf-8')
     for fixture_case in fixture_dataset.cases:
         phantom_prediction = np.full(fixture_case.shape_xyz[::-1], 2, dtype=np.uint8)
         nearby = fixture_case.folder / 'annotations' if layout == 'legacy' else dataset_root / 'Unconfigured predictions' / fixture_case.key
@@ -177,6 +187,7 @@ def run():
     slicer.util.selectModule('MeniscusAnnotator')
     widget = slicer.modules.meniscusannotator.widgetRepresentation().self()
     widget.settings = qt.QSettings(str(SETTINGS_FILE), qt.QSettings.IniFormat)  # Bind even if direct startup constructed the widget earlier.
+    widget.settings.setValue('Meniscus/job/' + fixture_dataset.identity, str(blank_job_path))
     widget.openDataset(str(dataset_root), work_root=str(work_root))
     events()
     # Select all generated geometries including oblique, variable dimensions/counts.
@@ -386,7 +397,7 @@ def run():
         widget.save(approve=True, practice=True)
         approved_checkpoint = widget.session.current_checkpoint
         approved_arrays[key] = (resolved_labels.copy(), resolved_uncertain.copy())
-        check(key + ' practice approval records honest role', widget.session.state['status'] == 'practice_approved' and 'not an independent second reader' in widget.session.state['approval']['role'])
+        check(key + ' practice approval records honest automated role', widget.session.state['status'] == 'practice_approved' and widget.session.state['annotator'] == 'Software QA (automated)' and widget.session.state['approval']['human_anatomical_approval'] is False and widget.session.state['approval']['accepted_research_annotation'] is False)
         stroke(widget, (i+8, j+4, k), label='medial')
         widget.save()
         check(key + ' approved editing creates draft', widget.session.state['status'] == 'needs_review' and widget.session.current_checkpoint != approved_checkpoint)
@@ -395,7 +406,7 @@ def run():
     exported = export_approved(widget.store, OUTPUT / 'Results 空間', include_practice=True)
     with zipfile.ZipFile(exported) as archive:
         manifest = json.loads(archive.read('results.json'))
-        check('practice ZIP explicitly marked', manifest['practice_only'] is True and exported.name.startswith('PRACTICE_ONLY-'))
+        check('practice ZIP explicitly marked', manifest['practice_only'] is True and exported.name.startswith('SOFTWARE_PRACTICE_ONLY-'))
         check('all approved synthetic cases exported', len(manifest['cases']) == len(keys))
         check('MRI images not duplicated in results', not any(n.endswith('/image.nii.gz') for n in archive.namelist()))
         check('export ZIP CRC integrity', archive.testzip() is None)
@@ -422,6 +433,7 @@ def run():
     starting_digest = sha256(starting_path)
     explicit_job = {'schema_version':'meniscus_job/1', 'dataset_identity':widget.dataset.identity,
                     'protocol':{'version':'synthetic-correction-practice-1','status':'draft'},
+                    'practice_context': software_context,
                     'cases':{correction_case.key:{'annotation_mode':'correction',
                     'starting_mask':{'path':str(starting_path),'sha256':starting_digest,
                                      'version':'synthetic-start-v1','source':'Committed synthetic integration generator'}}}}

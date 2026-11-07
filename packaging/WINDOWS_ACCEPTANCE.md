@@ -1,8 +1,12 @@
-# Windows acceptance record — NOT RUN
+# Windows correction acceptance record — PENDING
 
 Application: 0.1.0. Release target: Windows 11 x64.
-Proposed compatibility test only: Horizon Windows10 Enterprise19045 x64,16GB,
-110GB free,NVIDIA A16-1Q/VMware graphics — unverified. Installer: **not built in this session**.
+Available compatibility test: Horizon Windows 10 Enterprise 19045 x64, 16 GB,
+approximately 108–110 GB free, NVIDIA A16-1Q/VMware graphics. The user reported a
+plain-Slicer OpenGL 3.2 rendering probe; this is not installed-annotator acceptance.
+The historical installer at `6a562ef` passed hosted lifecycle/import checks but
+predates the current correction adapter. **A refreshed installed correction
+workflow has not passed Windows acceptance. Windows 11 remains untested.**
 Do not mark a row passed without executing it on the installed application.
 Use synthetic input unless development/practice access is explicitly permitted.
 Attach hashes, test logs and screenshots outside the repository if they contain real data.
@@ -14,6 +18,9 @@ Attach hashes, test logs and screenshots outside the repository if they contain 
 | Clean standard-user installation; expected Start-menu launch | Pending |
 | Disconnect network; launch with no Python/Slicer/Qt preinstalled | Pending |
 | Open synthetic dataset; first-use local work location | Pending |
+| Installed source commit and file fingerprint match the frozen build, not just version 0.1.0 | Pending |
+| Flat correction package automatically loads exact permitted masks and explicit practice actor | Pending |
+| Missing/invalid/blocked masks refuse correction without silent blank labels | Pending |
 | Native oblique acquired-plane stroke: only intended K slice changed | Pending |
 | Axis aligned and oblique geometry retained after save/reopen | Pending |
 | Paint, Draw, Erase; label switch; undo/redo; fixed mapping 1/2 | Pending |
@@ -27,6 +34,10 @@ Attach hashes, test logs and screenshots outside the repository if they contain 
 | Prediction-free job cannot load hidden/nearby predictions | Pending |
 | Reconnect moved dataset; wrong hash rejected | Pending |
 | Approve deliberately; only eligible cases exported | Pending |
+| Visible Export and Cancel buttons work with real mouse/keyboard input | Pending |
+| Native export folder picker, cancellation and completion notice work offline | Pending |
+| Installed correction automation plus fresh-process restore on both procedural geometries | Pending |
+| Two separately permitted real-case copies, including oblique, complete correction/save/restart/export | Pending; private evidence only, after synthetic checks |
 | ZIP reopen with independent reader; full grid/hashes/review records match | Pending |
 | ASCII installation path with spaces; Unicode install path clearly rejected; dataset/work Unicode and maximum paths | Pending |
 | Resize at 1024×768 and 1366×768; 100/150/200% scaling | Pending |

@@ -4,7 +4,7 @@ A focused research annotation module and Windows custom-application build for
 3D Slicer **5.12.4, revision 34645**. The MRI remains on its complete acquired
 grid, including tilted sagittal planes. No model is trained or downloaded.
 
-**Development preview; Windows acceptance is paused for Mac design review.** The actual Slicer desktop
+**Development preview; Windows correction acceptance is in progress.** The actual Slicer desktop
 workflow has been exercised on synthetic scans and two explicitly permitted
 software-practice MRI scans using Intel Slicer 5.12.4 under Rosetta on macOS.
 This is not a native ARM runtime; practice outputs are not accepted research

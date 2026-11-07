@@ -54,6 +54,26 @@ def validate_practice_context(context, protocol):
     return copy.deepcopy(context)
 
 
+def assigned_annotator(job=None):
+    """Return the immutable job actor, retaining historical checkpoint semantics.
+
+    Software practice uses its explicitly scoped actor. New ordinary jobs may
+    name an annotator; jobs predating that field retain the historical Jeff
+    assignment. The UI must confirm that assignment before ordinary work starts;
+    this fallback does not identify the person operating the application.
+    """
+    job = job or {}
+    if 'annotator' in job:
+        need(isinstance(job['annotator'], str) and bool(job['annotator'].strip()),
+             'Job annotator must be an explicitly named, nonempty reader.')
+    context = job.get('practice_context')
+    if context is not None:
+        need(isinstance(context, dict) and isinstance(context.get('actor'), str)
+             and bool(context['actor'].strip()), 'Software practice actor is missing.')
+        return context['actor']
+    return job.get('annotator', 'Jeff')
+
+
 def now():
     return dt.datetime.now(dt.timezone.utc).isoformat()
 
@@ -349,6 +369,7 @@ def validate_job(dataset, job, require_full_correction=False, verify_masks=True,
     protocol = job.get('protocol', {'version': 'draft-practice-1', 'status': 'draft'})
     need(isinstance(protocol, dict) and isinstance(protocol.get('version'), str) and protocol['version'].strip() and protocol.get('status') in ('draft', 'released'), 'Job configuration requires an explicit protocol version and draft/released status.')
     validate_practice_context(job.get('practice_context'), protocol)
+    assigned_annotator(job)
     if require_full_correction:
         need('protocol' in job, 'Correction package job requires an explicit documented protocol version and status.')
         need(set(rules) == set(dataset.by_key), 'Correction package job must explicitly list every case; omitted cases cannot default to blank.')
@@ -459,12 +480,25 @@ class WorkStore:
 
     def summary(self, case):
         folder = self.case_folder(case)
-        for checkpoint in self._checkpoints(folder):
+        checkpoints = self._checkpoints(folder)
+        for checkpoint in checkpoints:
             try:
                 state = self._validate_checkpoint(checkpoint, case, read_arrays=False)[0]
+                expected_job = canonical(self.job) if self.job else None
+                expected_mode = (self.job or {}).get('cases', {}).get(case.key, {}).get('annotation_mode', 'blank')
+                if state.get('job_identity') != expected_job or state['initialization']['method'] != expected_mode:
+                    return {'status': 'configuration_mismatch', 'previous_status': state['status'],
+                            'reviewed': sum(r['reviewed'] for r in state['review']),
+                            'flagged': sum(r['flag'] for r in state['review']),
+                            'checkpoint': checkpoint.name, 'last_slice': state['last_slice'],
+                            'reason': 'Saved work uses a different job configuration. Reconnect the original job and work folder; saved files were not changed.'}
                 return {'status': state['status'], 'reviewed': sum(r['reviewed'] for r in state['review']), 'flagged': sum(r['flag'] for r in state['review']), 'checkpoint': checkpoint.name, 'last_slice': state['last_slice']}
             except (ValidationError, OSError, KeyError, ValueError):
                 continue
+        if checkpoints:
+            return {'status': 'saved_unavailable', 'reviewed': 0, 'flagged': 0,
+                    'last_slice': 0, 'checkpoint': None,
+                    'reason': 'Saved work exists but cannot be validated with this application and job. Preserve the work folder and reconnect the original configuration or restore a verified backup.'}
         return {'status': 'not_started', 'reviewed': 0, 'flagged': 0, 'last_slice': 0, 'checkpoint': None}
 
     def _checkpoints(self, folder):
@@ -514,7 +548,7 @@ class WorkStore:
         need(isinstance(state.get('notes'), str) and isinstance(state.get('annotator'), str) and state['annotator'].strip(), 'Saved annotator or notes fields are invalid.')
         context = state.get('practice_context')
         need(context == self.practice_context, 'Saved software practice context differs from the explicit job configuration.')
-        expected_actor = context['actor'] if context is not None else 'Jeff'
+        expected_actor = assigned_annotator(self.job)
         need(state['annotator'] == expected_actor, 'Saved annotation actor differs from its assigned research or software-practice role.')
         if context is not None:
             validate_practice_context(context, state['protocol'])
@@ -601,7 +635,7 @@ class CaseSession:
                 'notes': '', 'compartments': {'medial': False, 'lateral': False}, 'protocol': copy.deepcopy(protocol),
                 'practice_context': copy.deepcopy(self.store.practice_context),
                 'annotation_purpose': 'software_practice' if self.store.practice_context is not None else 'research_annotation',
-                'annotator': self.store.practice_context['actor'] if self.store.practice_context is not None else 'Jeff', 'approver': None, 'approval': None,
+                'annotator': assigned_annotator(job), 'approver': None, 'approval': None,
                 'initialization': {'method': mode, 'starting_mask': None}, 'job_identity': canonical(job) if job else None,
                 'last_slice': 0, 'status': 'in_progress', 'created_utc': now(), 'saved_utc': None,
                 'uncertainty_policy': 'Separate binary overlay may overlap anatomical labels; all uncertainty and attention flags must be resolved before approval. ' + ('SOFTWARE PRACTICE validity is zero for every voxel; review flags do not confirm anatomical labels or background.' if self.store.practice_context is not None else 'Training validity excludes uncertain and unreviewed/flagged voxels.'),
@@ -694,7 +728,7 @@ class CaseSession:
                                        'human_anatomical_approval': False, 'accepted_research_annotation': False,
                                        'deliberate_approval_required_by_ui': not automated})
             else:
-                state.update(status='practice_approved' if practice else 'approved', approver='Jeff',
+                state.update(status='practice_approved' if practice else 'approved', approver=assigned_annotator(self.store.job),
                              approval={'approved_utc': now(), 'role': 'assigned annotator and approver; not an independent second reader', 'practice_only': bool(practice), 'deliberate_approval_required_by_ui': True})
         elif state['status'] not in ('in_progress', 'needs_review'):
             state['status'] = 'in_progress'

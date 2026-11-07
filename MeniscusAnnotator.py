@@ -13,8 +13,10 @@ import slicer
 from slicer.ScriptedLoadableModule import ScriptedLoadableModule, ScriptedLoadableModuleWidget
 from MeniscusAnnotatorLib import Dataset, WorkStore, ValidationError, export_approved
 from MeniscusAnnotatorLib.core import load_job_config, load_dataset_job_config, correction_inputs_present
+from MeniscusAnnotatorLib.build_identity import capture_source_identity
 
 VERSION = '0.1.0'
+SOURCE_IDENTITY = capture_source_identity()
 LABELS = {'medial': ('Medial meniscus', (0.30, 0.78, 0.92)),
           'lateral': ('Lateral meniscus', (0.95, 0.64, 0.31)),
           'uncertain': ('Uncertain area', (0.76, 0.56, 0.88))}
@@ -180,7 +182,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.search.connect('textChanged(QString)', self._filter)
         lay.addWidget(self.search)
         self.progressFilter = qt.QComboBox()
-        self.progressFilter.addItems(['All cases', 'Not started', 'In progress', 'Needs review', 'Approved'])
+        self.progressFilter.addItems(['All cases', 'Not started', 'In progress', 'Needs review', 'Approved', 'Blocked', 'Saved work needs attention'])
         self.progressFilter.connect('currentIndexChanged(int)', self._filter)
         lay.addWidget(self.progressFilter)
         self.caseTable = qt.QTableWidget(0,2)
@@ -398,6 +400,10 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.identityLabel = qt.QLabel('No case open')
         self.identityLabel.objectName = 'identity'
         self.topBar.addWidget(self.identityLabel)
+        self.initializationLabel = qt.QLabel('')
+        self.initializationLabel.objectName = 'initializationMode'
+        self.initializationLabel.wordWrap = True
+        self.topBar.addWidget(self.initializationLabel)
         spacer = qt.QWidget()
         spacer.setSizePolicy(qt.QSizePolicy.Expanding,qt.QSizePolicy.Preferred)
         self.topBar.addWidget(spacer)
@@ -520,7 +526,10 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
     def _about(self):
         notice = qt.QMessageBox(slicer.util.mainWindow())
         notice.setWindowTitle('About Meniscus Annotator')
-        notice.setText('Meniscus Annotator ' + VERSION + '\nResearch annotation of acquired knee MRI.\n\nBuilt on 3D Slicer 5.12.4. The Slicer runtime and third-party licences and attributions remain part of this distribution.')
+        revision = (SOURCE_IDENTITY.get('application_commit') or 'unrecorded')[:12]
+        if SOURCE_IDENTITY.get('application_source_dirty'):
+            revision += ' · local changes'
+        notice.setText('Meniscus Annotator ' + VERSION + '\nBuild: ' + revision + '\nSource: ' + SOURCE_IDENTITY['application_source_sha256'][:12] + '\nResearch annotation of acquired knee MRI.\n\nRuntime: 3D Slicer ' + slicer.app.applicationVersion + '. The Slicer runtime and third-party licences and attributions remain part of this distribution.')
         upstream = notice.addButton('About 3D Slicer',qt.QMessageBox.ActionRole)
         notice.addButton(qt.QMessageBox.Close)
         notice.exec_()
@@ -561,8 +570,37 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             reason = str(exc) if isinstance(exc, (ValidationError, OSError)) else 'The operation could not be completed.'
             self.message.setText('Action failed. Previous saved versions are intact.')
             self.saveStatus.setText('Action failed · check details')
-            slicer.util.errorDisplay(reason + '\n\nCheck the dataset or work location, available disk space and permissions, then retry. Diagnostic details are available in Help.', windowTitle='Meniscus annotation')
+            advice = ('\n\nContact the dataset coordinator if the input or saved-work configuration needs correction. Diagnostic details are available in Help.'
+                      if isinstance(exc, ValidationError) else
+                      '\n\nCheck the work location, available disk space and permissions, then retry. Diagnostic details are available in Help.')
+            slicer.util.errorDisplay(reason + advice, windowTitle='Meniscus annotation')
             return None
+
+    def _confirmDatasetStart(self, job):
+        """Confirm intentional blank work and the assigned reader before writing work."""
+        if (job or {}).get('practice_context'):
+            # These fixed jobs already explicitly identify software-practice actors.
+            return True
+        if job is None:
+            dialog = qt.QMessageBox(slicer.util.mainWindow())
+            dialog.objectName = 'MeniscusBlankStartDialog'
+            dialog.setWindowTitle('No starting masks configured')
+            dialog.setText('This package opens with empty labels for drawing from scratch.')
+            dialog.setInformativeText('If you expected existing automated masks to correct, choose No and obtain the correction package. Start blank annotation intentionally?')
+            dialog.setStandardButtons(qt.QMessageBox.Yes | qt.QMessageBox.No)
+            dialog.setDefaultButton(qt.QMessageBox.No)
+            if dialog.exec_() != qt.QMessageBox.Yes:
+                return False
+        from MeniscusAnnotatorLib.core import assigned_annotator
+        actor = assigned_annotator(job)
+        dialog = qt.QMessageBox(slicer.util.mainWindow())
+        dialog.objectName = 'MeniscusReaderConfirmDialog'
+        dialog.setWindowTitle('Confirm assigned reader')
+        dialog.setText('This annotation job records work under: ' + actor)
+        dialog.setInformativeText('Continue only if this is your assigned reader identity. Software testing must use a separate practice job. A coordinator must supply a different named job for another reader. Are you the assigned reader?')
+        dialog.setStandardButtons(qt.QMessageBox.Yes | qt.QMessageBox.No)
+        dialog.setDefaultButton(qt.QMessageBox.No)
+        return dialog.exec_() == qt.QMessageBox.Yes
 
     def _chooseDataset(self):
         root = qt.QFileDialog.getExistingDirectory(slicer.util.mainWindow(), 'Open dataset', str(self.settings.value('Meniscus/dataset', '')))
@@ -606,13 +644,17 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         job, job_path = load_dataset_job_config(ds, remembered_path=job_path, fixed_job_path=fixed_job)
         if self._practiceConfig and (not job or job.get('practice_context',{}).get('purpose')!='software_practice'):
             raise ValidationError('The software-practice actor and protocol configuration is missing or invalid.')
+        if not self._confirmDatasetStart(job):
+            self.message.setText('Opening cancelled. No new annotation work was created.')
+            return None
         store = WorkStore(location, ds, job=job)
         self.closeCase()
         self.dataset, self.store = ds, store
         self._updatePracticeContext()
         self.settings.setValue('Meniscus/dataset', str(Path(root).resolve()))
         self.settings.setValue('Meniscus/work/' + version, str(location))
-        self.datasetLabel.setText(version + '\n' + str(len(ds.cases)) + ' complete scans · local work folder connected')
+        blocked = sum(rule.get('availability') == 'unresolved' for rule in (job or {}).get('cases', {}).values())
+        self.datasetLabel.setText(version + '\n' + str(len(ds.cases)) + ' MRI scans' + (f' · {blocked} blocked' if blocked else '') + ' · local work connected')
         self._populate()
         if self.caseTable.rowCount:
             self.caseTable.selectRow(0)
@@ -633,6 +675,8 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         def load():
             require_full = (self.dataset.root / 'correction_job.json').exists() or correction_inputs_present(self.dataset) or Path(path).name == 'correction_job.json'
             job = load_job_config(path, self.dataset, require_full_correction=require_full, allow_unresolved=True)
+            if not self._confirmDatasetStart(job):
+                return
             self.closeCase()
             self.store = WorkStore(self.store.root, self.dataset, job=job)
             self.settings.setValue('Meniscus/job/' + self.dataset.identity, str(path))
@@ -650,11 +694,15 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             item.setData(qt.Qt.UserRole, case.key)
             self.caseTable.setItem(row, 0, item)
             status = 'Not started'
-            if self.session and self.session.case.key == case.key:
+            rule = (self.store.job or {}).get('cases', {}).get(case.key, {})
+            if rule.get('availability') == 'unresolved':
+                status = 'Blocked'
+                item.setToolTip(str(rule.get('reason', 'Starting mask unresolved')))
+            elif self.session and self.session.case.key == case.key:
                 status = 'Approved' if self.session.state.get('status') in ('approved', 'practice_approved') else ('Needs review' if any(not r['reviewed'] for r in self.session.state['review']) else 'In progress')
             elif hasattr(self.store, 'summary'):
                 summary = self.store.summary(case)
-                status = {'approved':'Approved', 'practice_approved':'Approved', 'not_started':'Not started', 'needs_review':'Needs review', 'in_progress':'In progress'}.get(summary.get('status'), 'In progress')
+                status = {'approved':'Approved', 'practice_approved':'Approved', 'not_started':'Not started', 'needs_review':'Needs review', 'in_progress':'In progress', 'saved_unavailable':'Saved work needs attention', 'configuration_mismatch':'Saved work needs attention'}.get(summary.get('status'), 'In progress')
             progressItem = qt.QTableWidgetItem(status)
             self.caseTable.setItem(row,1,progressItem)
             if self.session and case.key==self.session.case.key:
@@ -711,12 +759,15 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self._enable(False)
         self.sliceReadout.setText('Slice — of —')
         self.identityLabel.setText('No case open')
+        self.initializationLabel.setText('')
         self.saveStatus.setText('No case open')
         if getattr(self,'emptyCanvas',None): self.emptyCanvas.ready(bool(self.dataset))
 
     def openCase(self, key):
         if self.session and self.session.case.key == key:
             return
+        from MeniscusAnnotatorLib.core import require_case_prediction_available
+        require_case_prediction_available(self.store.job, key)
         self.closeCase()
         case = next(c for c in self.dataset.cases if c.key == key)
         self.session = self.store.open_case(case)
@@ -1092,6 +1143,9 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             return
         m = self.session.case.metadata
         self.identityLabel.setText(f"OAI {m['participant_id']}   ·   M{int(m['visit_month']):03d}   ·   {'Left' if m['knee_side']=='L' else 'Right'} knee")
+        correction = self.session.state['initialization']['method'] == 'correction'
+        self.initializationLabel.setText('Correction · Existing automated mask' if correction else 'Blank annotation · No starting mask')
+        self.initializationLabel.setToolTip('Starting masks are unreviewed model predictions. Check both compartments throughout the acquired stack.' if correction else 'This case was intentionally initialized with empty labels.')
         review = self.session.state['review']
         count = sum(bool(r['reviewed']) for r in review)
         flags = sum(bool(r['flag']) for r in review)
@@ -1164,7 +1218,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.saveStatus.setText(('SOFTWARE PRACTICE · ' if self.session.state.get('practice_context') else '') + 'Saving…')
         self.saveStatus.repaint()
         labels, uncertain = self.collectArrays()
-        self.session.state['runtime'] = {'slicer_version':slicer.app.applicationVersion, 'slicer_revision':slicer.app.repositoryRevision, 'application_version':VERSION, 'interface_revision':'workspace-2'}
+        self.session.state['runtime'] = {'slicer_version':slicer.app.applicationVersion, 'slicer_revision':slicer.app.repositoryRevision, 'application_version':VERSION, 'interface_revision':'workspace-2', **SOURCE_IDENTITY}
         path = self.session.save(labels, uncertain, self._segWriter, approve=approve, practice=practice)
         self.dirty = False
         self.refreshReview()
@@ -1186,14 +1240,21 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         if context:
             text = 'SOFTWARE PRACTICE ONLY. This records completion of a practice workflow, not an accepted research annotation or anatomical validation.\n\nRecorded practice actor: ' + self.session.state['annotator'] + '. Automated test work is never attributed to Jeff.\n\nRecord this practice version?'
         else:
-            text = ('This protocol is a draft. This creates an approved PRACTICE version, excluded from research exports.\n\n' if practice else '') + 'I, Jeff, have considered both compartments and reviewed every acquired slice under the recorded protocol. This is my own approval, not an independent second-reader assessment.\n\nApprove this version?'
+            actor = self.session.state['annotator']
+            text = ('This protocol is a draft. This creates an approved PRACTICE version, excluded from research exports.\n\n' if practice else '') + 'I, ' + actor + ', have considered both compartments and reviewed every acquired slice under the recorded protocol. This is my own approval, not an independent second-reader assessment.\n\nApprove this version?'
         if slicer.util.confirmYesNoDisplay(text,windowTitle='Approve case'):
             self._safe(lambda: self.save(approve=True,practice=practice))
 
     def _nextCase(self):
         if self.dataset:
             index = next((i for i,c in enumerate(self.dataset.cases) if self.session and c.key==self.session.case.key), -1)
-            self._safe(lambda: self.openCase(self.dataset.cases[(index+1)%len(self.dataset.cases)].key))
+            rules = (self.store.job or {}).get('cases', {})
+            for offset in range(1, len(self.dataset.cases) + 1):
+                case = self.dataset.cases[(index + offset) % len(self.dataset.cases)]
+                if rules.get(case.key, {}).get('availability') != 'unresolved':
+                    self._safe(lambda: self.openCase(case.key))
+                    return
+            self.message.setText('No available case. All starting masks are blocked.')
 
     def _autosave(self):
         if self.session and self.dirty:
@@ -1214,19 +1275,31 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         chosen_rows = sorted({index.row() for index in self.caseTable.selectedIndexes()})
         chosen_keys = [self.caseTable.item(row,0).data(qt.Qt.UserRole) for row in chosen_rows]
         dialog = qt.QDialog(slicer.util.mainWindow())
+        dialog.setObjectName('MeniscusExportDialog')
         dialog.setWindowTitle('Export results')
         layout = qt.QVBoxLayout(dialog)
         layout.addWidget(qt.QLabel('Export verified approved checkpoints without MRI images.'))
         selected = qt.QCheckBox('Selected cases only (' + str(len(chosen_keys)) + ')')
+        selected.setObjectName('MeniscusExportSelectedOnly')
         selected.setEnabled(bool(chosen_keys))
         layout.addWidget(selected)
         practice = qt.QCheckBox('Practice results (separate from research approval)')
+        practice.setObjectName('MeniscusExportPractice')
         if getattr(self.store,'practice_context',None):
             practice.setText('SOFTWARE PRACTICE results only — not research annotations')
             practice.setChecked(True)
             practice.setEnabled(False)
         layout.addWidget(practice)
-        buttons = qt.QDialogButtonBox(qt.QDialogButtonBox.Ok | qt.QDialogButtonBox.Cancel)
+        # PythonQt can resolve the single integer argument as an orientation,
+        # leaving the box empty. Set standard buttons explicitly after parenting.
+        buttons = qt.QDialogButtonBox(dialog)
+        buttons.setObjectName('MeniscusExportButtons')
+        buttons.setStandardButtons(qt.QDialogButtonBox.Ok | qt.QDialogButtonBox.Cancel)
+        export_button = buttons.button(qt.QDialogButtonBox.Ok)
+        export_button.setObjectName('MeniscusExportConfirm')
+        export_button.setText('Export')
+        export_button.setDefault(True)
+        buttons.button(qt.QDialogButtonBox.Cancel).setObjectName('MeniscusExportCancel')
         buttons.connect('accepted()',dialog.accept)
         buttons.connect('rejected()',dialog.reject)
         layout.addWidget(buttons)
