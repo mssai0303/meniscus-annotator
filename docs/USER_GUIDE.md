@@ -39,8 +39,9 @@ Rows marked **Blocked** cannot be edited and Next case skips them. **Saved work
 needs attention** means an existing checkpoint is incompatible or unavailable;
 preserve the work folder and contact the coordinator instead of starting over.
 
-The first connection proposes your operating system's Documents folder:
-`Documents/Meniscus_annotation_work/<dataset_version>/`. You can choose another
+The first connection proposes a work folder under your operating system's
+Documents folder. Named assignments receive separate subfolders so different
+readers do not share checkpoints. You can choose another
 **local** work folder then. It must be separate from the source dataset and
 outside Dropbox/OneDrive. The remembered work location is shown by **Dataset → Show saved work**. Source images and metadata are never edited by this application.
 

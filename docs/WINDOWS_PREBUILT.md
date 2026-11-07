@@ -12,7 +12,7 @@ describes cloning the launcher, settings and App-real executable for a focused
 workflow and separate settings. Complete compiled branding uses the separate
 custom-application approach. This package follows the documented launcher route,
 retains original executable bytes, adds its module and nibabel, and supplies an
-installer, Start-menu shortcut and uninstaller. Jeff needs no terminal, Python,
+installer, Start-menu application and Reader guide shortcuts, and uninstaller. Jeff needs no terminal, Python,
 Slicer installation, SCC account or runtime download.
 
 ## Locked inputs and contents
@@ -99,12 +99,12 @@ the application/core implementation: imports must resolve from the installed
 outside installation and ordinary annotation work. No MRI input picker or
 source checkout is used. Generation explicitly uses the flat layout.
 
-The versioned Start-menu Testing folder offers **Create synthetic examples**,
-**Run correction checks**, **Check correction resume**, **Run synthetic workflow
-checks** and **Check synthetic resume**. Generated examples contain explicit
-practice correction jobs and both labels. The resume items each
-requires a prior successful workflow run and reopens only that managed synthetic
-run in a fresh process. The procedural geometric examples are not anatomical
+The reader's Start menu contains only **Meniscus Annotator**, **Reader guide**
+and **Uninstall**. The synthetic generators and test executables remain internal
+maintainer tools; they are not shortcuts in the doctor's workflow. Generated
+examples contain explicit practice correction jobs and both labels. Each resume
+tool requires a prior successful workflow run and reopens only that managed
+synthetic run in a fresh process. The procedural geometric examples are not anatomical
 teaching material. Reports state technical scope separately from anatomy and
 independent-reader review.
 
@@ -128,6 +128,31 @@ The newer correction entrypoints and refreshed installer require Windows
 execution. Their presence in source is not a passing result. The older lifecycle
 receipt at commit `6a562ef` predates the flat correction adapter and is not usable
 evidence for the current dataset. Preserve that receipt as historical evidence.
+
+## Installed diagnostic findings (7 November 2026)
+
+The pinned candidate at commit `46ae45d` passed installed source/import checks.
+Its old Testing shortcuts (now removed from the reader menu) were unusable: the canonical test launcher settings
+were missing, and an empty test `HomeModule` aborted native startup before
+Python. The assembler now supplies the canonical pair without overwriting each
+alias's selected test action and uses `HomeModule=MeniscusAnnotator` in the
+separate test profile.
+
+[Bounded installed diagnostic 42394247782](https://github.com/mssai0303/meniscus-annotator/actions/runs/42394247782)
+reused the exact original installer and recorded the ephemeral settings change.
+The synthetic generator then passed on two flat correction cases, and all four
+normal/test/native Python probes passed with unchanged application hashes.
+The actual test settings path remained `MeniscusAnnotatorTest.ini`, separate
+from the reader's `MeniscusAnnotator.ini`.
+
+The correction and restart processes still failed before producing workflow
+reports: the hosted Windows Server runner could not create a valid VTK OpenGL
+pixel format and had no OSMesa fallback. This is **not a correction-workflow
+pass**. Build a candidate with `run_integration=false` for Windows 10 Horizon
+GPU testing; installation, byte checks, normal-runtime imports, synthetic
+package generation and uninstall checks remain enabled. GUI test fields must
+remain `NOT RUN` for that build. Windows 10 human interaction, correction,
+restart and export acceptance remain pending; Windows 11 is untested.
 
 ## Hosted CI resources, limits and cost
 

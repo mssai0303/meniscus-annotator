@@ -4,6 +4,15 @@
 
 ### Correction pilot repairs — 7 November 2026
 
+- Provide a bundled offline reader guide and a simple Start menu with the app,
+  guide and uninstaller; maintainer testing shortcuts are not shown to readers.
+- Separate named-reader default work folders and saved-location preferences by
+  immutable assignment; preserve legacy and software-practice work locations.
+- Keep the assigned reader visible and confirm identity before choosing a work
+  location. Actual Mac dialog checks cover two readers on the same dataset.
+- Correct Windows test launcher action dispatch and home-module defaults; hosted
+  OpenGL rendering remains insufficient for interactive workflow acceptance.
+
 - Repair the actual Export dialog; verify visible Export/Cancel, Return/Escape,
   selected-only archives and cancellation with native Qt interactions.
 - Confirm intentional blank initialization and assigned reader identity before

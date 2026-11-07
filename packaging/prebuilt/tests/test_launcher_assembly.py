@@ -51,3 +51,7 @@ def test_every_real_test_application_has_its_canonical_launcher_settings(tmp_pat
         assert 'MENISCUS_TEST_ACTION=' + action + '\n' in config
     assert (output / 'ReaderGuide.html').read_bytes() == (repo / 'docs/QUICK_START.html').read_bytes()
     assert 'ReaderGuide.html' in manifest['files_sha256']
+
+    test_defaults = (output / 'share/Slicer-5.12/MeniscusAnnotatorTestDefaultSettings.ini').read_text(encoding='utf-8')
+    assert 'HomeModule=MeniscusAnnotator\n' in test_defaults
+    assert 'HomeModule=\n' not in test_defaults

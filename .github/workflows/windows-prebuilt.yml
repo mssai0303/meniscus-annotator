@@ -32,7 +32,7 @@ jobs:
         run: |
           python -m pip install -r requirements-dev.txt
           if ($LASTEXITCODE -ne 0) { throw 'Test dependency installation failed.' }
-          python -m pytest tests/test_core.py tests/test_correction_jobs.py tests/test_practice_context.py tests/test_layouts.py tests/test_reader_identity.py tests/test_ui_guards.py packaging/prebuilt/tests -q
+          python -m pytest tests/test_core.py tests/test_correction_jobs.py tests/test_practice_context.py tests/test_layouts.py tests/test_reader_identity.py tests/test_ui_guards.py tests/test_case_resolutions.py tests/test_reader_workspace.py packaging/prebuilt/tests -q
           if ($LASTEXITCODE -ne 0) { throw 'Correction contract tests failed.' }
       - name: Build and test installation with pinned prebuilt runtime
         shell: pwsh
@@ -43,7 +43,7 @@ jobs:
           $integration = $env:RUN_INTEGRATION -eq 'true'
           $fast = $env:FAST_PACKAGE -eq 'true'
           & .\packaging\prebuilt\build.ps1 -BuildRoot $env:MENISCUS_BUILD_ROOT -TestInstall -RunIntegration:$integration -FastPackage:$fast
-      - name: Retain private installer and evidence for one day
+      - name: Retain installer and maintainer evidence for one day
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

@@ -622,8 +622,18 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             qt.QApplication.restoreOverrideCursor()
         documents = qt.QStandardPaths.writableLocation(qt.QStandardPaths.DocumentsLocation)
         version = ds.cases[0].metadata['dataset_version']
-        remembered = self.settings.value('Meniscus/work/' + version, '')
-        location = work_root or (self._practiceConfig['work_root'] if self._practiceConfig else remembered) or str(Path(documents) / 'Meniscus_annotation_work' / version)
+        job_path = str(self.settings.value('Meniscus/job/' + ds.identity, ''))
+        fixed_job = self._practiceConfig['job_path'] if self._practiceConfig else None
+        job, job_path = load_dataset_job_config(ds, remembered_path=job_path, fixed_job_path=fixed_job)
+        if self._practiceConfig and (not job or job.get('practice_context',{}).get('purpose')!='software_practice'):
+            raise ValidationError('The software-practice actor and protocol configuration is missing or invalid.')
+        if not self._confirmDatasetStart(job):
+            self.message.setText('Opening cancelled. No new annotation work was created.')
+            return None
+        from MeniscusAnnotatorLib.reader_workspace import reader_workspace
+        workspace = reader_workspace(version, job)
+        remembered = self.settings.value(workspace['settings_key'], '')
+        location = work_root or (self._practiceConfig['work_root'] if self._practiceConfig else remembered) or str(Path(documents) / 'Meniscus_annotation_work' / workspace['relative_folder'])
         if self._practiceConfig and Path(location).resolve()!=Path(self._practiceConfig['work_root']).resolve():
             raise ValidationError('Software practice must use its separate local practice work folder.')
         if not work_root and not remembered and not self._practiceConfig:
@@ -638,23 +648,16 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
                 chosen = qt.QFileDialog.getExistingDirectory(slicer.util.mainWindow(), 'Choose local work folder', documents)
                 if not chosen:
                     return
-                location = str(Path(chosen) / version)
-        job_path = str(self.settings.value('Meniscus/job/' + ds.identity, ''))
-        fixed_job = self._practiceConfig['job_path'] if self._practiceConfig else None
-        job, job_path = load_dataset_job_config(ds, remembered_path=job_path, fixed_job_path=fixed_job)
-        if self._practiceConfig and (not job or job.get('practice_context',{}).get('purpose')!='software_practice'):
-            raise ValidationError('The software-practice actor and protocol configuration is missing or invalid.')
-        if not self._confirmDatasetStart(job):
-            self.message.setText('Opening cancelled. No new annotation work was created.')
-            return None
+                location = str(Path(chosen) / workspace['relative_folder'])
         store = WorkStore(location, ds, job=job)
         self.closeCase()
         self.dataset, self.store = ds, store
         self._updatePracticeContext()
         self.settings.setValue('Meniscus/dataset', str(Path(root).resolve()))
-        self.settings.setValue('Meniscus/work/' + version, str(location))
+        self.settings.setValue(workspace['settings_key'], str(location))
         blocked = sum(rule.get('availability') == 'unresolved' for rule in (job or {}).get('cases', {}).values())
-        self.datasetLabel.setText(version + '\n' + str(len(ds.cases)) + ' MRI scans' + (f' · {blocked} blocked' if blocked else '') + ' · local work connected')
+        from MeniscusAnnotatorLib.core import assigned_annotator
+        self.datasetLabel.setText(version + '\nReader: ' + assigned_annotator(job) + '\n' + str(len(ds.cases)) + ' MRI scans' + (f' · {blocked} blocked' if blocked else '') + ' · local work connected')
         self._populate()
         if self.caseTable.rowCount:
             self.caseTable.selectRow(0)

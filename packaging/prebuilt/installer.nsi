@@ -86,12 +86,7 @@ Section "Application" SEC_APP
   CreateShortCut "$SMPROGRAMS\Meniscus Annotator 0.1.0\Meniscus Annotator.lnk" "$INSTDIR\MeniscusAnnotator.exe" "" "$INSTDIR\MeniscusAnnotator.ico"
   CreateShortCut "$SMPROGRAMS\Meniscus Annotator 0.1.0\Reader guide.lnk" "$INSTDIR\ReaderGuide.html"
   CreateShortCut "$SMPROGRAMS\Meniscus Annotator 0.1.0\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
-  CreateDirectory "$SMPROGRAMS\Meniscus Annotator 0.1.0\Testing"
-  CreateShortCut "$SMPROGRAMS\Meniscus Annotator 0.1.0\Testing\Create synthetic examples.lnk" "$INSTDIR\MeniscusAnnotatorExamples.exe"
-  CreateShortCut "$SMPROGRAMS\Meniscus Annotator 0.1.0\Testing\Run synthetic workflow checks.lnk" "$INSTDIR\MeniscusAnnotatorChecks.exe"
-  CreateShortCut "$SMPROGRAMS\Meniscus Annotator 0.1.0\Testing\Check synthetic resume.lnk" "$INSTDIR\MeniscusAnnotatorResumeCheck.exe"
-  CreateShortCut "$SMPROGRAMS\Meniscus Annotator 0.1.0\Testing\Run correction checks.lnk" "$INSTDIR\MeniscusAnnotatorCorrectionChecks.exe"
-  CreateShortCut "$SMPROGRAMS\Meniscus Annotator 0.1.0\Testing\Check correction resume.lnk" "$INSTDIR\MeniscusAnnotatorCorrectionResumeCheck.exe"
+  ; Maintainer TestKit remains internal; the reader menu has no QA shortcuts.
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.1.0" "DisplayName" "Meniscus Annotator 0.1.0 (3D Slicer 5.12.4 runtime)"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.1.0" "DisplayVersion" "0.1.0"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.1.0" "UninstallString" '$\"$INSTDIR\Uninstall.exe$\"'

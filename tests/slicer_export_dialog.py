@@ -13,6 +13,7 @@ import copy
 import os
 from pathlib import Path
 import platform
+import shutil
 import sys
 import time
 import traceback
@@ -277,6 +278,53 @@ def run_synthetic_export_test():
         report['dataset_start_dialogs'].extend(evidence)
         check('Confirming assigned reader opens correct dataset', result is not None and result.root == ordinary_source.resolve() and widget.store.root == ordinary_work.resolve())
         check('Opening named job creates no case annotation or approval', not list(ordinary_work.rglob('annotation.json')))
+        # The normal remembered-work route must separate two readers of the same
+        # dataset. No explicit work_root is passed; old version-only preferences
+        # intentionally point somewhere else and must not be reused.
+        from MeniscusAnnotatorLib.reader_workspace import reader_workspace
+        version = ordinary_dataset.cases[0].metadata['dataset_version']
+        plan_a = reader_workspace(version, ordinary_job)
+        work_a = output / 'Remembered work for reader A'
+        wrong_shared = output / 'Legacy shared work must stay unused'
+        widget.settings.setValue(plan_a['settings_key'], str(work_a))
+        widget.settings.setValue(plan_a['legacy_settings_key'], str(wrong_shared))
+        result, evidence = drive_start_prompts(
+            lambda: widget.openDataset(str(ordinary_source)),
+            [('MeniscusReaderConfirmDialog', True)])
+        report['dataset_start_dialogs'].extend(evidence)
+        check('Reader A uses assigned remembered location without forced work_root', widget.store.root == work_a.resolve())
+        check('Reader name stays visible in the case panel', ordinary_job['annotator'] in str(widget.datasetLabel.text))
+        widget.openCase(ordinary_dataset.cases[0].key)
+        widget.notes.setPlainText('SYNTHETIC reader A saved note')
+        widget.save()
+        saved_a = widget.session.current_checkpoint
+        saved_a_hashes = {p.relative_to(saved_a).as_posix(): sha256(p) for p in saved_a.rglob('*') if p.is_file()}
+        other_source = output / 'Second reader synthetic sources'
+        shutil.copytree(ordinary_source, other_source)
+        other_job = copy.deepcopy(ordinary_job)
+        other_job['annotator'] = 'Synthetic reader B confirmation probe'
+        (other_source / 'correction_job.json').write_text(json.dumps(other_job), encoding='utf-8')
+        plan_b = reader_workspace(version, other_job)
+        work_b = output / 'Remembered work for reader B'
+        widget.settings.setValue(plan_b['settings_key'], str(work_b))
+        result, evidence = drive_start_prompts(
+            lambda: widget.openDataset(str(other_source)),
+            [('MeniscusReaderConfirmDialog', True)])
+        report['dataset_start_dialogs'].extend(evidence)
+        check('Reader B uses a different assigned work location', widget.store.root == work_b.resolve() and work_a != work_b)
+        widget.openCase(ordinary_dataset.cases[0].key)
+        check('Reader B never inherits reader A note or attribution', widget.session.state['annotator'] == other_job['annotator'] and not widget.session.state['notes'])
+        widget.notes.setPlainText('SYNTHETIC reader B saved note')
+        widget.save()
+        result, evidence = drive_start_prompts(
+            lambda: widget.openDataset(str(ordinary_source)),
+            [('MeniscusReaderConfirmDialog', True)])
+        report['dataset_start_dialogs'].extend(evidence)
+        widget.openCase(ordinary_dataset.cases[0].key)
+        check('Returning to reader A restores only that assignment', widget.store.root == work_a.resolve() and widget.session.state['notes'] == 'SYNTHETIC reader A saved note' and widget.session.state['annotator'] == ordinary_job['annotator'])
+        check('Reader A checkpoint remains unchanged after reader B work', saved_a_hashes == {p.relative_to(saved_a).as_posix(): sha256(p) for p in saved_a.rglob('*') if p.is_file()})
+        check('Legacy shared work location was never created', not wrong_shared.exists())
+        slicer.util.mainWindow().grab().save(str(output / 'named-reader-workspace.png'))
         report['passed'] = True
     except Exception:
         report['passed'] = False

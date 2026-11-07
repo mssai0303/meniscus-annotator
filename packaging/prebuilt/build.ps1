@@ -191,4 +191,4 @@ if ($TestInstall) {
   $receipt | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $BuildRoot 'installer-build.json')
 }
 Write-Output "Windows installer: $Output"
-Write-Output 'Windows11 mouse/keyboard/high-DPI/offline interactive acceptance remains required.'
+Write-Output 'Windows 10 x64 Horizon mouse/keyboard/high-DPI/offline interactive acceptance remains pending. Windows 11 is untested.'

@@ -149,3 +149,26 @@ protocol, Jeff's actual annotation/review, the final installed Windows workflow
 and downstream training-loader integration remain separate requirements.
 The actual downstream loader was not available and has not passed integration.
 Geometry checks cannot detect every internally shifted or incorrectly drawn mask.
+
+## Offline reader delivery update — 7 November 2026
+
+The primary desktop acceptance target is the available Windows 10 Enterprise
+x64 Horizon desktop. Windows 11 remains untested. The reader installer bundles
+the runtime/dependencies and an offline HTML guide. Its Start menu exposes only
+the application, reader guide and uninstaller. Internal maintainer diagnostics
+are not part of the doctor's correction workflow.
+
+The actual Mac Slicer Export/dialog regression passed 26 checks after named-reader
+work location separation. Two synthetic named assignments with the same dataset
+used different remembered work folders through the ordinary Open dataset route
+(no forced work_root); switching readers preserved the first reader's saved note,
+attribution and checkpoint bytes. Old shared preferences were not reused. Export,
+Cancel, Return and Escape checks remained passing. These are automated native
+Qt events, not a human usability test or Windows acceptance. The visible reader
+caption was inspected in the native window capture.
+
+Named assignments use the original job hash for their work location. Additive
+case resolutions retain that location. Legacy and software-practice locations
+remain unchanged. Existing named jobs saved by earlier preview builds may need
+the coordinator to reconnect their original work folder explicitly; no old
+checkpoints are moved, relabelled or discarded.

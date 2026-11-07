@@ -16,7 +16,7 @@ Attach hashes, test logs and screenshots outside the repository if they contain 
 | OS edition/build, CPU, RAM, graphics/driver, monitor resolution | Pending |
 | Installer filename and SHA256; source commit/build receipt | Pending |
 | Clean standard-user installation; expected Start-menu launch | Pending |
-| Disconnect network; launch with no Python/Slicer/Qt preinstalled | Pending |
+| Offline application operation with bundled dependencies; retain Horizon connection and test app-only network restriction if permitted | Pending |
 | Open synthetic dataset; first-use local work location | Pending |
 | Explicit reader assignment; two readers use separate work folders and attribution | Pending |
 | Offline reader guide opens locally; no terminal or external Python setup required | Pending |

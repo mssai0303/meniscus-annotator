@@ -127,10 +127,11 @@ def prepare(runtime, installer, output, cache):
         if action == 'create':
             test_config = test_config.replace('arguments=--no-splash', 'arguments=--no-main-window --no-splash')
         (output / 'bin' / (stem + 'LauncherSettings.ini')).write_text(test_config, encoding='utf-8')
-    # Keep the test profile from constructing the reader widget before the suite
-    # redirects its QSettings; production home remains MeniscusAnnotator.
+    # Use the same home module as the reader app, but a separate test profile.
+    # An empty HomeModule caused a native pre-Python graphics abort on the
+    # pinned Windows runtime; the bounded installed diagnostic verified this fix.
     test_defaults = output / 'share' / 'Slicer-5.12' / 'MeniscusAnnotatorTestDefaultSettings.ini'
-    test_defaults.write_text('[Modules]\nHomeModule=\n[Extensions]\nAutoUpdateCheck=false\nAutoUpdateInstall=false\n[ApplicationUpdate]\nAutoUpdateCheck=false\n[ApplicationUpdates]\nEnabled=false\n', encoding='utf-8')
+    test_defaults.write_text('[Modules]\nHomeModule=MeniscusAnnotator\n[Extensions]\nAutoUpdateCheck=false\nAutoUpdateInstall=false\n[ApplicationUpdate]\nAutoUpdateCheck=false\n[ApplicationUpdates]\nEnabled=false\n', encoding='utf-8')
     license_dir = output / 'share' / 'MeniscusAnnotator' / 'licenses'
     license_dir.mkdir(parents=True)
     for source in (REPO / 'packaging' / 'licenses').glob('*'):
