@@ -22,6 +22,12 @@ CASE_FIELDS = frozenset('schema_version dataset_version case_key participant_id 
 INDEX_FIELDS = ['participant_id', 'visit_month', 'knee_side', 'case_key', 'relative_folder', 'expected_slice_count', 'annotation_status', 'image_sha256']
 SLICE_CONVENTION = 'zero-based along physical volume axis 2; ascending projection on DICOM row-direction cross column-direction; never InstanceNumber'
 TOL_MM = 0.01
+PRACTICE_ACTORS = {'automated': 'Software QA (automated)',
+                   'human_unverified': 'Preview user (identity unverified)'}
+PRACTICE_APPROVAL_ROLES = {
+    'automated': 'Automated software workflow check only; not a human or anatomical approval',
+    'human_unverified': 'Software practice operator; not an accepted research annotation or independent assessment'}
+
 
 
 class ValidationError(ValueError):
@@ -31,6 +37,21 @@ class ValidationError(ValueError):
 def need(condition, message):
     if not condition:
         raise ValidationError(message)
+
+
+def validate_practice_context(context, protocol):
+    """Explicit, immutable software-practice attribution within meniscus_job/1."""
+    if context is None:
+        return None
+    need(isinstance(context, dict) and set(context) == {'purpose', 'actor', 'actor_type'},
+         'Software practice context requires purpose, actor and actor_type only.')
+    need(context.get('purpose') == 'software_practice' and context.get('actor_type') in PRACTICE_ACTORS,
+         'Unsupported software practice purpose or actor type.')
+    need(context.get('actor') == PRACTICE_ACTORS[context['actor_type']],
+         'Software practice actor must use the canonical non-research role label; do not attribute automated work to Jeff.')
+    need(protocol.get('status') == 'draft',
+         'Software practice requires a draft protocol and cannot be promoted to research annotation.')
+    return copy.deepcopy(context)
 
 
 def now():
@@ -323,11 +344,15 @@ class WorkStore:
                 else:
                     start = rule.get('starting_mask')
                     need(isinstance(start, dict) and all(isinstance(start.get(k), str) and start[k].strip() for k in ('path', 'sha256', 'version', 'source')), 'Correction job requires an explicitly permitted mask path, checksum, source and version.')
+        protocol = (self.job or {}).get('protocol', {'version': 'draft-practice-1', 'status': 'draft'})
+        self.practice_context = validate_practice_context((self.job or {}).get('practice_context'), protocol)
         binding_path = self.root / 'dataset.json'
         binding = {'schema_version': 'meniscus_work/1', 'dataset_identity': dataset.identity, 'dataset_version': dataset.version}
-        # Claim only a previously empty/unclaimed folder; no overwrite of other datasets.
+        if self.practice_context is not None:
+            binding['practice_context'] = copy.deepcopy(self.practice_context)
+        # Claim only a previously empty/unclaimed folder; no overwrite of other datasets or practice scopes.
         if binding_path.exists():
-            need(read_json(binding_path) == binding, 'Work folder belongs to a different dataset. Reconnect the original or choose a new local work folder.')
+            need(read_json(binding_path) == binding, 'Work folder belongs to a different dataset or practice scope. Reconnect the original configuration or choose a separate local work folder.')
         else:
             write_json(binding_path, binding)
         self.cases_root = self.root / 'cases'
@@ -395,6 +420,14 @@ class WorkStore:
         need(state.get('protocol', {}).get('version') and state.get('protocol', {}).get('status') in ('draft', 'released'), 'Saved annotation protocol is invalid.')
         need(set(state.get('compartments', {})) == {'medial', 'lateral'} and all(type(v) is bool for v in state['compartments'].values()), 'Saved compartment consideration records are invalid.')
         need(isinstance(state.get('notes'), str) and isinstance(state.get('annotator'), str) and state['annotator'].strip(), 'Saved annotator or notes fields are invalid.')
+        context = state.get('practice_context')
+        need(context == self.practice_context, 'Saved software practice context differs from the explicit job configuration.')
+        expected_actor = context['actor'] if context is not None else 'Jeff'
+        need(state['annotator'] == expected_actor, 'Saved annotation actor differs from its assigned research or software-practice role.')
+        if context is not None:
+            validate_practice_context(context, state['protocol'])
+            need(state['protocol'] == (self.job or {}).get('protocol', {'version': 'draft-practice-1', 'status': 'draft'}), 'Saved software practice protocol differs from the explicit job configuration.')
+            need(state.get('annotation_purpose') == 'software_practice' and state.get('status') != 'approved', 'Software practice cannot be an accepted research annotation.')
         reviews = state.get('review', [])
         need(len(reviews) == case.n_slices and all(r.get('slice_index') == k and type(r.get('reviewed')) is bool and type(r.get('flag')) is bool and isinstance(r.get('note'), str) for k, r in enumerate(reviews)), 'Saved slice review records are incomplete.')
         need(type(state.get('last_slice')) is int and 0 <= state['last_slice'] < case.n_slices, 'Saved slice position is invalid.')
@@ -407,15 +440,23 @@ class WorkStore:
             need(isinstance(start, dict) and all(isinstance(start.get(k), str) and start[k] for k in ('source', 'version', 'sha256')), 'Correction annotation lacks starting-mask provenance.')
         if state['status'] in ('approved', 'practice_approved'):
             approval = state.get('approval')
-            need(isinstance(approval, dict) and state.get('approver') == 'Jeff' and bool(approval.get('approved_utc')), 'Saved approval metadata is incomplete.')
+            need(isinstance(approval, dict) and state.get('approver') == expected_actor and bool(approval.get('approved_utc')), 'Saved approval metadata is incomplete.')
             need(type(approval.get('practice_only')) is bool and approval['practice_only'] == (state['status'] == 'practice_approved'), 'Approval practice status is inconsistent.')
             need(all(r['reviewed'] and not r['flag'] for r in reviews) and all(state['compartments'].values()), 'Approved work has incomplete review or compartment consideration.')
             need(state['status'] != 'approved' or state['protocol']['status'] == 'released', 'Research approval requires a released protocol.')
+            if context is not None:
+                automated = context['actor_type'] == 'automated'
+                need(approval.get('approval_type') == ('automated_software_check' if automated else 'manual_software_practice') and approval.get('role') == PRACTICE_APPROVAL_ROLES[context['actor_type']], 'Software practice approval roles are misleading or incomplete.')
+                need(approval.get('human_anatomical_approval') is False and approval.get('accepted_research_annotation') is False and approval.get('deliberate_approval_required_by_ui') is (not automated), 'Software practice approval must not imply a human or research approval.')
         else:
             need(state.get('approval') is None and state.get('approver') is None, 'Draft work must not retain active approval metadata.')
 
 
 def validity_array(state, uncertainty):
+    context = state.get('practice_context')
+    if isinstance(context, dict) and context.get('purpose') == 'software_practice':
+        # Software review flags exercise workflow only; they never confirm anatomy/background.
+        return np.zeros_like(uncertainty, dtype=np.uint8)
     valid_slices = np.asarray([r['reviewed'] and not r['flag'] for r in state['review']], dtype=np.uint8)
     return ((valid_slices[:, None, None] == 1) & (uncertainty == 0)).astype(np.uint8)
 
@@ -464,10 +505,12 @@ class CaseSession:
                 'array_convention': 'files IJK; application arrays KJI; displayed slice n = stored k + 1',
                 'review': [{'slice_index': k, 'reviewed': False, 'flag': False, 'note': ''} for k in range(self.case.n_slices)],
                 'notes': '', 'compartments': {'medial': False, 'lateral': False}, 'protocol': copy.deepcopy(protocol),
-                'annotator': 'Jeff', 'approver': None, 'approval': None,
+                'practice_context': copy.deepcopy(self.store.practice_context),
+                'annotation_purpose': 'software_practice' if self.store.practice_context is not None else 'research_annotation',
+                'annotator': self.store.practice_context['actor'] if self.store.practice_context is not None else 'Jeff', 'approver': None, 'approval': None,
                 'initialization': {'method': mode, 'starting_mask': None}, 'job_identity': canonical(job) if job else None,
                 'last_slice': 0, 'status': 'in_progress', 'created_utc': now(), 'saved_utc': None,
-                'uncertainty_policy': 'Separate binary overlay may overlap anatomical labels; all uncertainty and attention flags must be resolved before approval. Training validity excludes uncertain and unreviewed/flagged voxels.',
+                'uncertainty_policy': 'Separate binary overlay may overlap anatomical labels; all uncertainty and attention flags must be resolved before approval. ' + ('SOFTWARE PRACTICE validity is zero for every voxel; review flags do not confirm anatomical labels or background.' if self.store.practice_context is not None else 'Training validity excludes uncertain and unreviewed/flagged voxels.'),
                 'technical_acceptance_scope': 'Identity, byte integrity, native geometry, label mapping and review completeness only; not anatomical correctness. Downstream training-loader integration is a separate requirement.'}
 
     def blank_arrays(self):
@@ -525,6 +568,8 @@ class CaseSession:
             errors.append('Confirm that both medial and lateral compartments were considered.')
         if not self.state.get('annotator') or not self.state['protocol'].get('version'):
             errors.append('Record the annotator and annotation protocol version.')
+        if self.store.practice_context is not None and not practice:
+            errors.append('SOFTWARE PRACTICE cannot receive research approval. Use separate practice approval/export only.')
         if self.state['protocol'].get('status') != 'released' and not practice:
             errors.append('The anatomical protocol is draft. Only clearly marked practice approval is permitted.')
         return errors
@@ -545,8 +590,17 @@ class CaseSession:
         state['saved_utc'] = now()
         state['app_version'] = APP_VERSION
         if approve:
-            state.update(status='practice_approved' if practice else 'approved', approver='Jeff',
-                         approval={'approved_utc': now(), 'role': 'assigned annotator and approver; not an independent second reader', 'practice_only': bool(practice), 'deliberate_approval_required_by_ui': True})
+            if self.store.practice_context is not None:
+                context = self.store.practice_context
+                automated = context['actor_type'] == 'automated'
+                state.update(status='practice_approved', approver=context['actor'],
+                             approval={'approved_utc': now(), 'role': PRACTICE_APPROVAL_ROLES[context['actor_type']],
+                                       'practice_only': True, 'approval_type': 'automated_software_check' if automated else 'manual_software_practice',
+                                       'human_anatomical_approval': False, 'accepted_research_annotation': False,
+                                       'deliberate_approval_required_by_ui': not automated})
+            else:
+                state.update(status='practice_approved' if practice else 'approved', approver='Jeff',
+                             approval={'approved_utc': now(), 'role': 'assigned annotator and approver; not an independent second reader', 'practice_only': bool(practice), 'deliberate_approval_required_by_ui': True})
         elif state['status'] not in ('in_progress', 'needs_review'):
             state['status'] = 'in_progress'
         self.store._validate_state(state, self.case)
@@ -634,7 +688,7 @@ def export_approved(store, destination, case_keys=None, include_practice=False):
                 need(state.get('job_identity') == expected_job, 'Saved approval uses a different job configuration. Supply the original explicit job before export.')
                 need(all(r['reviewed'] and not r['flag'] for r in state['review']) and not uncertainty.any(), 'Approval review/uncertainty records are incomplete.')
                 need(all(state['compartments'].get(k) is True for k in ('medial', 'lateral')), 'Approval compartment records are incomplete.')
-                need(state.get('approval') and state.get('approver') == 'Jeff', 'Approval metadata is missing.')
+                need(state.get('approval') and state.get('approver') == state.get('annotator'), 'Approval metadata or actor attribution is missing.')
                 need(state['status'] == 'practice_approved' or state['protocol'].get('status') == 'released', 'Research approval requires a released protocol.')
                 found = (case, checkpoint, state)
                 break
@@ -647,7 +701,8 @@ def export_approved(store, destination, case_keys=None, include_practice=False):
             raise ValidationError('Case %s has no eligible approved version. Complete review and approval, or remove it from this export.' % key)
     need(accepted, 'No eligible approved cases are available to export.')
     practice = any(s['status'] == 'practice_approved' for _, _, s in accepted)
-    prefix = 'PRACTICE_ONLY-' if practice else ''
+    software_practice = any(s.get('practice_context') is not None for _, _, s in accepted)
+    prefix = 'SOFTWARE_PRACTICE_ONLY-' if software_practice else ('PRACTICE_ONLY-' if practice else '')
     result_name = prefix + 'Meniscus_results_' + dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ') + '_' + uuid.uuid4().hex[:6] + '.zip'
     output = destination / result_name
     temporary = destination / ('.pending-' + uuid.uuid4().hex + '.zip')
@@ -669,11 +724,14 @@ def export_approved(store, destination, case_keys=None, include_practice=False):
                                  'manifest_sha256': sha256(checkpoint / 'manifest.json'), 'status': state['status']})
             manifest = {'schema_version': 'meniscus_results/1', 'created_utc': now(), 'app_version': APP_VERSION,
                         'dataset_identity': store.dataset.identity, 'dataset_version': store.dataset.version,
-                        'practice_only': practice, 'cases': receipts,
+                        'practice_only': practice, 'software_practice': software_practice, 'cases': receipts,
                         'training_contract': 'labels 0/1/2 fixed background/medial/lateral; use validity.nii.gz to interpret background. Uncertainty is separate, never a third training class.',
-                        'limits': 'Technical acceptance is not anatomical validation. Jeff is annotator and approver. Actual downstream training-loader integration must be checked separately.'}
+                        'limits': 'Technical acceptance is not anatomical validation. Actor roles are recorded per case. Actual downstream training-loader integration must be checked separately.'}
+            if software_practice:
+                manifest.update(practice_context=copy.deepcopy(store.practice_context), accepted_research_annotation=False, human_anatomical_approval=False)
+                manifest['training_contract'] += ' SOFTWARE PRACTICE: validity is zero across the entire grid; no voxel is confirmed training anatomy or background.'
             archive.writestr('results.json', json.dumps(manifest, ensure_ascii=False, indent=2))
-            archive.writestr('README.txt', ('PRACTICE ONLY — NOT RESEARCH APPROVAL\n' if practice else '') + 'Versioned approved annotations on the original full acquired grid. MRI images are omitted.\nlabels.nii.gz: 0 background, 1 medial, 2 lateral. uncertainty.nii.gz: binary uncertainty.\nOnly voxels with validity.nii.gz = 1 may be treated as reviewed known labels/background.\nTechnical validation does not establish anatomical correctness.\n')
+            archive.writestr('README.txt', ('SOFTWARE PRACTICE — NOT ACCEPTED RESEARCH ANNOTATIONS; NOT HUMAN ANATOMICAL APPROVAL\nEvery validity voxel is zero. Review flags exercise software only; labels/background are not anatomically confirmed.\n' if software_practice else ('PRACTICE ONLY — NOT RESEARCH APPROVAL\n' if practice else '')) + 'Versioned approved annotations on the original full acquired grid. MRI images are omitted.\nlabels.nii.gz: 0 background, 1 medial, 2 lateral. uncertainty.nii.gz: binary uncertainty.\nOnly voxels with validity.nii.gz = 1 may be treated as reviewed known labels/background.\nTechnical validation does not establish anatomical correctness.\n')
         with zipfile.ZipFile(temporary) as archive:
             need(archive.testzip() is None, 'Export ZIP integrity check failed. Retry export.')
             for case, checkpoint, state in accepted:

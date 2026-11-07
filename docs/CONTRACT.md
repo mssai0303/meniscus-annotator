@@ -126,3 +126,59 @@ Approving requires complete explicit review, both compartments considered, annot
 Practice exports require an explicit `include_practice=True` choice and are named `PRACTICE_ONLY-Meniscus_results_…zip`, with practice status in results metadata and README. Routine research export includes only research approvals. Fixed mapping and `validity.nii.gz` semantics travel with the ZIP. Outputs contain no unnecessary source MRI duplication, private selection/exposure records or preparation logs.
 
 Technical acceptance establishes identity, geometry, byte integrity, file consistency, mapping and review completeness. It does **not** prove anatomical correctness, internally shifted drawing correctness, reader independence, downstream loader compatibility or readiness for training. The real downstream training-loader check remains an explicit integration requirement until its loader is available and exercised.
+
+
+## Explicit software-practice context (optional job extension)
+
+A `meniscus_job/1` may include this versioned-contract extension when software
+checks or an unverified preview operator use real or synthetic practice images:
+
+```json
+"practice_context": {
+  "purpose": "software_practice",
+  "actor": "Software QA (automated)",
+  "actor_type": "automated"
+}
+```
+
+The only actor types and canonical role labels are `automated` /
+`Software QA (automated)` and `human_unverified` /
+`Preview user (identity unverified)`. The three context fields are explicit and
+closed. Software practice must use a draft protocol. Its immutable context is
+bound in the local `dataset.json` and every saved annotation; a work folder cannot
+be reused for ordinary production work or a different practice actor. Work and
+results must still be separate from source inputs and from each other.
+
+Software-practice metadata records `annotation_purpose = software_practice`, the
+canonical actor as annotator, and no approver while draft. A workflow completion
+may be saved only with explicit practice approval. Automated completion records
+`approval_type = automated_software_check`, the software actor as approver,
+`human_anatomical_approval = false`, `accepted_research_annotation = false` and
+`deliberate_approval_required_by_ui = false`. It never implies that Jeff reviewed
+or approved an automated drawing. Manual unverified preview completion uses
+`manual_software_practice`, the preview role label and the UI-confirmation
+requirement, while remaining explicitly outside research acceptance. Existing
+review, uncertainty, compartment, source-identity and technical export safeguards
+remain required in both modes.
+
+Software-practice exports require the explicit practice option. Their filenames
+begin `SOFTWARE_PRACTICE_ONLY-`; results metadata and README state that these are
+not accepted research annotations or human anatomical approvals. They cannot
+appear in ordinary research exports. The source MRI is omitted. Source identities
+and actor/context remain recorded in each private case annotation.
+
+Jobs without `practice_context` retain the assigned Jeff workflow. Their work
+bindings remain unchanged, and older saved annotations without the optional
+context/purpose fields remain readable. Ordinary draft-protocol practice exports
+retain their existing `PRACTICE_ONLY-` prefix.
+
+
+For explicit `software_practice` contexts, **every voxel of `validity.nii.gz` is
+zero**, for automated QA and unverified manual practice alike. Programmatically
+completed review rows or practice approval never turn raw labels or zero-valued
+background into anatomically confirmed training targets. The full-grid 0/1/2
+label image remains available only to test software geometry, mapping and save/
+export behaviour. Checkpoint validation recomputes this full exclusion and rejects
+a software-practice validity image that grants any voxel training validity.
+Ordinary production and ordinary draft-protocol practice without this explicit
+context keep their existing review/flag/uncertainty-based validity semantics.

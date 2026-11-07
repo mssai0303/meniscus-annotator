@@ -64,8 +64,11 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self._observers = []
         self._lastArrays = None
         self._editQueued = False
+        self._windowLevelActive = False
         self._lastExport = None
         self._diagnostic = ''
+        config_path = os.environ.get('MENISCUS_SOFTWARE_PRACTICE_CONFIG') or os.environ.get('MENISCUS_REAL_PRACTICE_CONFIG')
+        self._practiceConfig = json.loads(Path(config_path).read_text(encoding='utf-8')) if config_path else None
         settings_file = os.environ.get('MENISCUS_SETTINGS_FILE')
         self.settings = qt.QSettings(settings_file,qt.QSettings.IniFormat) if settings_file else qt.QSettings()
         self._buildStyle()
@@ -299,6 +302,9 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.opacity.setValue(25)
         self.opacity.connect('valueChanged(int)',self._display)
         inner.addWidget(self.opacity)
+        self.windowLevelButton = self._button('Window/level',self._windowLevel,inner)
+        self.windowLevelButton.setCheckable(True)
+        self.windowLevelButton.setToolTip('Left-drag on the image to adjust brightness and contrast. Choose Paint, Draw or Erase to return to annotation.')
         self._button('Reset view',self._resetView,inner,icon='reset')
         self.reformats = qt.QCheckBox('Show orientation views')
         self.reformats.setToolTip('Coronal and axial reformats are for orientation. Editing stays on the acquired sagittal view.')
@@ -495,6 +501,15 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.emptyCanvas = EmptyCanvas(slicer.app.layoutManager().sliceWidget('Red').sliceView(),self)
         self.emptyCanvas.ready(bool(self.dataset))
 
+    def _updatePracticeContext(self):
+        context = (self.session.state.get('practice_context') if self.session else None) or (getattr(self.store,'practice_context',None) if self.store else None)
+        if context:
+            automated = context.get('actor_type')=='automated'
+            slicer.util.mainWindow().setWindowTitle('Meniscus Annotator — AUTOMATED SOFTWARE QA' if automated else 'Meniscus Annotator — SOFTWARE PRACTICE — not research annotations')
+            self.protocolLabel.setText('SOFTWARE PRACTICE · Not accepted research annotations')
+            self.message.setText('AUTOMATED SOFTWARE QA · Not human annotations' if automated else 'SOFTWARE PRACTICE · Separate work and exports')
+        return context
+
     def _showDataset(self):
         if self.dataset: qt.QDesktopServices.openUrl(qt.QUrl.fromLocalFile(str(self.dataset.root)))
 
@@ -554,6 +569,8 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             self._safe(lambda: self.openDataset(root))
 
     def openDataset(self, root, work_root=None):
+        if self._practiceConfig and Path(root).resolve()!=Path(self._practiceConfig['input_root']).resolve():
+            raise ValidationError('This software-practice launcher is restricted to its two permitted cases. Other datasets cannot be opened here.')
         self.message.setText('Validating dataset…')
         slicer.app.processEvents()
         def progress(done, total):
@@ -567,8 +584,10 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         documents = qt.QStandardPaths.writableLocation(qt.QStandardPaths.DocumentsLocation)
         version = ds.cases[0].metadata['dataset_version']
         remembered = self.settings.value('Meniscus/work/' + version, '')
-        location = work_root or remembered or str(Path(documents) / 'Meniscus_annotation_work' / version)
-        if not work_root and not remembered:
+        location = work_root or (self._practiceConfig['work_root'] if self._practiceConfig else remembered) or str(Path(documents) / 'Meniscus_annotation_work' / version)
+        if self._practiceConfig and Path(location).resolve()!=Path(self._practiceConfig['work_root']).resolve():
+            raise ValidationError('Software practice must use its separate local practice work folder.')
+        if not work_root and not remembered and not self._practiceConfig:
             dialog = qt.QMessageBox(slicer.util.mainWindow())
             dialog.setWindowTitle('Local work folder')
             dialog.setText('Annotations will be saved separately from the dataset.')
@@ -582,10 +601,14 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
                     return
                 location = str(Path(chosen) / version)
         job_path = str(self.settings.value('Meniscus/job/' + ds.identity, ''))
+        if self._practiceConfig: job_path = self._practiceConfig['job_path']
         job = json.loads(Path(job_path).read_text(encoding='utf-8')) if job_path else None
+        if self._practiceConfig and (not job or job.get('practice_context',{}).get('purpose')!='software_practice'):
+            raise ValidationError('The software-practice actor and protocol configuration is missing or invalid.')
         store = WorkStore(location, ds, job=job)
         self.closeCase()
         self.dataset, self.store = ds, store
+        self._updatePracticeContext()
         self.settings.setValue('Meniscus/dataset', str(Path(root).resolve()))
         self.settings.setValue('Meniscus/work/' + version, str(location))
         self.datasetLabel.setText(version + '\n' + str(len(ds.cases)) + ' complete scans · local work folder connected')
@@ -597,6 +620,9 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         return ds
 
     def _loadJob(self):
+        if self._practiceConfig:
+            slicer.util.infoDisplay('This launcher uses a fixed SOFTWARE PRACTICE protocol and separate work folder. Research jobs cannot be loaded here.',windowTitle='Software practice only')
+            return
         if not self.dataset:
             slicer.util.warningDisplay('Open the dataset first.')
             return
@@ -785,6 +811,10 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         a = self.session.case.affine_ras
         normal = a[:3,2]/np.linalg.norm(a[:3,2])
         up = a[:3,1]/np.linalg.norm(a[:3,1])
+        # Use a superior-up display while retaining the acquired-plane normal and
+        # original IJK grid. This is an in-plane 180-degree camera rotation only.
+        if up[2] < 0:
+            up = -up
         horizontal = np.cross(up, normal)
         centre = a @ np.array([(self.session.case.shape_xyz[0]-1)/2, (self.session.case.shape_xyz[1]-1)/2, k, 1])
         node = slicer.app.layoutManager().sliceWidget('Red').mrmlSliceNode()
@@ -899,6 +929,8 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         if not self.session:
             return
         self._segmentChanged()
+        if self._windowLevelActive:
+            self.setTool('Paint')
         self.activeLabel = key
         previousTool = self.editor.activeEffect().name if self.editor.activeEffect() else 'Paint'
         if self.editor.segmentationNode() != self.anatomy:
@@ -917,17 +949,41 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         if not self.session:
             return
         self._segmentChanged()
+        self._windowLevelActive = False
+        self.windowLevelButton.setChecked(False)
+        slicer.app.applicationLogic().GetInteractionNode().SetCurrentInteractionMode(slicer.vtkMRMLInteractionNode.ViewTransform)
         self.editor.setActiveEffectByName(name)
         self._configureEffects()
         for n, b in self.toolButtons.items():
             b.setChecked(n == name)
         self._toolStatus()
 
+    def _windowLevel(self):
+        if not self.session:
+            return
+        if self._windowLevelActive:
+            self.setTool('')
+            return
+        self._segmentChanged()
+        self.editor.setActiveEffectByName('')
+        self._windowLevelActive = True
+        for button in self.toolButtons.values(): button.setChecked(False)
+        self.windowLevelButton.setChecked(True)
+        slicer.app.applicationLogic().GetInteractionNode().SetCurrentInteractionMode(slicer.vtkMRMLInteractionNode.AdjustWindowLevel)
+        self._toolStatus()
+
     def _toolStatus(self):
+        if self._windowLevelActive:
+            self.toolText.setText('Window/level · Display only\nLeft-drag to adjust brightness and contrast')
+            annotation = slicer.app.layoutManager().sliceWidget('Red').sliceView().cornerAnnotation()
+            annotation.SetText(vtk.vtkCornerAnnotation.UpperRight,'Window/level · Display only\nLeft-drag · No drawing')
+            slicer.app.layoutManager().sliceWidget('Red').sliceView().forceRender()
+            return
         tool = self.editor.activeEffect().name if self.editor.activeEffect() else 'Navigate'
         self.toolText.setText(f'{LABELS[self.activeLabel][0]} · {tool}\nEditing: this acquired slice only')
         annotation = slicer.app.layoutManager().sliceWidget('Red').sliceView().cornerAnnotation()
         annotation.SetText(vtk.vtkCornerAnnotation.UpperRight,f'{LABELS[self.activeLabel][0]} · {tool}\n{self.brushSize.value:g} mm · This slice only')
+        slicer.app.layoutManager().sliceWidget('Red').sliceView().forceRender()
 
     def _brush(self, *args):
         self.settings.setValue('Meniscus/brush', self.brushSize.value)
@@ -1051,8 +1107,11 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.attention.setChecked(review[self.currentSlice]['flag'])
         self.attention.blockSignals(False)
         state = 'Reviewed' if review[self.currentSlice]['reviewed'] else 'Not reviewed'
-        self.saveStatus.setText(('Unsaved changes' if self.dirty else 'Saved') + ' · ' + state + '  ')
-        self.message.setText('Practice work · Draft protocol' if self.session.state['protocol']['status']=='draft' else 'Protocol ' + self.session.state['protocol']['version'])
+        context = self._updatePracticeContext()
+        save_text = 'Unsaved changes' if self.dirty else ('Saved' if self.session.current_checkpoint else 'New draft')
+        self.saveStatus.setText(('SOFTWARE PRACTICE · ' if context else '') + save_text)
+        if not context:
+            self.message.setText('Practice work · Draft protocol' if self.session.state['protocol']['status']=='draft' else 'Protocol ' + self.session.state['protocol']['version'])
         annotation = slicer.app.layoutManager().sliceWidget('Red').sliceView().cornerAnnotation()
         annotation.SetText(vtk.vtkCornerAnnotation.UpperLeft,f'Slice {self.currentSlice+1} of {len(review)}\n{state}')
 
@@ -1100,7 +1159,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         if hashlib.sha256(slicer.util.arrayFromVolume(self.volume).tobytes()).hexdigest() != self._volumeDigest:
             self.editor.setActiveEffectByName('')
             raise ValidationError('The loaded source image pixels changed. Reopen the case before saving.')
-        self.saveStatus.setText('Saving…')
+        self.saveStatus.setText(('SOFTWARE PRACTICE · ' if self.session.state.get('practice_context') else '') + 'Saving…')
         self.saveStatus.repaint()
         labels, uncertain = self.collectArrays()
         self.session.state['runtime'] = {'slicer_version':slicer.app.applicationVersion, 'slicer_revision':slicer.app.repositoryRevision, 'application_version':VERSION, 'interface_revision':'workspace-2'}
@@ -1108,7 +1167,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.dirty = False
         self.refreshReview()
         self._populate()
-        self.saveStatus.setText(('Approved practice' if practice else 'Approved') + ' · Saved' if approve else 'Saved · checkpoint verified')
+        self.saveStatus.setText(('SOFTWARE PRACTICE · ' if self.session.state.get('practice_context') else '') + (('Practice approved · Saved' if practice else 'Approved · Saved') if approve else 'Saved'))
         return path
 
     def _approve(self):
@@ -1121,7 +1180,11 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             self.caseReviewPanel.collapsed = False
             slicer.util.warningDisplay('Approval is unavailable:\n\n' + '\n'.join('• ' + e for e in errors),windowTitle='Review required')
             return
-        text = ('This protocol is a draft. This creates an approved PRACTICE version, excluded from research exports.\n\n' if practice else '') + 'I, Jeff, have considered both compartments and reviewed every acquired slice under the recorded protocol. This is my own approval, not an independent second-reader assessment.\n\nApprove this version?'
+        context = self.session.state.get('practice_context')
+        if context:
+            text = 'SOFTWARE PRACTICE ONLY. This records completion of a practice workflow, not an accepted research annotation or anatomical validation.\n\nRecorded practice actor: ' + self.session.state['annotator'] + '. Automated test work is never attributed to Jeff.\n\nRecord this practice version?'
+        else:
+            text = ('This protocol is a draft. This creates an approved PRACTICE version, excluded from research exports.\n\n' if practice else '') + 'I, Jeff, have considered both compartments and reviewed every acquired slice under the recorded protocol. This is my own approval, not an independent second-reader assessment.\n\nApprove this version?'
         if slicer.util.confirmYesNoDisplay(text,windowTitle='Approve case'):
             self._safe(lambda: self.save(approve=True,practice=practice))
 
@@ -1156,6 +1219,10 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         selected.setEnabled(bool(chosen_keys))
         layout.addWidget(selected)
         practice = qt.QCheckBox('Practice results (separate from research approval)')
+        if getattr(self.store,'practice_context',None):
+            practice.setText('SOFTWARE PRACTICE results only — not research annotations')
+            practice.setChecked(True)
+            practice.setEnabled(False)
         layout.addWidget(practice)
         buttons = qt.QDialogButtonBox(qt.QDialogButtonBox.Ok | qt.QDialogButtonBox.Cancel)
         buttons.connect('accepted()',dialog.accept)
@@ -1166,13 +1233,17 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         if self.session and self.dirty and self._safe(self.save) is None:
             return
         documents = qt.QStandardPaths.writableLocation(qt.QStandardPaths.DocumentsLocation)
-        target = qt.QFileDialog.getExistingDirectory(slicer.util.mainWindow(), 'Export results to folder', documents)
-        if not target:
-            return
+        if self._practiceConfig:
+            destination = Path(self._practiceConfig['results_root'])
+        else:
+            target = qt.QFileDialog.getExistingDirectory(slicer.util.mainWindow(), 'Export results to folder', documents)
+            if not target:
+                return
+            destination = Path(target)/'Meniscus_annotation_results'
         keys = None
         if selected.checked:
             keys = chosen_keys
-        result = self._safe(lambda: export_approved(self.store, Path(target)/'Meniscus_annotation_results', case_keys=keys, include_practice=practice.checked))
+        result = self._safe(lambda: export_approved(self.store, destination, case_keys=keys, include_practice=practice.checked))
         if result:
             self._lastExport = result
             self.message.setText('Export verified: ' + Path(result).name)
@@ -1186,7 +1257,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
                 qt.QDesktopServices.openUrl(qt.QUrl.fromLocalFile(str(Path(result).parent)))
 
     def _help(self):
-        text = 'Meniscus Annotator ' + VERSION + '\n\nOpen dataset → Open case → Draw → Review every slice → Save draft → Approve → Export.\n\nMRI view shortcuts (inactive while typing notes):\nLeft / Right: acquired slice · R: reviewed and next\nU: next unreviewed · F: next flagged\n1 / 2 / 3: medial / lateral / uncertain\nP / D / E: paint / draw / erase · Esc: navigate\nCtrl+S: save · Ctrl+Z / Ctrl+Y: undo / redo\n\nNative Slicer mouse controls:\nCtrl+wheel: zoom · middle drag: pan\nRight drag: window/level · wheel: slice\nDraw: left-click contour points, right-click to apply.\n\nEvery changed slice requires review again. Uncertainty is a separate overlapping mask and blocks approval until resolved. Draft protocols allow practice approval only. Saved versions recover work after restart; in-memory undo history does not survive restart.\n\nHelp → Diagnostics includes details of the last error.'
+        text = 'Meniscus Annotator ' + VERSION + '\n\nOpen dataset → Open case → Draw → Review every slice → Save draft → Approve → Export.\n\nMRI view shortcuts (inactive while typing notes):\nLeft / Right: acquired slice · R: reviewed and next\nU: next unreviewed · F: next flagged\n1 / 2 / 3: medial / lateral / uncertain\nP / D / E: paint / draw / erase · Esc: navigate\nCtrl+S: save · Ctrl+Z / Ctrl+Y: undo / redo\n\nNative Slicer mouse controls:\nCtrl+wheel: zoom · middle drag: pan\nRight drag: zoom · wheel: slice\nWindow/level: choose it in Display and orientation, then left-drag\nDraw: left-click contour points, right-click to apply.\n\nEvery changed slice requires review again. Uncertainty is a separate overlapping mask and blocks approval until resolved. Draft protocols allow practice approval only. Saved versions recover work after restart; in-memory undo history does not survive restart.\n\nHelp → Diagnostics includes details of the last error.'
         dialog = qt.QMessageBox(slicer.util.mainWindow())
         dialog.setWindowTitle('Setup and shortcut help')
         dialog.setText(text)
