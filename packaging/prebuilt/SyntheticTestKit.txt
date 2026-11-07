@@ -11,7 +11,7 @@ Start menu. Open that folder in File Explorer and run the named executable:
   choose Open dataset and that synthetic package for manual interface practice.
   Each has an explicit draft correction job and two coloured geometric patches
   on the middle acquired slice. The actor is an unverified practice user, never
-  Jeff. The shapes are not anatomical teaching examples.
+  a research reader. The shapes are not anatomical teaching examples.
 
   MeniscusAnnotatorCorrectionChecks.exe - uses a separate automated fixture through Open dataset,
   exact starting-mask loading, native-plane paint/erase/undo/redo, save/reopen,
@@ -29,7 +29,7 @@ Start menu. Open that folder in File Explorer and run the named executable:
 
   MeniscusAnnotatorResumeCheck.exe - start this only after a successful workflow check.
   It opens a fresh process and verifies the previous synthetic case, slice,
-  notes and native masks. The test profile is separate from Jeff's reader profile.
+  notes and native masks. The test profile is separate from the ordinary reader profile.
 
 Every invocation uses a fresh folder under the operating system's local app-data
 location / Meniscus Annotator synthetic tests. Input examples, work, exports and

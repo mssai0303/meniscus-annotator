@@ -69,7 +69,7 @@ Git.** Committed screenshots use synthetic inputs only.
 
 The two permitted scans are used in an explicitly configured SOFTWARE PRACTICE
 workspace with separate local work and results. Automated and manual practice
-have canonical non-Jeff actors; automated tests are never attributed to Jeff.
+have canonical software actors; automated tests are never attributed to a research reader.
 Every validity voxel remains **zero**, including after software review/approval.
 Neither labelled voxels nor background are accepted research training targets.
 These checks are software and geometry verification, not an anatomical assessment
@@ -146,7 +146,7 @@ reader interface.
 The real input package is prepared with flat case folders, and legacy layout
 support is retained. Two permitted practice scans have now been exercised in the
 Mac app, but this does not accept the full research batch. A released anatomical
-protocol, Jeff's actual annotation/review, the final installed Windows workflow
+protocol, actual expert annotation/review, the final installed Windows workflow
 and downstream training-loader integration remain separate requirements.
 The actual downstream loader was not available and has not passed integration.
 Geometry checks cannot detect every internally shifted or incorrectly drawn mask.

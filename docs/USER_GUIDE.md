@@ -21,8 +21,9 @@ verified starting masks load as unreviewed predictions to correct, not completed
 annotations. Missing or unresolved masks are blocked instead of replaced with
 blank labels. MRI-only packages without a job require an explicit confirmation
 before drawing from blank; the default is No. If you expected predictions,
-cancel and obtain the correction package. Confirm the assigned reader identity
-before opening ordinary work. Do not confirm another person's name for testing.
+cancel and obtain the correction package. In **Reader identity**, enter your
+**Reader name or study ID** and choose **Continue**. Use the same spelling each
+time. If the assignment already names a reader, confirm it only if it is yours.
 
 The header always identifies **Correction · Existing automated mask** or
 **Blank annotation · No starting mask**. A slice outside the predicted meniscus
@@ -40,8 +41,8 @@ needs attention** means an existing checkpoint is incompatible or unavailable;
 preserve the work folder and contact the coordinator instead of starting over.
 
 The first connection proposes a work folder under your operating system's
-Documents folder. Named assignments receive separate subfolders so different
-readers do not share checkpoints. You can choose another
+Documents folder. Each explicitly selected reader receives a separate subfolder
+so different readers do not share checkpoints. You can choose another
 **local** work folder then. It must be separate from the source dataset and
 outside Dropbox/OneDrive. The remembered work location is shown by **Dataset → Show saved work**. Source images and metadata are never edited by this application.
 

@@ -40,7 +40,7 @@ The exact existing `slice_index_convention` string is:
 
 > zero-based along physical volume axis 2; ascending projection on DICOM row-direction cross column-direction; never InstanceNumber
 
-The input review table has columns `slice_index,status`, one ordered row per K index (0…N−1), initially `not_reviewed` for all slices. It is validated and then left untouched. Source review records never replace Jeff's explicit review records in the work folder.
+The input review table has columns `slice_index,status`, one ordered row per K index (0…N−1), initially `not_reviewed` for all slices. It is validated and then left untouched. Source review records never replace the reader's explicit review records in the work folder.
 
 Case index identity, path identity, JSON identity, source SHA-256, dimensions, transforms and native geometry must agree. Both NIfTI-1 qform and sform must be active, spatial units explicitly millimetres, and maximum physical corner disagreement ≤0.01 mm. Unknown units, missing/conflicting transforms, shear, wrong source bytes or geometry block import/editing. Case identifiers and UIDs must be unique. The adapter deliberately does not display sampling, exposure, clinical findings or train/test metadata.
 
@@ -48,7 +48,7 @@ The dataset identity is a location-independent canonical SHA-256 of sorted `(cas
 
 ## Indexing and label semantics
 
-The primary Slicer view uses native I/J axes and K acquired-plane centres. Displayed slice **n = K + 1**, so Jeff sees 1…N. In-memory arrays supplied to the core are **K,J,I**; NIfTI files use **I,J,K**. Conversion is a transpose, never a geometric resample, crop, resize, flip or dropped-empty-slice operation. RAS affine is `diag(-1,-1,1,1) × LPS affine`.
+The primary Slicer view uses native I/J axes and K acquired-plane centres. Displayed slice **n = K + 1**, so the reader sees 1…N. In-memory arrays supplied to the core are **K,J,I**; NIfTI files use **I,J,K**. Conversion is a transpose, never a geometric resample, crop, resize, flip or dropped-empty-slice operation. RAS affine is `diag(-1,-1,1,1) × LPS affine`.
 
 Anatomical output values are fixed independently of Slicer segment order:
 
@@ -127,11 +127,11 @@ The UI resolves Documents through Qt/OS. Suggested root is `Documents/Meniscus_a
 
 Every save creates a new immutable checkpoint directory. Files are written into a hidden `.pending-*` directory, reopened and checked, fsynced, and atomically renamed on the same filesystem. `CURRENT.json` is an atomically replaced convenience pointer. Recovery scans complete version directories; `.pending-*` directories are never resumed. If the latest saved version is corrupt, the newest intact prior version is recovered and the UI reports recovery. If no intact version remains, editing is blocked and a backup must be restored. OS-held per-case locks prevent concurrent writers and release on process death; lock files persist safely. Undo/redo is an in-memory Slicer facility, not an across-restart history.
 
-`annotation.json` (`meniscus_annotation/1`) records source identity and metadata, app version, fixed mapping, initialization provenance, protocol, Jeff's role, review rows, compartments considered, case/slice notes, position, state and approval. `slice_review.csv` has ordered fields `slice_index,displayed_slice,status,attention_flag,note`. Review and attention are separate. `manifest.json` (`meniscus_checkpoint/1`) records source hash, case identity and SHA-256 for all six payload files. `manifest.json` does not recursively hash itself; its hash is included in exported results metadata.
+`annotation.json` (`meniscus_annotation/1`) records source identity and metadata, app version, fixed mapping, initialization provenance, protocol, the reader's role, review rows, compartments considered, case/slice notes, position, state and approval. `slice_review.csv` has ordered fields `slice_index,displayed_slice,status,attention_flag,note`. Review and attention are separate. `manifest.json` (`meniscus_checkpoint/1`) records source hash, case identity and SHA-256 for all six payload files. `manifest.json` does not recursively hash itself; its hash is included in exported results metadata.
 
 Each NIfTI output is full native extent, uint8, mm units, with consistent active qform/sform. Outputs are reopened independently with nibabel and compared voxel-for-voxel with arrays supplied by Slicer. The editable segmentation writer is Slicer's own writer; actual segmentation reopening is exercised by the Slicer integration tests separately from the core tests.
 
-Approving requires complete explicit review, both compartments considered, annotator/protocol metadata, no unresolved uncertainty/attention, valid outputs, and a deliberate UI action. Jeff is the assigned annotator **and** approver; this is not an independent second-reader assessment. Editing an approved version saves a new draft, preserving the previous approved directory.
+Approving requires complete explicit review, both compartments considered, annotator/protocol metadata, no unresolved uncertainty/attention, valid outputs, and a deliberate UI action. The explicitly selected reader is the annotator **and** approver; this is not an independent second-reader assessment. Editing an approved version saves a new draft, preserving the previous approved directory.
 
 ## Export: `meniscus_results/1`
 
@@ -168,7 +168,7 @@ canonical actor as annotator, and no approver while draft. A workflow completion
 may be saved only with explicit practice approval. Automated completion records
 `approval_type = automated_software_check`, the software actor as approver,
 `human_anatomical_approval = false`, `accepted_research_annotation = false` and
-`deliberate_approval_required_by_ui = false`. It never implies that Jeff reviewed
+`deliberate_approval_required_by_ui = false`. It never implies that a research reader reviewed
 or approved an automated drawing. Manual unverified preview completion uses
 `manual_software_practice`, the preview role label and the UI-confirmation
 requirement, while remaining explicitly outside research acceptance. Existing
@@ -181,9 +181,11 @@ not accepted research annotations or human anatomical approvals. They cannot
 appear in ordinary research exports. The source MRI is omitted. Source identities
 and actor/context remain recorded in each private case annotation.
 
-Jobs without `practice_context` retain the assigned Jeff workflow. Their work
-bindings remain unchanged, and older saved annotations without the optional
-context/purpose fields remain readable. Ordinary draft-protocol practice exports
+Jobs without `practice_context` require an explicit reader identity. A named job
+uses its recorded assignment. An unassigned job uses a local reader binding
+without changing the shared job or resolution registry. Older saved annotations
+retain their original attribution; they can be reopened only with a matching
+explicitly selected reader and the original input bindings. Ordinary draft-protocol practice exports
 retain their existing `PRACTICE_ONLY-` prefix.
 
 
@@ -196,3 +198,22 @@ export behaviour. Checkpoint validation recomputes this full exclusion and rejec
 a software-practice validity image that grants any voxel training validity.
 Ordinary production and ordinary draft-protocol practice without this explicit
 context keep their existing review/flag/uncertainty-based validity semantics.
+
+## Local reader assignments
+
+Ordinary jobs with no `annotator` do not supply a default person's name. Before
+creating work, the interface requires a reader name or study ID. The local work
+folder stores `reader_assignment.json` with schema `meniscus_reader_assignment/1`,
+the dataset identity, original base job identity, and selected reader. Neither
+the shared job nor its additive correction resolutions are rewritten. Reader
+identity is self-reported; this is attribution, not authentication.
+
+The default work folder and remembered location are separated by the explicit
+reader and original job. New annotations and approvals record that reader; the
+local binding is checked when opening, saving, and exporting. Reader names never
+become raw filesystem path components. Explicit named jobs and software-practice
+roles retain their existing assignment rules.
+
+Legacy checkpoints are not relabelled. Reconnecting an older work folder requires
+the explicitly selected reader to match the recorded attribution and original
+job/dataset bindings. Unmatched or unverifiable work is preserved and refused.
