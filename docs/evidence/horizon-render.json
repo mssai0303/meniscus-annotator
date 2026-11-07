@@ -1,0 +1,38 @@
+{
+  "reported_utc": "2026-11-06T23:32:23.502120+00:00",
+  "evidence_method": "User-pasted output from synthetic Slicer probe in Horizon desktop; not direct agent observation",
+  "platform": {
+    "windows": "Windows 10 Enterprise",
+    "build": "19045",
+    "architecture": "x64",
+    "ram_gb": 16
+  },
+  "passed": true,
+  "slicer_version": "5.12.4",
+  "dimensions_xyz": [
+    96,
+    80,
+    23
+  ],
+  "spacing_xyz_mm": [
+    0.4,
+    0.45,
+    3.0
+  ],
+  "saved_voxels_and_geometry_match": true,
+  "opengl": {
+    "vendor": "NVIDIA Corporation",
+    "renderer": "NVIDIA A16-1Q/PCI/SSE2",
+    "version": "3.2.0 NVIDIA 538.78"
+  },
+  "render_context_reported": true,
+  "visual_confirmation": "User confirmed grayscale oval/ring display; explicit scrolling confirmation still pending",
+  "annotation_application_test": "Paused for Mac redesign review",
+  "windows11_validation": "pending",
+  "persistence": {
+    "user_reported_documents_and_localappdata_write_readback": "passed",
+    "disconnect_reconnect_hashes": "passed",
+    "signout_new_login_hashes": "passed",
+    "administrator_recomposition": "not tested"
+  }
+}
