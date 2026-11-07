@@ -34,7 +34,7 @@ No macOS/Rosetta result verifies Windows support. A successful build does not ve
 1. Install the actual installer on a clean supported Windows machine. No Python, Slicer or development tools may be preinstalled. Retain installation evidence and required licence files.
 2. Disconnect network access. Launch from Start menu; open the committed synthetic package using the folder picker. Confirm no runtime download and no terminal requirement.
 3. Test paths with spaces and Unicode in dataset, work and results folders. Exercise the documented long-path limit; confirm a clear error instead of partial output.
-4. At 100%, 150% and 200% display scaling, resize on a normal laptop screen. Inspect labels, tools, notes, dialogs, canvas and bottom controls for clipping and readable contrast. Collapse the case panel.
+4. At 100%, 125%, 150% and 200% display scaling, resize on a normal laptop screen. Inspect labels, tools, notes, dialogs, canvas and bottom controls for clipping and readable contrast. Collapse the case panel.
 5. Test physical mouse scroll, single-step controls, shortcut help, pan, zoom, window/level, reset, opacity and outline/fill. Type shortcut letters in notes and confirm editing/navigation does not trigger.
 6. On the oblique fixture, draw and erase on a known acquired plane and verify only its native K index changes. Test Undo/Redo. Inspect anatomical orientation labels and native 1..N slice numbering.
 7. Mark empty and nonempty slices reviewed, edit a reviewed slice and confirm rechecking. Test next unreviewed and attention navigation. Attempt approval with incomplete review, unchecked compartments and unresolved attention.
@@ -57,3 +57,46 @@ Use real development/practice scans only when explicitly provided with permissio
 `tests/test_layouts.py` exercises both exact legacy and flat source names, invalid ID/visit/side names, unsafe paths, duplicate case/source identities, source byte preservation and reconnection of an existing checkpoint after a layout-only migration. The dataset and case identity hashes must remain unchanged. `tools/make_synthetic.py --layout flat` generates the flat fixture without source annotation directories; the default legacy fixture remains available.
 
 Run the native workflow in separate fresh Slicer processes with `MENISCUS_TEST_LAYOUT=legacy` and `MENISCUS_TEST_LAYOUT=flat`. Use different `MENISCUS_TEST_OUTPUT` directories, then use the existing `MENISCUS_RESUME_FROM` route for a fresh-process restart. These settings affect only generated synthetic fixtures. Mac results must be reported separately from Windows; a Mac run does not validate the Windows installer or renderer.
+
+## Focused workspace redesign checks
+
+The graphics-only Horizon probe opens ordinary Slicer, not the Meniscus Annotator
+workspace. Its image display does not demonstrate the application's slice controls,
+case list or startup path. Identify the running interface by its current module,
+window title and visible persistent application header; screenshots from older
+builds cannot establish the current interface.
+
+The maintained native workflow additionally drives the visible acquired-slice
+slider across every stored K plane and checks its 1..N bounds and human-readable
+current/total readout. It exercises slider Home/End and canvas arrow keys, checks
+the current case's visible selection, then collapses/restores both side panels.
+The MRI must enlarge while the acquired-slice controls remain visible, and case,
+label, active tool and slice must be preserved. It captures the actual application
+at requested1280×800 and1440×900 logical sizes, recording the actual dimensions
+when the development desktop constrains the request. None of these Mac checks
+substitute for physical Windows mouse/DPI checks.
+
+`tests/slicer_startup.py` is a separate delayed observer for the real startup path.
+It never calls `selectModule`, loads a dataset or opens a prediction. Launch it
+through the application Bootstrap/installed launcher to check that the current
+module and persistent header already identify Meniscus Annotator and unrelated
+Slicer toolbars are hidden. A test that explicitly selects the module cannot be
+used as proof of direct startup.
+
+For the current Windows10 Enterprise build19045 x64 Horizon desktop, record
+physical scrolling, slider navigation, drawing/erase/undo, save/reopen and export
+separately as they are observed or confirmed by the user. Windows11 remains
+untested; do not infer incompatibility from the lack of that environment.
+
+The redesigned navigation tests check the loaded acquired plane **before any
+navigation callback**, preserve that plane when Reset view refits the image,
+and paint/undo at both first and last acquired slices on each geometry. This
+catches a misleading slice readout even when later stepping is correct.
+
+Run native integration with Slicer's `--testing` flag to isolate its native
+settings. The workflow itself binds the application settings to the explicit
+`Qt settings/workflow.ini` in the synthetic output directory. Fresh-process
+resume reuses that file. `MENISCUS_TEST_SETTINGS_FILE` selects an older explicit
+synthetic settings file when checking an earlier receipt; it never changes the
+application's production settings implementation. This avoids confusing a
+change in Slicer's testing application name with a resume failure.

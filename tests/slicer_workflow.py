@@ -9,6 +9,7 @@ MENISCUS_TEST_OUTPUT directory (defaults to a temporary local directory).
 import csv
 import json
 import os
+import re
 import platform
 from pathlib import Path
 import sys
@@ -31,6 +32,7 @@ SETTINGS_ROOT = Path(os.environ.get('MENISCUS_RESUME_FROM', str(OUTPUT))) / 'Qt 
 SETTINGS_ROOT.mkdir(parents=True, exist_ok=True)
 qt.QSettings.setDefaultFormat(qt.QSettings.IniFormat)
 qt.QSettings.setPath(qt.QSettings.IniFormat, qt.QSettings.UserScope, str(SETTINGS_ROOT))
+SETTINGS_FILE = Path(os.environ.get('MENISCUS_TEST_SETTINGS_FILE', str(SETTINGS_ROOT / 'workflow.ini')))
 REPORT = {'platform': sys.platform, 'os': platform.platform(), 'machine': platform.machine(), 'slicer_version': slicer.app.applicationVersion,
           'slicer_revision': slicer.app.repositoryRevision, 'checks': [],
           'scope': 'Synthetic development integration; neither anatomical validation nor Windows installer acceptance.',
@@ -45,6 +47,30 @@ def check(name, condition, detail=''):
 
 def events():
     slicer.app.processEvents()
+
+
+def plain_label(label):
+    return re.sub(r'<[^>]+>', '', str(label.text)).strip()
+
+
+def key_event(target, key):
+    """Deliver a key to the actual focused Qt widget, not a helper callback."""
+    target.setFocus()
+    for event_type in (qt.QEvent.KeyPress, qt.QEvent.KeyRelease):
+        qt.QApplication.sendEvent(target, qt.QKeyEvent(event_type, key, qt.Qt.NoModifier))
+    events()
+
+
+def check_workspace(widget):
+    window = slicer.util.mainWindow()
+    names = [plain_label(label) for label in window.findChildren(qt.QLabel) if label.isVisible()]
+    check('workspace header identifies Meniscus Annotator', 'Meniscus Annotator' in names)
+    check('workspace window title identifies actual application', str(window.windowTitle).startswith('Meniscus Annotator'))
+    unrelated = [str(bar.objectName) for bar in window.findChildren(qt.QToolBar)
+                 if bar.isVisible() and not str(bar.objectName).startswith('Meniscus')]
+    check('workspace hides unrelated Slicer toolbars', not unrelated, str(unrelated))
+    check('workspace displays save state', widget.saveStatus.isVisible() and bool(plain_label(widget.saveStatus)))
+    check('workspace exposes acquired-slice slider and readout', widget.sliceSlider.isVisible() and widget.sliceReadout.isVisible())
 
 
 def xy_for_ijk(widget, ijk):
@@ -105,6 +131,7 @@ def run():
         previous = Path(os.environ['MENISCUS_RESUME_FROM'])
         slicer.util.selectModule('MeniscusAnnotator')
         widget = slicer.modules.meniscusannotator.widgetRepresentation().self()
+        widget.settings = qt.QSettings(str(SETTINGS_FILE), qt.QSettings.IniFormat)  # Exact file also survives --testing's different application name.
         widget.openDataset(str(previous / 'Synthetic dataset 空間'), work_root=str(previous / 'Local work Jeff'))
         widget._resume()
         events()
@@ -114,6 +141,23 @@ def run():
         labels, uncertain = widget.collectArrays()
         saved_labels, saved_uncertain, _ = widget.session.load()
         check('restart restores saved native masks', np.array_equal(labels,saved_labels) and np.array_equal(uncertain,saved_uncertain))
+        widget.caseListDock.setVisible(False)
+        widget.rightDock.setVisible(False)
+        events()
+        red = slicer.app.layoutManager().sliceWidget('Red')
+        red.sliceView().forceRender()
+        annotation = red.sliceView().cornerAnnotation()
+        active_overlay = annotation.GetText(vtk.vtkCornerAnnotation.UpperRight)
+        check('collapsed tools retain active label and editing scope on canvas', 'Medial meniscus' in active_overlay and 'Paint' in active_overlay and 'This slice only' in active_overlay)
+        check('collapsed panels retain acquired-slice readout and slider', widget.sliceReadout.isVisible() and widget.sliceSlider.isVisible() and str(widget.currentSlice+1) in plain_label(widget.sliceReadout))
+        matrix = red.mrmlSliceNode().GetSliceToRAS()
+        point = np.array([matrix.GetElement(axis,3) for axis in range(3)]+[1])
+        native_index = (np.linalg.inv(widget.session.case.affine_ras) @ point)[2]
+        check('collapsed panels preserve the acquired editing plane', abs(native_index-widget.currentSlice)<0.001)
+        slicer.util.mainWindow().grab().save(str(OUTPUT / 'synthetic-panels-collapsed.png'))
+        widget.caseListDock.setVisible(True)
+        widget.rightDock.setVisible(True)
+        events()
         widget.closeCase()
         REPORT['passed'] = True
         return
@@ -132,30 +176,73 @@ def run():
     source_hashes = {str(p.relative_to(dataset_root)): sha256(p) for p in dataset_root.rglob('*') if p.is_file()}
     slicer.util.selectModule('MeniscusAnnotator')
     widget = slicer.modules.meniscusannotator.widgetRepresentation().self()
+    widget.settings = qt.QSettings(str(SETTINGS_FILE), qt.QSettings.IniFormat)  # Bind even if direct startup constructed the widget earlier.
     widget.openDataset(str(dataset_root), work_root=str(work_root))
     events()
     # Select all generated geometries including oblique, variable dimensions/counts.
     keys = [case.key for case in widget.dataset.cases]
     approved_arrays = {}
     check('synthetic cases available', len(keys) >= 2)
+    check_workspace(widget)
     for key in keys:
         widget.openCase(key)
         events()
         dims = widget.volume.GetImageData().GetDimensions()
         k = dims[2] // 2
         i, j = dims[0] // 2, dims[1] // 2
+        check(key + ' slider spans every acquired slice', widget.sliceSlider.minimum == 1 and widget.sliceSlider.maximum == dims[2])
+        selected = {widget.caseTable.item(index.row(),0).data(qt.Qt.UserRole) for index in widget.caseTable.selectedIndexes()}
+        check(key + ' current case is visibly selected', key in selected)
         all_planes_match = True
+        plane_checks = []
+        all_readouts_match = True
         affine = widget.session.case.affine_ras
         normal = affine[:3,2] / np.linalg.norm(affine[:3,2])
+        initial_matrix = slicer.app.layoutManager().sliceWidget('Red').mrmlSliceNode().GetSliceToRAS()
+        initial_point = np.array([initial_matrix.GetElement(axis,3) for axis in range(3)]+[1])
+        check(key + ' initial displayed slice matches loaded native plane', abs((np.linalg.inv(affine) @ initial_point)[2]-widget.currentSlice) < 0.001)
+        for endpoint in (0,dims[2]-1):
+            if widget.currentSlice != endpoint:
+                widget.goSlice(endpoint)
+            stroke(widget,(i,j,endpoint))
+            endpoint_labels, _ = widget.collectArrays()
+            painted_indices = np.argwhere(endpoint_labels > 0)
+            check(key + ' native Paint isolates endpoint slice ' + str(endpoint+1), len(painted_indices)>0 and set(painted_indices[:,0])=={endpoint} and endpoint_labels[endpoint,j,i]==1)
+            widget.editor.undo()
+            events()
+            endpoint_undone, _ = widget.collectArrays()
+            check(key + ' endpoint paint Undo restores empty annotation ' + str(endpoint+1), not endpoint_undone.any())
         for acquired_index in range(dims[2]):
-            widget.goSlice(acquired_index)
+            widget.sliceSlider.setValue(acquired_index+1)
+            events()
+            numbers = [int(n) for n in re.findall(r'\d+', plain_label(widget.sliceReadout))]
+            all_readouts_match &= 'slice' in plain_label(widget.sliceReadout).lower() and len(numbers) >= 2 and numbers[0] == acquired_index+1 and numbers[-1] == dims[2]
             matrix = slicer.app.layoutManager().sliceWidget('Red').mrmlSliceNode().GetSliceToRAS()
             plane_origin = np.array([matrix.GetElement(axis,3) for axis in range(3)])
             expected_origin = (affine @ np.array([0,0,acquired_index,1]))[:3]
-            all_planes_match &= widget.currentSlice == acquired_index and abs(np.dot(normal, plane_origin-expected_origin)) < 0.001
-        check(key + ' every acquired slice maps to native plane', all_planes_match)
+            error_mm = float(abs(np.dot(normal, plane_origin-expected_origin)))
+            current_match = widget.currentSlice == acquired_index and error_mm < 0.001
+            all_planes_match &= current_match
+            plane_checks.append({'display_requested':acquired_index+1,'current_k':widget.currentSlice,'slider':widget.sliceSlider.value,'native_k':float((np.linalg.inv(affine) @ np.r_[plane_origin,1])[2]),'plane_error_mm':error_mm,'readout':plain_label(widget.sliceReadout)})
+        REPORT.setdefault('native_plane_checks',{})[key] = plane_checks
+        check(key + ' every acquired slice maps to native plane', all_planes_match, json.dumps([x for x in plane_checks if x['plane_error_mm']>=0.001 or x['current_k'] != x['display_requested']-1]))
+        check(key + ' every slider position displays human slice and total', all_readouts_match, plain_label(widget.sliceReadout))
+        key_event(widget.sliceSlider, qt.Qt.Key_Home)
+        check(key + ' slider Home reaches first acquired slice', widget.currentSlice == 0 and widget.sliceSlider.value == 1)
+        key_event(widget.sliceSlider, qt.Qt.Key_End)
+        check(key + ' slider End reaches last acquired slice', widget.currentSlice == dims[2]-1 and widget.sliceSlider.value == dims[2])
+        widget.goSlice(2)
+        widget._resetView()
+        reset_matrix = slicer.app.layoutManager().sliceWidget('Red').mrmlSliceNode().GetSliceToRAS()
+        reset_point = np.array([reset_matrix.GetElement(axis,3) for axis in range(3)]+[1])
+        check(key + ' Reset view preserves requested acquired slice', widget.currentSlice == 2 and abs((np.linalg.inv(affine) @ reset_point)[2]-2) < 0.001)
         widget.goSlice(k)
         events()
+        primary_view = slicer.app.layoutManager().sliceWidget('Red').sliceView()
+        key_event(primary_view, qt.Qt.Key_Right)
+        check(key + ' canvas Right steps one acquired slice', widget.currentSlice == k+1 and widget.sliceSlider.value == k+2)
+        key_event(primary_view, qt.Qt.Key_Left)
+        check(key + ' canvas Left steps one acquired slice', widget.currentSlice == k and widget.sliceSlider.value == k+1)
         before, _ = widget.collectArrays()
         check(key + ' blank mode ignores nearby prediction', not np.any(before))
         check(key + ' prediction-free scene contains source MRI only', slicer.mrmlScene.GetNodesByClass('vtkMRMLScalarVolumeNode').GetNumberOfItems() == 1)
@@ -407,6 +494,20 @@ def run():
     check('failed native image load releases writer lock for retry', widget.session is not None)
     widget.goSlice(target[2])
     events()
+    case_state = (widget.session.case.key,widget.currentSlice,widget.activeLabel,widget.editor.activeEffect().name)
+    canvas = slicer.app.layoutManager().sliceWidget('Red').sliceView()
+    canvas_width = canvas.width
+    widget.caseListDock.setVisible(False)
+    widget.rightDock.setVisible(False)
+    events()
+    check('both side panels collapse', not widget.caseListDock.isVisible() and not widget.rightDock.isVisible())
+    check('collapsed panels enlarge MRI canvas', canvas.width > canvas_width, '%s -> %s' % (canvas_width,canvas.width))
+    check('slice controls remain visible when panels collapse', widget.sliceSlider.isVisible() and widget.sliceReadout.isVisible())
+    widget.caseListDock.setVisible(True)
+    widget.rightDock.setVisible(True)
+    events()
+    check('both side panels restore', widget.caseListDock.isVisible() and widget.rightDock.isVisible())
+    check('panel toggles preserve annotation context', case_state == (widget.session.case.key,widget.currentSlice,widget.activeLabel,widget.editor.activeEffect().name))
     table = widget.caseTable
     REPORT['case_table'] = {'row_count':table.rowCount, 'column_count':table.columnCount, 'visible':table.isVisible(), 'header_visible':table.horizontalHeader().isVisible(), 'query':str(widget.search.text), 'filter':str(widget.progressFilter.currentText), 'rows':[{'hidden':table.isRowHidden(row),'identity':str(table.item(row,0).text()),'status':str(table.item(row,1).text())} for row in range(table.rowCount)]}
     check('case list populated and visible', table.isVisible() and table.rowCount == len(keys) and all(not table.isRowHidden(row) for row in range(table.rowCount)))
@@ -417,10 +518,12 @@ def run():
     events()
     window = slicer.util.mainWindow()
     REPORT['display'] = {'device_pixel_ratio': window.devicePixelRatioF(), 'captures': []}
-    for width, height in [(1280, 800), (1600, 1000)]:
+    for width, height in [(1280, 800), (1440, 900)]:
         window.resize(width, height)
         events()
         slicer.app.layoutManager().sliceWidget('Red').sliceView().forceRender()
+        check('slice slider visible at %dx%d' % (width,height), widget.sliceSlider.isVisible() and widget.sliceSlider.width >= 100)
+        check('slice readout fits at %dx%d' % (width,height), widget.sliceReadout.isVisible() and widget.sliceReadout.width >= widget.sliceReadout.minimumSizeHint.width())
         screenshot = 'synthetic-application-%dx%d.png' % (width, height)
         window.grab().save(str(OUTPUT / screenshot))
         REPORT['display']['captures'].append({'requested_logical_size': [width, height], 'actual_logical_size': [window.width, window.height], 'file': screenshot})

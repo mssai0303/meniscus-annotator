@@ -17,8 +17,7 @@ checks identities, hashes and geometry before offering editing.
 The first connection proposes your operating system's Documents folder:
 `Documents/Meniscus_annotation_work/<dataset_version>/`. You can choose another
 **local** work folder then. It must be separate from the source dataset and
-outside Dropbox/OneDrive. The remembered work location is shown by **Show saved
-files**. Source images and metadata are never edited by this application.
+outside Dropbox/OneDrive. The remembered work location is shown by **Dataset → Show saved work**. Source images and metadata are never edited by this application.
 
 Double-click a case or select it and choose **Open selected case**. Search by
 OAI ID, visit or side; use the progress filter as needed. **Resume work** opens
@@ -28,7 +27,7 @@ identity and hashes must match the existing work folder.
 
 ## Draw and inspect
 
-The header shows OAI ID, visit and knee side. The bottom slice number counts
+The header shows OAI ID, visit and knee side. The prominent bottom readout and slider count
 **1 to N**, including every acquired slice. The primary view follows the acquired
 planes even on a tilted scan. Letters at its edges describe actual physical
 orientation; combinations such as `SLP` indicate an oblique direction. Secondary
@@ -48,7 +47,7 @@ in-memory undo history is not restored.
 
 Use **Display and orientation** to show/hide labels, switch between outlines
 and transparent fill, change fill opacity, reset the view or show reformats.
-Scroll or use Previous/Next for acquired-slice navigation. Ctrl+wheel zooms,
+Use the slice slider, Previous/Next, mouse wheel or Go to for acquired-slice navigation. Ctrl+wheel zooms,
 middle-drag pans, and right-drag adjusts window/level. Zoom and window/level
 remain in effect while stepping through the case. **Cases** and **Tools** in the
 header collapse the side panels. Panel widths and brush diameter are remembered.
@@ -56,8 +55,8 @@ header collapse the side panels. Panel widths and brush diameter are remembered.
 ## Review, save and approve
 
 Scrolling does **not** mark a slice reviewed. After inspecting each slice,
-including an empty one, use **Reviewed → next slice**. **Next unreviewed** and
-**Next flagged** help finish review. A flag records attention separately from
+including an empty one, use **Mark reviewed and next**. **Jump to → Next unreviewed slice** and
+**Next flagged slice** help finish review. A flag records attention separately from
 review. Any anatomical or uncertainty edit marks affected slices for rechecking.
 Use notes for explanations; keyboard drawing shortcuts do not act while typing.
 
@@ -94,7 +93,7 @@ annotation/approval metadata. It uses the latest preserved eligible approval,
 even when a later unfinished draft exists. Never substitute a draft for an
 approved export. Training code must respect validity and uncertainty records.
 
-**Load job configuration** is for a coordinator-supplied, dataset-bound JSON.
+**Help → Annotation setup** is for a coordinator-supplied, dataset-bound JSON.
 It records the protocol and explicitly permitted correction mask. Without one,
 annotation starts blank and nearby predictions are ignored. Do not edit job
 configuration to promote a draft protocol yourself. Changing initialization or
@@ -113,7 +112,7 @@ protocol for existing work requires a separately coordinated work folder/batch.
 | Ctrl+S | Save draft |
 | Ctrl+Z / Ctrl+Y | Undo / Redo |
 
-These shortcuts are scoped to the MRI view. **Setup and shortcut help** also
+These shortcuts are scoped to the MRI view. **Help → Controls and shortcuts** also
 provides local diagnostic details for an error. Keep diagnostics private; do
 not send participant data or screenshots containing real identities to public
 issue trackers.

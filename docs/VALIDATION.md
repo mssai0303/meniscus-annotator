@@ -99,3 +99,21 @@ Actual desktop coverage also includes completely blank segmentations saved/reope
 on the full source grid, ignored nearby phantom predictions with no hidden volume,
 and explicitly permitted synthetic correction with verified source/version/checksum
 and the original mask preserved separately.
+
+
+## Current Mac workspace redesign
+
+The later redesigned module was checked separately from the earlier adapter/UI
+receipts above. See [MAC_PREVIEW.md](MAC_PREVIEW.md):182 current-code flat workflow
+assertions with preview settings enabled,182 legacy regression assertions, seven
+fresh-process restoration assertions and five direct-startup assertions passed.
+Actual1280×800 and1440×900 logical captures were inspected. Evidence is under
+`docs/evidence/mac-redesign-*`; module/helper hashes are recorded in the preview
+startup receipt. The redesigned interface is not substituted with an old screenshot.
+
+The repaired local preview loads only synthetic inputs and preserves its separate
+Practice_work directory. The real flat250-scan input package was completed by the
+preparation session; its production annotation workflow is not accepted by this
+Mac preview. Windows installer lifecycle progress is retained, and new Windows
+acceptance is paused until the user reviews the Mac interface. Windows11 remains
+untested; no incompatibility claim is made.

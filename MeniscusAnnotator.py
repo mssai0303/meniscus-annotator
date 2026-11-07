@@ -43,7 +43,7 @@ class CloseGuard(qt.QObject):
 class MeniscusAnnotator(ScriptedLoadableModule):
     def __init__(self, parent):
         super().__init__(parent)
-        parent.title = 'Meniscus annotation'
+        parent.title = 'Meniscus Annotator'
         parent.categories = ['Annotation']
         parent.contributors = ['Meniscus Annotator contributors']
         parent.helpText = 'Open a dataset, annotate each acquired plane, review every slice, save and approve.'
@@ -66,7 +66,8 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self._editQueued = False
         self._lastExport = None
         self._diagnostic = ''
-        self.settings = qt.QSettings()
+        settings_file = os.environ.get('MENISCUS_SETTINGS_FILE')
+        self.settings = qt.QSettings(settings_file,qt.QSettings.IniFormat) if settings_file else qt.QSettings()
         self._buildStyle()
         self._buildCases()
         self._buildEditor()
@@ -82,38 +83,56 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         qt.QTimer.singleShot(0, self._finishLayout)
 
     def _buildStyle(self):
+        from MeniscusAnnotatorLib.interface import icon, checkmark_path
+        self._icon = icon
         families = list(qt.QFontDatabase().families())
-        family = 'Segoe UI Variable' if 'Segoe UI Variable' in families else ('Segoe UI' if 'Segoe UI' in families else 'Arial')
+        if sys.platform == 'win32':
+            family = 'Segoe UI Variable' if 'Segoe UI Variable' in families else 'Segoe UI'
+        else:
+            family = qt.QFontDatabase.systemFont(qt.QFontDatabase.GeneralFont).family()
         self.font = qt.QFont(family, 11)
         self.parent.setFont(self.font)
         self.style = '''
-        QWidget { color:#25313c; font-size:11pt; font-weight:400; }
-        ctkCollapsibleButton { background:#e6edf3; color:#25313c; border:1px solid #b8c2cc; border-radius:2px; padding:6px; text-align:left; }
-        QToolBar { background:#edf1f4; border:0; spacing:5px; padding:4px; }
-        QWidget#MeniscusCases { background:#f3f5f7; }
-        QCheckBox::indicator { width:16px; height:16px; border:1px solid #8796a3; background:white; }
-        QCheckBox::indicator:checked { background:#246a99; border:2px solid #1b557d; }
-        QDockWidget, QWidget#annotationPanel { background:#f3f5f7; }
-        QLabel#identity { font-size:14pt; font-weight:600; }
-        QLabel#panelTitle { font-size:12pt; font-weight:600; padding-top:6px; }
-        QLabel#support { color:#52616e; }
-        QPushButton, QToolButton { min-height:28px; padding:3px 9px; border:1px solid #b8c2cc; border-radius:3px; background:#fafbfc; }
-        QPushButton:hover, QToolButton:hover { background:#e6edf3; border-color:#8096a8; }
-        QPushButton:checked, QToolButton:checked { background:#dcecf7; border:2px solid #246a99; }
-        QPushButton:focus, QToolButton:focus, QLineEdit:focus, QTextEdit:focus, QComboBox:focus { border:2px solid #246a99; }
-        QPushButton:disabled { color:#7a8793; background:#ebeff2; border-color:#d6dde3; }
-        QPushButton#primary { background:#246a99; color:white; border-color:#246a99; }
-        QPushButton#primary:hover { background:#19577f; }
-        QLineEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox { background:white; border:1px solid #b8c2cc; padding:5px; border-radius:2px; min-height:23px; }
-        QTableWidget { background:white; border:1px solid #cbd3db; gridline-color:#e4e8ec; selection-background-color:#dcecf7; selection-color:#182c3c; }
-        QHeaderView::section { background:#e9eef2; padding:7px; border:0; border-bottom:1px solid #cbd3db; font-weight:600; }
-        QProgressBar { border:1px solid #c3cdd5; background:#e6ebef; text-align:center; min-height:20px; color:#25313c; }
-        QProgressBar::chunk { background:#a7c6dc; }
-        QCheckBox { spacing:7px; min-height:26px; }
-        '''
-        self.parent.setObjectName('MeniscusCases')
-        self.parent.setAttribute(qt.Qt.WA_StyledBackground, True)
-        self.parent.setAutoFillBackground(True)
+        QWidget { color:#263642; font-size:11pt; font-weight:400; }
+        QWidget#workspacePanel { background:#f3f5f7; }
+        QWidget#navigationPanel, QToolBar { background:#f8f9fb; border:0; }
+        QToolBar { spacing:8px; padding:6px 12px; border-bottom:1px solid #d9e0e6; }
+        QDockWidget { background:#f3f5f7; border:0; }
+        QLabel { background:transparent; }
+        QLabel#appTitle { font-size:13pt; font-weight:600; color:#233743; }
+        QLabel#identity { font-size:11pt; color:#405461; }
+        QLabel#panelTitle { font-size:11pt; font-weight:600; margin-top:3px; }
+        QLabel#support { color:#60717e; }
+        QLabel#sliceReadout { font-size:14pt; font-weight:600; color:#233743; }
+        QLabel#saveState { font-weight:600; padding:0 8px; }
+        QPushButton, QToolButton { background:#ffffff; border:1px solid #c4ced7; border-radius:4px; min-height:28px; padding:3px 9px; }
+        QPushButton:hover, QToolButton:hover { background:#edf3f7; border-color:#8fa4b4; }
+        QPushButton:checked, QToolButton:checked { background:#e4f0f8; border:1px solid #2874a0; color:#174f70; }
+        QPushButton:focus, QToolButton:focus, QLineEdit:focus, QTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus { border:2px solid #2874a0; }
+        QPushButton:disabled, QToolButton:disabled { color:#88949d; background:#eef1f4; border-color:#dbe1e6; }
+        QPushButton#primary { background:#246d98; color:white; border-color:#246d98; font-weight:600; }
+        QPushButton#primary:hover { background:#195a80; }
+        QPushButton#primary:disabled { color:#88949d; background:#eef1f4; border-color:#dbe1e6; }
+        QPushButton#quiet, QToolButton#quiet { border-color:transparent; background:transparent; }
+        QPushButton#quiet:hover, QToolButton#quiet:hover { background:#e5ebf0; }
+        QLineEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox { background:#ffffff; border:1px solid #c4ced7; border-radius:3px; padding:5px; min-height:22px; selection-background-color:#c9e0f0; selection-color:#203340; }
+        QTableWidget { background:#ffffff; color:#263642; border:0; gridline-color:#e5eaef; selection-background-color:#dfedf7; selection-color:#203340; }
+        QHeaderView::section { background:#f3f5f7; color:#60717e; border:0; border-bottom:1px solid #d9e0e6; padding:6px; font-size:10pt; }
+        QCheckBox { background:transparent; spacing:7px; min-height:26px; }
+        QCheckBox::indicator { width:18px; height:18px; background:white; border:1px solid #8a9ba8; border-radius:3px; }
+        QCheckBox::indicator:checked { background:#246d98; border-color:#246d98; image:url(CHECKMARK); }
+        QCheckBox::indicator:disabled { border-color:#cbd3d9; background:#e8edf0; }
+        QSlider::groove:horizontal { height:5px; background:#cfd9e1; border-radius:2px; }
+        QSlider::sub-page:horizontal { background:#82afca; border-radius:2px; }
+        QSlider::handle:horizontal { background:#246d98; border:2px solid #ffffff; width:16px; height:16px; margin:-7px 0; border-radius:8px; }
+        QSlider::handle:horizontal:focus { border:2px solid #163f59; }
+        QSlider::groove:horizontal:disabled { background:#dfe5e9; }
+        QSlider::handle:horizontal:disabled { background:#aebcc6; }
+        ctkCollapsibleButton { background:#f3f5f7; color:#405461; border:0; border-top:1px solid #dce3e9; padding:7px 0; text-align:left; }
+        QMenu { background:#ffffff; color:#263642; border:1px solid #c4ced7; padding:5px; }
+        QMenu::item { padding:7px 20px 7px 9px; }
+        QMenu::item:selected { background:#dfedf7; }
+        '''.replace('CHECKMARK', checkmark_path())
         self.parent.setStyleSheet(self.style)
 
     def _title(self, text, layout):
@@ -122,255 +141,376 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         layout.addWidget(label)
         return label
 
-    def _button(self, text, callback, layout, primary=False):
-        b = qt.QPushButton(text)
+    def _button(self, text, callback, layout, primary=False, icon=None):
+        button = qt.QPushButton(text)
         if primary:
-            b.objectName = 'primary'
-        b.connect('clicked()', callback)
-        layout.addWidget(b)
-        return b
+            button.objectName = 'primary'
+        if icon:
+            button.setIcon(self._icon(icon, '#ffffff' if primary else '#425363'))
+            button.setIconSize(qt.QSize(18,18))
+        button.connect('clicked()', callback)
+        layout.addWidget(button)
+        return button
+
+    def _panel(self):
+        panel = qt.QWidget()
+        panel.objectName = 'workspacePanel'
+        panel.setFont(self.font)
+        panel.setAttribute(qt.Qt.WA_StyledBackground, True)
+        panel.setStyleSheet(self.style)
+        layout = qt.QVBoxLayout(panel)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(10)
+        return panel, layout
 
     def _buildCases(self):
-        self.layout.setContentsMargins(12, 8, 12, 10)
-        self.layout.setSpacing(8)
-        self._title('Cases', self.layout)
-        self._button('Open dataset', self._chooseDataset, self.layout, True)
-        self.resumeButton = self._button('Resume work', self._resume, self.layout)
+        self.caseListDock = qt.QDockWidget('Cases', slicer.util.mainWindow())
+        self.caseListDock.objectName = 'MeniscusCasesDock'
+        self.caseListDock.setFeatures(qt.QDockWidget.NoDockWidgetFeatures)
+        self.caseListDock.setTitleBarWidget(qt.QWidget(self.caseListDock))
+        panel, lay = self._panel()
+        self._title('Cases', lay)
         self.search = qt.QLineEdit()
-        self.search.placeholderText = 'Search OAI ID, visit or side'
+        self.search.placeholderText = 'Search OAI ID'
+        self.search.setClearButtonEnabled(True)
         self.search.connect('textChanged(QString)', self._filter)
-        self.layout.addWidget(self.search)
+        lay.addWidget(self.search)
         self.progressFilter = qt.QComboBox()
         self.progressFilter.addItems(['All cases', 'Not started', 'In progress', 'Needs review', 'Approved'])
         self.progressFilter.connect('currentIndexChanged(int)', self._filter)
-        self.layout.addWidget(self.progressFilter)
-        self.caseTable = qt.QTableWidget(0, 2)
-        # Item delegates use the view palette; make text explicit under Slicer themes.
-        tablePalette = self.caseTable.palette
-        for role in [qt.QPalette.Text, qt.QPalette.WindowText, qt.QPalette.ButtonText]:
-            tablePalette.setColor(role, qt.QColor('#25313c'))
-        tablePalette.setColor(qt.QPalette.Base, qt.QColor('#ffffff'))
-        self.caseTable.palette = tablePalette
-        self.caseTable.horizontalHeader().palette = tablePalette
-        self.caseTable.setStyleSheet('QTableWidget { color:#25313c; background:#ffffff; gridline-color:#dce3e9; } QHeaderView::section { color:#25313c; background:#e9eef2; border:0; padding:7px; }')
-        self.caseTable.setHorizontalHeaderLabels(['OAI ID · visit · side', 'Progress'])
+        lay.addWidget(self.progressFilter)
+        self.caseTable = qt.QTableWidget(0,2)
+        palette = self.caseTable.palette
+        for role in [qt.QPalette.Text,qt.QPalette.WindowText,qt.QPalette.ButtonText]:
+            palette.setColor(role,qt.QColor('#263642'))
+        palette.setColor(qt.QPalette.Base,qt.QColor('white'))
+        palette.setColor(qt.QPalette.Highlight,qt.QColor('#dfedf7'))
+        palette.setColor(qt.QPalette.HighlightedText,qt.QColor('#203340'))
+        self.caseTable.palette = palette
+        self.caseTable.horizontalHeader().palette = palette
+        self.caseTable.setHorizontalHeaderLabels(['Participant / visit', 'Progress'])
         self.caseTable.verticalHeader().hide()
+        self.caseTable.verticalHeader().setDefaultSectionSize(56)
         self.caseTable.horizontalHeader().setStretchLastSection(True)
-        self.caseTable.setColumnWidth(0, 170)
+        self.caseTable.horizontalHeader().minimumSectionSize = 60
+        self.caseTable.setColumnWidth(0,130)
+        self.caseTable.setShowGrid(False)
+        self.caseTable.setAlternatingRowColors(False)
         self.caseTable.setSelectionBehavior(qt.QAbstractItemView.SelectRows)
         self.caseTable.setSelectionMode(qt.QAbstractItemView.ExtendedSelection)
         self.caseTable.setEditTriggers(qt.QAbstractItemView.NoEditTriggers)
-        self.caseTable.connect('cellDoubleClicked(int,int)', self._openRow)
-        self.layout.addWidget(self.caseTable, 1)
-        self._button('Open selected case', lambda: self._openRow(self.caseTable.currentRow(), 0), self.layout)
-        self.datasetLabel = qt.QLabel('Choose the complete downloaded dataset folder.\nSource images remain read-only.')
-        self.datasetLabel.wordWrap = True
+        self.caseTable.connect('cellDoubleClicked(int,int)',self._openRow)
+        lay.addWidget(self.caseTable,1)
+        self.openCaseButton = self._button('Open selected case',lambda:self._openRow(self.caseTable.currentRow(),0),lay,icon='next')
+        row = qt.QHBoxLayout()
+        self.resumeButton = self._button('Resume work',self._resume,row,icon='resume')
+        self._button('Next case',self._nextCase,row,icon='next')
+        lay.addLayout(row)
+        self.datasetLabel = qt.QLabel('No dataset open')
         self.datasetLabel.objectName = 'support'
-        self.layout.addWidget(self.datasetLabel)
-        outputRow = qt.QHBoxLayout()
-        self._button('Show saved files', self._showWork, outputRow)
-        self._button('Export results', self._exportDialog, outputRow)
-        self.layout.addLayout(outputRow)
-        self._button('Load job configuration', self._loadJob, self.layout)
-        self._button('Setup and shortcut help', self._help, self.layout)
+        self.datasetLabel.wordWrap = True
+        lay.addWidget(self.datasetLabel)
+        self.message = qt.QLabel('Open a dataset to begin.')
+        self.message.objectName = 'support'
+        self.message.wordWrap = True
+        self.message.setMaximumHeight(72)
+        lay.addWidget(self.message)
+        self.caseListDock.setWidget(panel)
+        self.caseListDock.setMinimumWidth(250)
+        slicer.util.mainWindow().addDockWidget(qt.Qt.LeftDockWidgetArea,self.caseListDock)
 
     def _buildEditor(self):
-        self.rightDock = qt.QDockWidget('Annotation', slicer.util.mainWindow())
+        self.rightDock = qt.QDockWidget('Annotation',slicer.util.mainWindow())
         self.rightDock.objectName = 'MeniscusAnnotationTools'
-        self.rightDock.setAllowedAreas(qt.Qt.RightDockWidgetArea | qt.Qt.LeftDockWidgetArea)
-        panel = qt.QWidget()
-        panel.objectName = 'annotationPanel'
-        panel.setFont(self.font)
-        panel.setStyleSheet(self.style)
-        lay = qt.QVBoxLayout(panel)
-        lay.setContentsMargins(12, 8, 12, 12)
-        lay.setSpacing(8)
-        self._title('Anatomical label', lay)
+        self.rightDock.setFeatures(qt.QDockWidget.NoDockWidgetFeatures)
+        self.rightDock.setTitleBarWidget(qt.QWidget(self.rightDock))
+        panel, lay = self._panel()
+        self._title('Annotation',lay)
+        labels = qt.QHBoxLayout()
         self.labelButtons = {}
-        self.labelCombo = qt.QComboBox()
-        for key in LABELS:
-            name, color = LABELS[key]
-            swatch = qt.QPixmap(16,16)
-            swatch.fill(qt.QColor.fromRgbF(*color))
-            self.labelCombo.addItem(qt.QIcon(swatch), name, key)
-        self.labelCombo.connect('currentIndexChanged(int)', lambda index: self.setLabel(list(LABELS)[index]))
-        lay.addWidget(self.labelCombo)
-        self.toolText = qt.QLabel('Medial meniscus · Paint · 3 mm')
-        self.toolText.wordWrap = True
-        lay.addWidget(self.toolText)
+        for key in ['medial','lateral']:
+            name,color = LABELS[key]
+            b = self._button('Medial' if key=='medial' else 'Lateral',lambda k=key:self.setLabel(k),labels)
+            b.setIcon(self._icon('dot',qt.QColor.fromRgbF(*color).name()))
+            b.setCheckable(True)
+            b.setToolTip(name)
+            self.labelButtons[key] = b
+        lay.addLayout(labels)
+        b = self._button('Uncertain area',lambda:self.setLabel('uncertain'),lay)
+        b.setIcon(self._icon('dot',qt.QColor.fromRgbF(*LABELS['uncertain'][1]).name()))
+        b.setCheckable(True)
+        self.labelButtons['uncertain'] = b
+        # Retained as an internal selection model for compatibility, not a hidden image layer.
+        self.labelCombo = qt.QComboBox(panel)
+        self.labelCombo.addItems([value[0] for value in LABELS.values()])
+        self.labelCombo.hide()
         tools = qt.QHBoxLayout()
         self.toolButtons = {}
-        for name in ['Draw', 'Paint', 'Erase']:
-            b = self._button(name, lambda n=name: self.setTool(n), tools)
+        for name in ['Paint','Draw','Erase']:
+            b = qt.QToolButton()
+            b.setText(name)
+            b.setIcon(self._icon(name.lower()))
+            b.setIconSize(qt.QSize(20,20))
+            b.setToolButtonStyle(qt.Qt.ToolButtonTextUnderIcon)
+            b.setSizePolicy(qt.QSizePolicy.Expanding,qt.QSizePolicy.Fixed)
+            b.setMinimumHeight(48)
             b.setCheckable(True)
+            b.connect('clicked()',lambda n=name:self.setTool(n))
+            tools.addWidget(b)
             self.toolButtons[name] = b
         lay.addLayout(tools)
-        self.editor = slicer.qMRMLSegmentEditorWidget()
+        self.toolText = qt.QLabel('Choose a case to annotate')
+        self.toolText.wordWrap = True
+        self.toolText.setMinimumHeight(38)
+        lay.addWidget(self.toolText)
+        brush = qt.QHBoxLayout()
+        brush.addWidget(qt.QLabel('Brush size'))
+        self.brushSize = qt.QDoubleSpinBox()
+        self.brushSize.setRange(.3,30)
+        self.brushSize.setSingleStep(.5)
+        self.brushSize.setSuffix(' mm')
+        self.brushSize.setDecimals(1)
+        self.brushSize.setValue(float(self.settings.value('Meniscus/brush',3)))
+        self.brushSize.connect('valueChanged(double)',self._brush)
+        brush.addWidget(self.brushSize,1)
+        lay.addLayout(brush)
+        history = qt.QHBoxLayout()
+        self._button('Undo',self._undo,history,icon='undo')
+        self._button('Redo',self._redo,history,icon='redo')
+        lay.addLayout(history)
+        display = ctk.ctkCollapsibleButton()
+        display.text = 'Display and orientation'
+        display.collapsed = True
+        inner = qt.QVBoxLayout(display)
+        inner.setContentsMargins(0,8,0,8)
+        row = qt.QHBoxLayout()
+        self.visible = qt.QCheckBox('Show annotation')
+        self.visible.setChecked(True)
+        self.visible.connect('toggled(bool)',self._display)
+        row.addWidget(self.visible)
+        self.fill = qt.QCheckBox('Fill')
+        self.fill.setChecked(True)
+        self.fill.connect('toggled(bool)',self._display)
+        row.addWidget(self.fill)
+        inner.addLayout(row)
+        inner.addWidget(qt.QLabel('Fill opacity'))
+        self.opacity = qt.QSlider(qt.Qt.Horizontal)
+        self.opacity.setRange(0,100)
+        self.opacity.setValue(25)
+        self.opacity.connect('valueChanged(int)',self._display)
+        inner.addWidget(self.opacity)
+        self._button('Reset view',self._resetView,inner,icon='reset')
+        self.reformats = qt.QCheckBox('Show orientation views')
+        self.reformats.setToolTip('Coronal and axial reformats are for orientation. Editing stays on the acquired sagittal view.')
+        self.reformats.connect('toggled(bool)',self._layoutViews)
+        inner.addWidget(self.reformats)
+        lay.addWidget(display)
+        self._title('Slice review',lay)
+        self.attention = qt.QCheckBox('Flag this slice')
+        self.attention.connect('toggled(bool)',self._flag)
+        lay.addWidget(self.attention)
+        self.notes = qt.QTextEdit()
+        self.notes.setPlaceholderText('Notes for this case or uncertain findings')
+        self.notes.setFixedHeight(78)
+        self.notes.connect('textChanged()',self._notesChanged)
+        lay.addWidget(self.notes)
+        review = ctk.ctkCollapsibleButton()
+        review.text = 'Case review and protocol'
+        review.collapsed = True
+        self.caseReviewPanel = review
+        reviewLay = qt.QVBoxLayout(review)
+        reviewLay.setContentsMargins(0,8,0,8)
+        self.medialConsidered = qt.QCheckBox('Medial compartment considered')
+        self.lateralConsidered = qt.QCheckBox('Lateral compartment considered')
+        for checkbox in [self.medialConsidered,self.lateralConsidered]:
+            checkbox.connect('toggled(bool)',self._compartments)
+            reviewLay.addWidget(checkbox)
+        self.protocolLabel = qt.QLabel('Practice work · Draft protocol')
+        self.protocolLabel.objectName = 'support'
+        self.protocolLabel.wordWrap = True
+        reviewLay.addWidget(self.protocolLabel)
+        lay.addWidget(review)
+        lay.addStretch(1)
+        self.editor = slicer.qMRMLSegmentEditorWidget(panel)
         self.editor.setMRMLScene(slicer.mrmlScene)
         self.editor.setMaximumNumberOfUndoStates(30)
         self.editor.setUndoEnabled(True)
-        self.editor.setEffectNameOrder(['Draw', 'Paint', 'Erase'])
+        self.editor.setEffectNameOrder(['Draw','Paint','Erase'])
         self.editor.unorderedEffectsVisible = False
         self.editor.autoShowSourceVolumeNode = False
-        for method in ['setSourceVolumeNodeSelectorVisible', 'setSegmentationNodeSelectorVisible', 'setSwitchToSegmentationsButtonVisible', 'setShow3DButtonVisible', 'setEffectButtonStyle']:
-            if hasattr(self.editor, method) and method != 'setEffectButtonStyle':
-                getattr(self.editor, method)(False)
-        # Native editor owns the effects and undo history. Focused controls are exposed above.
+        for method in ['setSourceVolumeNodeSelectorVisible','setSegmentationNodeSelectorVisible','setSwitchToSegmentationsButtonVisible','setShow3DButtonVisible']:
+            if hasattr(self.editor,method): getattr(self.editor,method)(False)
         self.editor.hide()
-        lay.addWidget(self.editor)
-        brushRow = qt.QHBoxLayout()
-        brushRow.addWidget(qt.QLabel('Brush diameter'))
-        self.brushSize = qt.QDoubleSpinBox()
-        self.brushSize.setRange(0.3, 30)
-        self.brushSize.setSingleStep(0.5)
-        self.brushSize.setSuffix(' mm')
-        self.brushSize.setValue(float(self.settings.value('Meniscus/brush', 3)))
-        self.brushSize.connect('valueChanged(double)', self._brush)
-        brushRow.addWidget(self.brushSize)
-        lay.addLayout(brushRow)
-        row = qt.QHBoxLayout()
-        self._button('Undo', self._undo, row)
-        self._button('Redo', self._redo, row)
-        lay.addLayout(row)
-        displayPanel = ctk.ctkCollapsibleButton()
-        displayPanel.text = 'Display and orientation'
-        displayPanel.collapsed = True
-        displayLayout = qt.QVBoxLayout(displayPanel)
-        displayLayout.setSpacing(8)
-        lay.addWidget(displayPanel)
-        displayRow = qt.QHBoxLayout()
-        self.visible = qt.QCheckBox('Show labels')
-        self.visible.setChecked(True)
-        self.visible.connect('toggled(bool)', self._display)
-        displayRow.addWidget(self.visible)
-        self.fill = qt.QCheckBox('Fill')
-        self.fill.setChecked(True)
-        self.fill.connect('toggled(bool)', self._display)
-        displayRow.addWidget(self.fill)
-        displayLayout.addLayout(displayRow)
-        self.opacity = qt.QSlider(qt.Qt.Horizontal)
-        self.opacity.setRange(0, 100)
-        self.opacity.setValue(25)
-        self.opacity.setToolTip('Transparent fill opacity; outline remains visible')
-        self.opacity.connect('valueChanged(int)', self._display)
-        displayLayout.addWidget(self.opacity)
-        self._button('Reset view', self._resetView, displayLayout)
-        self.reformats = qt.QCheckBox('Show orientation reformats')
-        self.reformats.setToolTip('Secondary resliced views for orientation. Editing remains on the acquired Red view only.')
-        self.reformats.connect('toggled(bool)', self._layoutViews)
-        displayLayout.addWidget(self.reformats)
-        self._title('Review and notes', lay)
-        self.attention = qt.QCheckBox('This slice needs attention')
-        self.attention.connect('toggled(bool)', self._flag)
-        lay.addWidget(self.attention)
-        self.notes = qt.QTextEdit()
-        self.notes.setPlaceholderText('Case notes / uncertainty explanation')
-        self.notes.setMaximumHeight(90)
-        self.notes.connect('textChanged()', self._notesChanged)
-        lay.addWidget(self.notes)
-        self.medialConsidered = qt.QCheckBox('Medial compartment considered')
-        self.lateralConsidered = qt.QCheckBox('Lateral compartment considered')
-        for b in [self.medialConsidered, self.lateralConsidered]:
-            b.connect('toggled(bool)', self._compartments)
-            lay.addWidget(b)
-        self.protocolLabel = qt.QLabel('Protocol: draft · practice work only')
-        self.protocolLabel.objectName = 'support'
-        self.protocolLabel.wordWrap = True
-        lay.addWidget(self.protocolLabel)
-        lay.addStretch(1)
         scroll = qt.QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(qt.QFrame.NoFrame)
         scroll.setWidget(panel)
         scroll.setStyleSheet(self.style)
         self.rightDock.setWidget(scroll)
-        slicer.util.mainWindow().addDockWidget(qt.Qt.RightDockWidgetArea, self.rightDock)
+        self.rightDock.setMinimumWidth(270)
+        slicer.util.mainWindow().addDockWidget(qt.Qt.RightDockWidgetArea,self.rightDock)
+
+    def _menu(self, button, actions):
+        menu = qt.QMenu(button)
+        menu.setStyleSheet(self.style)
+        for text,callback,name in actions:
+            if text is None:
+                menu.addSeparator()
+            else:
+                action = menu.addAction(self._icon(name),text)
+                action.connect('triggered()',callback)
+        button.setMenu(menu)
+        button.setPopupMode(qt.QToolButton.InstantPopup)
+        return menu
+
+    def _headerButton(self, text, icon):
+        button = qt.QToolButton()
+        button.setText(text)
+        button.setIcon(self._icon(icon))
+        button.setToolButtonStyle(qt.Qt.ToolButtonTextBesideIcon)
+        button.setIconSize(qt.QSize(18,18))
+        button.objectName = 'quiet'
+        self.topBar.addWidget(button)
+        return button
 
     def _buildBars(self):
         main = slicer.util.mainWindow()
-        self.topBar = qt.QToolBar('Case and view', main)
-        self.topBar.objectName = 'MeniscusIdentity'
+        self.topBar = qt.QToolBar('Meniscus Annotator',main)
+        self.topBar.objectName = 'MeniscusHeader'
+        self.topBar.setMovable(False)
         self.topBar.setFont(self.font)
         self.topBar.setStyleSheet(self.style)
-        self.topBar.setMovable(False)
-        self.identityLabel = qt.QLabel('Meniscus annotation')
+        title = qt.QLabel('Meniscus Annotator')
+        title.objectName = 'appTitle'
+        self.topBar.addWidget(title)
+        self.casesToggle = self._headerButton('Cases','cases')
+        self.casesToggle.setCheckable(True)
+        self.casesToggle.setChecked(True)
+        self.casesToggle.connect('toggled(bool)',self.caseListDock.setVisible)
+        self.caseListDock.connect('visibilityChanged(bool)',self.casesToggle.setChecked)
+        self.identityLabel = qt.QLabel('No case open')
         self.identityLabel.objectName = 'identity'
         self.topBar.addWidget(self.identityLabel)
-        cases = qt.QPushButton('Cases')
-        cases.setCheckable(True)
-        cases.setChecked(True)
-        cases.connect('toggled(bool)', lambda visible: slicer.util.setModulePanelVisible(visible))
-        self.topBar.addWidget(cases)
-        tools = qt.QPushButton('Tools')
-        tools.setCheckable(True)
-        tools.setChecked(True)
-        tools.connect('toggled(bool)', self.rightDock.setVisible)
-        self.rightDock.connect('visibilityChanged(bool)', tools.setChecked)
-        self.topBar.addWidget(tools)
         spacer = qt.QWidget()
-        spacer.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Preferred)
+        spacer.setSizePolicy(qt.QSizePolicy.Expanding,qt.QSizePolicy.Preferred)
         self.topBar.addWidget(spacer)
-        self.saveStatus = qt.QLabel('Open a dataset to begin')
+        self.saveStatus = qt.QLabel('No case open')
+        self.saveStatus.objectName = 'saveState'
         self.topBar.addWidget(self.saveStatus)
-        main.addToolBar(qt.Qt.TopToolBarArea, self.topBar)
-        self.bottomBar = qt.QToolBar('Slice review', main)
-        self.bottomBar.objectName = 'MeniscusReview'
+        dataset = self._headerButton('Dataset','folder')
+        self._menu(dataset,[('Open dataset…',self._chooseDataset,'folder'),('Resume work',self._resume,'resume'),(None,None,None),('Show dataset folder',self._showDataset,'folder'),('Show saved work',self._showWork,'folder'),('Export results…',self._exportDialog,'export')])
+        self.toolsToggle = self._headerButton('Tools','tools')
+        self.toolsToggle.setCheckable(True)
+        self.toolsToggle.setChecked(True)
+        self.toolsToggle.connect('toggled(bool)',self.rightDock.setVisible)
+        self.rightDock.connect('visibilityChanged(bool)',self.toolsToggle.setChecked)
+        helpButton = self._headerButton('Help','help')
+        self._menu(helpButton,[('Controls and shortcuts',self._help,'help'),('Annotation setup…',self._loadJob,'folder'),('Troubleshooting',self._diagnostics,'help'),('About Meniscus Annotator',self._about,'help')])
+        main.addToolBar(qt.Qt.TopToolBarArea,self.topBar)
+        self.bottomBar = qt.QToolBar('Acquired slices and review',main)
+        self.bottomBar.objectName = 'MeniscusNavigation'
         self.bottomBar.setMovable(False)
-        self.bottomBar.setStyleSheet(self.style)
         self.bottomBar.setFont(self.font)
+        self.bottomBar.setStyleSheet(self.style)
+        footer = qt.QWidget()
+        footer.objectName = 'navigationPanel'
+        footer.setSizePolicy(qt.QSizePolicy.Expanding,qt.QSizePolicy.Preferred)
+        footerLayout = qt.QVBoxLayout(footer)
+        footerLayout.setContentsMargins(2,2,2,2)
+        footerLayout.setSpacing(10)
+        nav = qt.QHBoxLayout()
+        nav.setSpacing(12)
+        self.sliceReadout = qt.QLabel('Slice — of —')
+        self.sliceReadout.objectName = 'sliceReadout'
+        self.sliceReadout.setMinimumWidth(148)
+        nav.addWidget(self.sliceReadout)
+        self.previousButton = self._button('Previous',lambda:self.goSlice(self.currentSlice-1),nav,icon='previous')
+        self.sliceSlider = qt.QSlider(qt.Qt.Horizontal)
+        self.sliceSlider.setRange(1,1)
+        self.sliceSlider.setSingleStep(1)
+        self.sliceSlider.setPageStep(1)
+        self.sliceSlider.setMinimumWidth(160)
+        self.sliceSlider.setToolTip('Every acquired slice, in source order. Displayed slice 1 is stored index 0.')
+        self.sliceSlider.setAccessibleName('Acquired slice')
+        self.sliceSlider.connect('valueChanged(int)',lambda value:self.goSlice(value-1))
+        nav.addWidget(self.sliceSlider,1)
+        self.nextButton = self._button('Next',lambda:self.goSlice(self.currentSlice+1),nav,icon='next')
+        nav.addWidget(qt.QLabel('Go to'))
         self.sliceSpin = qt.QSpinBox()
-        self.sliceSpin.setRange(1, 1)
-        self.sliceSpin.setPrefix('Slice ')
-        self.sliceSpin.connect('valueChanged(int)', lambda v: self.goSlice(v-1))
-        self.bottomBar.addWidget(self.sliceSpin)
-        for text, callback in [('Previous', lambda: self.goSlice(self.currentSlice-1)), ('Next', lambda: self.goSlice(self.currentSlice+1)), ('Reviewed → next slice', self._reviewNext), ('Next unreviewed', self._nextUnreviewed), ('Next flagged', self._nextFlagged)]:
-            b = qt.QPushButton(text)
-            b.connect('clicked()', callback)
-            self.bottomBar.addWidget(b)
-        self.progress = qt.QLabel('0 / 0 reviewed')
-        self.bottomBar.addWidget(self.progress)
-        main.addToolBar(qt.Qt.BottomToolBarArea, self.bottomBar)
-        self.actionBar = qt.QToolBar('Save and approval', main)
-        self.actionBar.objectName = 'MeniscusActions'
-        self.actionBar.setMovable(False)
-        self.actionBar.setFont(self.font)
-        self.actionBar.setStyleSheet(self.style)
-        for text, cb in [('Save draft', lambda: self._safe(self.save)), ('Approve case', self._approve), ('Next case', self._nextCase)]:
-            b = qt.QPushButton(text)
-            b.connect('clicked()', cb)
-            self.actionBar.addWidget(b)
-        self.message = qt.QLabel('Research annotation · source data is read-only')
-        self.actionBar.addWidget(self.message)
-        main.addToolBarBreak(qt.Qt.BottomToolBarArea)
-        main.addToolBar(qt.Qt.BottomToolBarArea, self.actionBar)
+        self.sliceSpin.setRange(1,1)
+        self.sliceSpin.setMinimumWidth(64)
+        self.sliceSpin.setAccessibleName('Go to acquired slice')
+        self.sliceSpin.connect('valueChanged(int)',lambda value:self.goSlice(value-1))
+        nav.addWidget(self.sliceSpin)
+        footerLayout.addLayout(nav)
+        self.actionBar = qt.QWidget()
+        actions = qt.QHBoxLayout(self.actionBar)
+        actions.setContentsMargins(0,0,0,0)
+        actions.setSpacing(10)
+        self.progress = qt.QLabel('No slices reviewed')
+        self.progress.objectName = 'support'
+        actions.addWidget(self.progress)
+        jump = qt.QToolButton()
+        jump.setText('Jump to')
+        jump.setToolButtonStyle(qt.Qt.ToolButtonTextBesideIcon)
+        jump.setIcon(self._icon('next'))
+        self._menu(jump,[('Next unreviewed slice',self._nextUnreviewed,'next'),('Next flagged slice',self._nextFlagged,'flag')])
+        actions.addWidget(jump)
+        self.reviewButton = self._button('Mark reviewed and next',self._reviewNext,actions,True,icon='check')
+        actions.addStretch(1)
+        self.saveButton = self._button('Save draft',lambda:self._safe(self.save),actions,icon='save')
+        self.approveButton = self._button('Approve case',self._approve,actions,icon='check')
+        footerLayout.addWidget(self.actionBar)
+        self.bottomBar.addWidget(footer)
+        main.addToolBar(qt.Qt.BottomToolBarArea,self.bottomBar)
 
     def _finishLayout(self):
-        # Retain native Slicer MRI widgets, but remove unrelated toolbars from this focused workflow.
-        for bar in slicer.util.mainWindow().findChildren(qt.QToolBar):
-            if bar not in [self.topBar, self.bottomBar, self.actionBar]:
-                bar.hide()
+        main = slicer.util.mainWindow()
+        for bar in main.findChildren(qt.QToolBar):
+            if bar not in [self.topBar,self.bottomBar]: bar.hide()
+        defaultPanel = main.findChild(qt.QDockWidget, 'PanelDockWidget')
+        if defaultPanel:
+            defaultPanel.hide()
         slicer.util.setApplicationLogoVisible(False)
         slicer.util.setModuleHelpSectionVisible(False)
-        slicer.util.setModulePanelTitleVisible(False)
         slicer.util.setDataProbeVisible(False)
         slicer.util.setPythonConsoleVisible(False)
-        slicer.util.mainWindow().setWindowTitle('Meniscus Annotator ' + VERSION + ' · Research annotation')
+        probe = getattr(slicer.modules,'DataProbeInstance',None)
+        if probe and getattr(probe,'infoWidget',None):
+            annotations = probe.infoWidget.sliceAnnotations
+            annotations.sliceViewAnnotationsEnabled = False
+            annotations.updateSliceViewFromGUI()
+        main.menuBar().hide()
+        main.statusBar().hide()
+        main.setWindowTitle('Meniscus Annotator ' + VERSION)
+        main.setMinimumSize(1024,700)
+        main.setStyleSheet('QMainWindow { background:#101820; } QMainWindow::separator { background:#dce3e9; width:1px; height:1px; }')
         slicer.app.layoutManager().setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUpRedSliceView)
-        # Remove general Slicer menu shortcuts (for example Save Scene) so only
-        # focused view shortcuts act on annotations and notes keep normal text editing.
-        for action in slicer.util.mainWindow().findChildren(qt.QAction):
-            action.setShortcut(qt.QKeySequence())
+        for action in main.findChildren(qt.QAction):
+            if not any(word in str(action.objectName) for word in ['Exit','Quit']): action.setShortcut(qt.QKeySequence())
         self._installShortcuts()
-        slicer.util.mainWindow().resizeDocks([self.rightDock], [int(self.settings.value('Meniscus/toolsWidth', 310))], qt.Qt.Horizontal)
-        self.rightDock.setMinimumWidth(260)
-        self.parent.setMinimumWidth(260)
-        caseDock = slicer.util.mainWindow().findChild(qt.QDockWidget, 'PanelDockWidget')
-        if caseDock:
-            caseDock.setStyleSheet('QDockWidget { background:#f3f5f7; }')
-            slicer.util.mainWindow().resizeDocks([caseDock], [int(self.settings.value('Meniscus/casesWidth', 300))], qt.Qt.Horizontal)
-        slicer.util.mainWindow().setMinimumSize(1024, 700)
-        # Native view controller can reorient/reslice; focused workflow controls navigation instead.
+        main.resizeDocks([self.caseListDock,self.rightDock],[int(self.settings.value('Meniscus/casesWidth',270)),int(self.settings.value('Meniscus/toolsWidth',290))],qt.Qt.Horizontal)
         self._lockControllers()
+        from MeniscusAnnotatorLib.interface import EmptyCanvas
+        self.emptyCanvas = EmptyCanvas(slicer.app.layoutManager().sliceWidget('Red').sliceView(),self)
+        self.emptyCanvas.ready(bool(self.dataset))
+
+    def _showDataset(self):
+        if self.dataset: qt.QDesktopServices.openUrl(qt.QUrl.fromLocalFile(str(self.dataset.root)))
+
+    def _diagnostics(self):
+        slicer.util.infoDisplay(self._diagnostic or 'No errors recorded in this session.',windowTitle='Troubleshooting — keep details private')
+
+    def _about(self):
+        notice = qt.QMessageBox(slicer.util.mainWindow())
+        notice.setWindowTitle('About Meniscus Annotator')
+        notice.setText('Meniscus Annotator ' + VERSION + '\nResearch annotation of acquired knee MRI.\n\nBuilt on 3D Slicer 5.12.4. The Slicer runtime and third-party licences and attributions remain part of this distribution.')
+        upstream = notice.addButton('About 3D Slicer',qt.QMessageBox.ActionRole)
+        notice.addButton(qt.QMessageBox.Close)
+        notice.exec_()
+        if notice.clickedButton()==upstream:
+            action = slicer.util.mainWindow().findChild(qt.QAction,'HelpAboutSlicerAction')
+            if action: action.trigger()
 
     def _lockControllers(self):
         lm = slicer.app.layoutManager()
@@ -403,7 +543,8 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         except Exception as exc:
             self._diagnostic = traceback.format_exc()
             reason = str(exc) if isinstance(exc, (ValidationError, OSError)) else 'The operation could not be completed.'
-            self.message.setText('Action failed — saved checkpoints retained')
+            self.message.setText('Action failed. Previous saved versions are intact.')
+            self.saveStatus.setText('Action failed · check details')
             slicer.util.errorDisplay(reason + '\n\nCheck the dataset or work location, available disk space and permissions, then retry. Diagnostic details are available in Help.', windowTitle='Meniscus annotation')
             return None
 
@@ -449,7 +590,10 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.settings.setValue('Meniscus/work/' + version, str(location))
         self.datasetLabel.setText(version + '\n' + str(len(ds.cases)) + ' complete scans · local work folder connected')
         self._populate()
-        self.message.setText('Dataset validated. Double-click a case to open.')
+        if self.caseTable.rowCount:
+            self.caseTable.selectRow(0)
+        self.message.setText('Dataset ready. Select a case to begin.')
+        if getattr(self,'emptyCanvas',None): self.emptyCanvas.ready(True)
         return ds
 
     def _loadJob(self):
@@ -473,7 +617,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.caseTable.setRowCount(len(self.dataset.cases))
         for row, case in enumerate(self.dataset.cases):
             m = case.metadata
-            identity = f"{m['participant_id']} · M{int(m['visit_month']):03d} · {'Left' if m['knee_side']=='L' else 'Right'}"
+            identity = f"{m['participant_id']}\nM{int(m['visit_month']):03d} · {'Left' if m['knee_side']=='L' else 'Right'}"
             item = qt.QTableWidgetItem(identity)
             item.setData(qt.Qt.UserRole, case.key)
             self.caseTable.setItem(row, 0, item)
@@ -483,7 +627,10 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             elif hasattr(self.store, 'summary'):
                 summary = self.store.summary(case)
                 status = {'approved':'Approved', 'practice_approved':'Approved', 'not_started':'Not started', 'needs_review':'Needs review', 'in_progress':'In progress'}.get(summary.get('status'), 'In progress')
-            self.caseTable.setItem(row, 1, qt.QTableWidgetItem(status))
+            progressItem = qt.QTableWidgetItem(status)
+            self.caseTable.setItem(row,1,progressItem)
+            if self.session and case.key==self.session.case.key:
+                self.caseTable.selectRow(row)
         self._filter()
 
     def _filter(self, *args):
@@ -534,6 +681,10 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.volume = self.anatomy = self.uncertainty = None
         self._loading = False
         self._enable(False)
+        self.sliceReadout.setText('Slice — of —')
+        self.identityLabel.setText('No case open')
+        self.saveStatus.setText('No case open')
+        if getattr(self,'emptyCanvas',None): self.emptyCanvas.ready(bool(self.dataset))
 
     def openCase(self, key):
         if self.session and self.session.case.key == key:
@@ -541,6 +692,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.closeCase()
         case = next(c for c in self.dataset.cases if c.key == key)
         self.session = self.store.open_case(case)
+        if getattr(self,'emptyCanvas',None): self.emptyCanvas.hide()
         self._loading = True
         try:
             labels, uncertain, seg_path = self.session.load()
@@ -588,11 +740,11 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             sliceNode = slicer.app.layoutManager().sliceWidget('Red').mrmlSliceNode()
             self._observers.append((sliceNode, sliceNode.AddObserver(vtk.vtkCommand.ModifiedEvent, self._sliceMoved)))
             self.sliceSpin.setMaximum(case.n_slices)
-            self.sliceSpin.setSuffix(' / ' + str(case.n_slices))
+            self.sliceSlider.setMaximum(case.n_slices)
             self.notes.setPlainText(self.session.state.get('notes', ''))
             self.medialConsidered.setChecked(self.session.state['compartments']['medial'])
             self.lateralConsidered.setChecked(self.session.state['compartments']['lateral'])
-            self.protocolLabel.setText('Protocol: ' + self.session.state['protocol']['version'] + ' · ' + self.session.state['protocol']['status'])
+            self.protocolLabel.setText('Practice work · Draft protocol' if self.session.state['protocol']['status']=='draft' else 'Protocol ' + self.session.state['protocol']['version'])
             self.dirty = False
             self._enable(True)
             self.setLabel('medial')
@@ -660,6 +812,11 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             node.SetPrescribedSliceSpacing(float(spacing[0]),float(spacing[1]),float(spacing[2]))
             if reset:
                 slicer.app.layoutManager().sliceWidget('Red').sliceLogic().FitSliceToAll()
+                # Fit resets the slice position to the volume centre. Keep its
+                # field of view, then restore this requested acquired plane.
+                for i in range(3):
+                    mat.SetElement(i,3,float(centre[i]))
+                node.UpdateMatrices()
         finally:
             self._snap = False
 
@@ -768,7 +925,9 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
 
     def _toolStatus(self):
         tool = self.editor.activeEffect().name if self.editor.activeEffect() else 'Navigate'
-        self.toolText.setText(f'{LABELS[self.activeLabel][0]} · {tool} · {self.brushSize.value:g} mm\nScope: current acquired slice')
+        self.toolText.setText(f'{LABELS[self.activeLabel][0]} · {tool}\nEditing: this acquired slice only')
+        annotation = slicer.app.layoutManager().sliceWidget('Red').sliceView().cornerAnnotation()
+        annotation.SetText(vtk.vtkCornerAnnotation.UpperRight,f'{LABELS[self.activeLabel][0]} · {tool}\n{self.brushSize.value:g} mm · This slice only')
 
     def _brush(self, *args):
         self.settings.setValue('Meniscus/brush', self.brushSize.value)
@@ -797,11 +956,25 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
 
     def _layoutViews(self, *args):
         lm = slicer.app.layoutManager()
-        lm.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutFourUpView if self.reformats.checked else slicer.vtkMRMLLayoutNode.SlicerLayoutOneUpRedSliceView)
-        # Four-up includes an optional 3D orientation view, not an editing surface.
-        self._lockControllers()
+        # Keep the acquired plane dominant; orientation reformats occupy a narrow column.
+        layout_id = 703
+        description = '<layout type="horizontal"><item splitSize="700"><view class="vtkMRMLSliceNode" singletontag="Red"><property name="orientation" action="default">Sagittal</property></view></item><item splitSize="300"><layout type="vertical"><item><view class="vtkMRMLSliceNode" singletontag="Yellow"><property name="orientation" action="default">Coronal</property></view></item><item><view class="vtkMRMLSliceNode" singletontag="Green"><property name="orientation" action="default">Axial</property></view></item></layout></item></layout>'
+        if not getattr(self,'_orientationLayoutAdded',False):
+            lm.layoutLogic().GetLayoutNode().AddLayoutDescription(layout_id,description)
+            self._orientationLayoutAdded = True
+        k = self.currentSlice
+        self._snap = True
+        try:
+            lm.setLayout(layout_id if self.reformats.checked else slicer.vtkMRMLLayoutNode.SlicerLayoutOneUpRedSliceView)
+            self._lockControllers()
+            if self.volume:
+                slicer.util.setSliceViewerLayers(background=self.volume)
+                lm.sliceWidget('Yellow').mrmlSliceNode().SetOrientationToCoronal() if lm.sliceWidget('Yellow') else None
+                lm.sliceWidget('Green').mrmlSliceNode().SetOrientationToAxial() if lm.sliceWidget('Green') else None
+        finally:
+            self._snap = False
         if self.volume:
-            self._nativePlane(self.currentSlice)
+            self._nativePlane(k)
             self._display()
 
     def _resetView(self):
@@ -864,7 +1037,13 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         review = self.session.state['review']
         count = sum(bool(r['reviewed']) for r in review)
         flags = sum(bool(r['flag']) for r in review)
-        self.progress.setText(f'  {count} / {len(review)} reviewed · {flags} flagged  ')
+        self.progress.setText(f'{count} of {len(review)} reviewed · {flags} flagged')
+        self.sliceReadout.setText(f'Slice {self.currentSlice+1} of {len(review)}')
+        self.sliceSlider.blockSignals(True)
+        self.sliceSlider.setValue(self.currentSlice+1)
+        self.sliceSlider.blockSignals(False)
+        self.previousButton.setEnabled(self.currentSlice>0)
+        self.nextButton.setEnabled(self.currentSlice<len(review)-1)
         self.sliceSpin.blockSignals(True)
         self.sliceSpin.setValue(self.currentSlice+1)
         self.sliceSpin.blockSignals(False)
@@ -873,7 +1052,9 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.attention.blockSignals(False)
         state = 'Reviewed' if review[self.currentSlice]['reviewed'] else 'Not reviewed'
         self.saveStatus.setText(('Unsaved changes' if self.dirty else 'Saved') + ' · ' + state + '  ')
-        self.message.setText('Practice protocol · approval is Jeff’s own review' if self.session.state['protocol']['status']=='draft' else 'Annotation protocol ' + self.session.state['protocol']['version'])
+        self.message.setText('Practice work · Draft protocol' if self.session.state['protocol']['status']=='draft' else 'Protocol ' + self.session.state['protocol']['version'])
+        annotation = slicer.app.layoutManager().sliceWidget('Red').sliceView().cornerAnnotation()
+        annotation.SetText(vtk.vtkCornerAnnotation.UpperLeft,f'Slice {self.currentSlice+1} of {len(review)}\n{state}')
 
     def _segWriter(self, path):
         # One editable segmentation contains all fixed IDs. Separate layers preserve uncertainty overlap.
@@ -920,8 +1101,9 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             self.editor.setActiveEffectByName('')
             raise ValidationError('The loaded source image pixels changed. Reopen the case before saving.')
         self.saveStatus.setText('Saving…')
+        self.saveStatus.repaint()
         labels, uncertain = self.collectArrays()
-        self.session.state['runtime'] = {'slicer_version':slicer.app.applicationVersion, 'slicer_revision':slicer.app.repositoryRevision, 'application_version':VERSION}
+        self.session.state['runtime'] = {'slicer_version':slicer.app.applicationVersion, 'slicer_revision':slicer.app.repositoryRevision, 'application_version':VERSION, 'interface_revision':'workspace-2'}
         path = self.session.save(labels, uncertain, self._segWriter, approve=approve, practice=practice)
         self.dirty = False
         self.refreshReview()
@@ -936,6 +1118,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         labels, uncertain = self.collectArrays()
         errors = self.session.approval_errors(labels, uncertain, practice=practice)
         if errors:
+            self.caseReviewPanel.collapsed = False
             slicer.util.warningDisplay('Approval is unavailable:\n\n' + '\n'.join('• ' + e for e in errors),windowTitle='Review required')
             return
         text = ('This protocol is a draft. This creates an approved PRACTICE version, excluded from research exports.\n\n' if practice else '') + 'I, Jeff, have considered both compartments and reviewed every acquired slice under the recorded protocol. This is my own approval, not an independent second-reader assessment.\n\nApprove this version?'
@@ -1028,18 +1211,17 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             except Exception:
                 # Periodic verified checkpoints remain recoverable; never pretend exit saved.
                 self._diagnostic = traceback.format_exc()
-        caseDock = slicer.util.mainWindow().findChild(qt.QDockWidget, 'PanelDockWidget')
-        if caseDock:
-            self.settings.setValue('Meniscus/casesWidth', caseDock.width)
+        self.settings.setValue('Meniscus/casesWidth',self.caseListDock.width)
         self.settings.setValue('Meniscus/toolsWidth', self.rightDock.width)
         self.settings.sync()
 
     def cleanup(self):
+        self._loading = True  # Native editing libraries may already be unloading; close guards saved beforehand.
         self.dirty = False  # aboutToQuit/close guard saves while native modules are still alive.
         if hasattr(self, 'autosave'):
             self.autosave.stop()
         self.closeCase()
-        for name in ['rightDock', 'topBar', 'bottomBar', 'actionBar']:
+        for name in ['caseListDock','rightDock','topBar','bottomBar']:
             widget = getattr(self, name, None)
             if widget:
                 widget.hide()

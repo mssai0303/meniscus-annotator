@@ -4,12 +4,13 @@ A focused research annotation module and Windows custom-application build for
 3D Slicer **5.12.4, revision 34645**. The MRI remains on its complete acquired
 grid, including tilted sagittal planes. No model is trained or downloaded.
 
-**Development build; Windows release is blocked.** The actual Slicer desktop
-workflow has been exercised on synthetic scans on macOS under Rosetta. No
-Windows installer has been built or tested. The real dataset is still being
-prepared, and a released anatomical protocol has not been supplied. Do not
+**Development preview; Windows acceptance is paused for Mac design review.** The actual Slicer desktop
+workflow has been exercised on synthetic scans on macOS under Rosetta. A wrapped Windows installer passed hosted installation/import/lifecycle checks;
+the redesigned interface has not yet completed Windows acceptance. The real input package is prepared with flat case folders; its full annotation
+workflow is not yet accepted. A released anatomical protocol has not been supplied. Do not
 use this version as an accepted production release for 250 cases.
 
+- [Open the checked Mac preview](docs/MAC_PREVIEW.md)
 - [Jeff's practical guide](docs/USER_GUIDE.md)
 - [Input/output and job contract](docs/CONTRACT.md)
 - [Windows reproducible build](docs/WINDOWS.md)
@@ -30,12 +31,12 @@ These dependencies are bundled at **build time** in the Windows application;
 Jeff will not need Python, pip, a console, a login or runtime downloads.
 
 In Slicer: Edit → Application Settings → Modules → Additional module paths →
-add this repository folder. Restart and select **Meniscus annotation**. The
-module opens the focused MRI layout. Use **Open dataset** to select a package.
+add this repository folder. Launch with the development entry point below to open **Meniscus Annotator**
+directly. The module opens the focused MRI layout. Use **Open dataset** to select a package.
 For an isolated development launch:
 
 ```text
-Slicer --no-splash --ignore-slicerrc --additional-module-paths <repository>
+Slicer --no-splash --ignore-slicerrc --additional-module-paths <repository> --python-script <repository>/tools/start_workspace.py
 ```
 
 Create synthetic examples outside the repository with Slicer's PythonSlicer

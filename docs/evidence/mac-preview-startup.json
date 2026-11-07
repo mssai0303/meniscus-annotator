@@ -1,0 +1,25 @@
+{
+  "recorded_utc": "2026-11-07T00:09:39.347002+00:00",
+  "scope": "Actual interactive Mac development preview; synthetic inputs only",
+  "module": "MeniscusAnnotator",
+  "slicer_version": "5.12.4",
+  "slicer_revision": "4e21c19",
+  "module_sha256": "cc7697bb48de379c193b34d301fc928e6417ce84baa1daa7c205f815965068e9",
+  "interface_sha256": "869131beff3d8b952710e2b6e3f4aecb30f2c0bd8f7ac74a7594ad10643109df",
+  "case_count": 2,
+  "case_key": "SYNTHETIC_01",
+  "slice_readout": "Slice 4 of 17",
+  "slice_slider_visible": true,
+  "slice_slider_range": [
+    1,
+    17
+  ],
+  "window_visible": true,
+  "window_title": "Meniscus Annotator \u2014 Synthetic practice",
+  "visible_toolbars": [
+    "MeniscusHeader",
+    "MeniscusNavigation"
+  ],
+  "ready": true,
+  "evidence_method": "Native application startup self-check, actual Qt window capture and matching running process; no desktop automation."
+}

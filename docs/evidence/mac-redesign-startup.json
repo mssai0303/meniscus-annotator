@@ -1,0 +1,32 @@
+{
+  "scope": "Direct application startup inspection; no dataset, anatomy or installed-Windows claim.",
+  "platform": "macOS-27.2-x86_64-i386-64bit",
+  "checks": [
+    {
+      "name": "startup selects Meniscus Annotator directly",
+      "passed": true,
+      "detail": "MeniscusAnnotator"
+    },
+    {
+      "name": "startup window identifies Meniscus Annotator",
+      "passed": true,
+      "detail": "Meniscus Annotator 0.1.0"
+    },
+    {
+      "name": "startup header identifies Meniscus Annotator",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "startup hides unrelated Slicer toolbars",
+      "passed": true,
+      "detail": "['MeniscusHeader', 'MeniscusNavigation']"
+    },
+    {
+      "name": "startup has not loaded an MRI or prediction",
+      "passed": true,
+      "detail": ""
+    }
+  ],
+  "passed": true
+}

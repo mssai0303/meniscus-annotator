@@ -1,0 +1,1297 @@
+{
+  "platform": "darwin",
+  "os": "macOS-27.2-x86_64-i386-64bit",
+  "machine": "x86_64",
+  "slicer_version": "5.12.4",
+  "slicer_revision": "4e21c19",
+  "checks": [
+    {
+      "name": "synthetic cases available",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "workspace header identifies Meniscus Annotator",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "workspace window title identifies actual application",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "workspace hides unrelated Slicer toolbars",
+      "passed": true,
+      "detail": "[]"
+    },
+    {
+      "name": "workspace displays save state",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "workspace exposes acquired-slice slider and readout",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 slider spans every acquired slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 current case is visibly selected",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 initial displayed slice matches loaded native plane",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 native Paint isolates endpoint slice 1",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 endpoint paint Undo restores empty annotation 1",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 native Paint isolates endpoint slice 17",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 endpoint paint Undo restores empty annotation 17",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 every acquired slice maps to native plane",
+      "passed": true,
+      "detail": "[]"
+    },
+    {
+      "name": "SYNTHETIC_01 every slider position displays human slice and total",
+      "passed": true,
+      "detail": "Slice 17 of 17"
+    },
+    {
+      "name": "SYNTHETIC_01 slider Home reaches first acquired slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 slider End reaches last acquired slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 Reset view preserves requested acquired slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 canvas Right steps one acquired slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 canvas Left steps one acquired slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 blank mode ignores nearby prediction",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 prediction-free scene contains source MRI only",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 empty annotation exports full native dimensions",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 empty annotation exports native physical grid",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 completely empty segmentation saves and reopens",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 secondary reformats reject editing",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 notes accept shortcut letters",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 notes typing does not navigate or switch tools",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 native Paint changes voxels",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 Paint affects intended acquired slice only",
+      "passed": true,
+      "detail": "[8]"
+    },
+    {
+      "name": "SYNTHETIC_01 known voxel painted medial",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 undo restores blank",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 redo restores paint",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 Reviewed next records explicit review",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 Reviewed next advances one acquired slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 edit invalidates reviewed slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 lateral replaces medial with fixed value 2",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 compartment overwrite undo restores prior anatomy",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 compartment overwrite redo restores replacement",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 erase removes lateral",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 erase undo restores label",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 undo survives switching uncertainty label",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 separate uncertainty exists",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 uncertainty overlaps anatomy without erasing it",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 anatomical edit preserves overlapping uncertainty",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 uncertainty does not add training class",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 Draw contour fills known native voxel",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 Draw stays on acquired slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 independent reopen labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 independent full geometry labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 SimpleITK voxels labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 SimpleITK spacing labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 SimpleITK LPS origin labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 SimpleITK LPS direction labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 independent reopen uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 independent full geometry uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 SimpleITK voxels uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 SimpleITK spacing uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 SimpleITK LPS origin uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 SimpleITK LPS direction uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 editable segmentation reopen medial",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 editable segmentation reopen lateral",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 editable segmentation reopen uncertain",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 save reopen labels",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 save reopen uncertainty",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 original dimensions retained",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 incomplete review blocks approval",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 uncertainty erased separately",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 draft protocol blocks research approval",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 practice approval records honest role",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 approved editing creates draft",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 approved checkpoint preserved",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 slider spans every acquired slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 current case is visibly selected",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 initial displayed slice matches loaded native plane",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 native Paint isolates endpoint slice 1",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 endpoint paint Undo restores empty annotation 1",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 native Paint isolates endpoint slice 23",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 endpoint paint Undo restores empty annotation 23",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 every acquired slice maps to native plane",
+      "passed": true,
+      "detail": "[]"
+    },
+    {
+      "name": "SYNTHETIC_02 every slider position displays human slice and total",
+      "passed": true,
+      "detail": "Slice 23 of 23"
+    },
+    {
+      "name": "SYNTHETIC_02 slider Home reaches first acquired slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 slider End reaches last acquired slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 Reset view preserves requested acquired slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 canvas Right steps one acquired slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 canvas Left steps one acquired slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 blank mode ignores nearby prediction",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 prediction-free scene contains source MRI only",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 empty annotation exports full native dimensions",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 empty annotation exports native physical grid",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 completely empty segmentation saves and reopens",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 secondary reformats reject editing",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 notes accept shortcut letters",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 notes typing does not navigate or switch tools",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 native Paint changes voxels",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 Paint affects intended acquired slice only",
+      "passed": true,
+      "detail": "[11]"
+    },
+    {
+      "name": "SYNTHETIC_02 known voxel painted medial",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 undo restores blank",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 redo restores paint",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 Reviewed next records explicit review",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 Reviewed next advances one acquired slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 edit invalidates reviewed slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 lateral replaces medial with fixed value 2",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 compartment overwrite undo restores prior anatomy",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 compartment overwrite redo restores replacement",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 erase removes lateral",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 erase undo restores label",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 undo survives switching uncertainty label",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 separate uncertainty exists",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 uncertainty overlaps anatomy without erasing it",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 anatomical edit preserves overlapping uncertainty",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 uncertainty does not add training class",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 Draw contour fills known native voxel",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 Draw stays on acquired slice",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 independent reopen labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 independent full geometry labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 SimpleITK voxels labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 SimpleITK spacing labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 SimpleITK LPS origin labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 SimpleITK LPS direction labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 independent reopen uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 independent full geometry uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 SimpleITK voxels uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 SimpleITK spacing uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 SimpleITK LPS origin uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 SimpleITK LPS direction uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 editable segmentation reopen medial",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 editable segmentation reopen lateral",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 editable segmentation reopen uncertain",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 save reopen labels",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 save reopen uncertainty",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 original dimensions retained",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 incomplete review blocks approval",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 uncertainty erased separately",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 draft protocol blocks research approval",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 practice approval records honest role",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 approved editing creates draft",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 approved checkpoint preserved",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "practice ZIP explicitly marked",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "all approved synthetic cases exported",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "MRI images not duplicated in results",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export ZIP CRC integrity",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export retains labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export retains uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export retains validity.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export retains slice_review.csv",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export retains segmentation.seg.nrrd",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 exported approved voxels labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_01 exported approved voxels uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export retains labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export retains uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export retains validity.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export retains slice_review.csv",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "export retains segmentation.seg.nrrd",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 exported approved voxels labels.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "SYNTHETIC_02 exported approved voxels uncertainty.nii.gz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "entire source package unchanged",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "actual application loads explicitly permitted correction mask",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "correction source and version recorded",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "correction original prediction preserved separately",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "correction saves and reopens exact starting voxels",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "correction does not alter original supplied mask",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "correction leaves source package unchanged",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "repeated save does not accumulate scene helper nodes",
+      "passed": true,
+      "detail": "124 -> 124"
+    },
+    {
+      "name": "save failure blocks case switch and retains unsaved work",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "completed stroke awaits queued observer before immediate close",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "immediate case close flushes and saves queued stroke",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "failed native image load releases partial case session",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "failed native image load releases writer lock for retry",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "both side panels collapse",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "collapsed panels enlarge MRI canvas",
+      "passed": true,
+      "detail": "950 -> 1512"
+    },
+    {
+      "name": "slice controls remain visible when panels collapse",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "both side panels restore",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "panel toggles preserve annotation context",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "case list populated and visible",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "slice slider visible at 1280x800",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "slice readout fits at 1280x800",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "slice slider visible at 1440x900",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "slice readout fits at 1440x900",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "closing probe is dirty before window close",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "actual window close releases case session",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "actual window close saves latest notes",
+      "passed": true,
+      "detail": ""
+    }
+  ],
+  "scope": "Synthetic development integration; neither anatomical validation nor Windows installer acceptance.",
+  "settings_scope": "Isolated Qt settings under synthetic output; no production settings changed.",
+  "folder_layout": "legacy",
+  "native_plane_checks": {
+    "SYNTHETIC_01": [
+      {
+        "display_requested": 1,
+        "current_k": 0,
+        "slider": 1,
+        "native_k": 0.0,
+        "plane_error_mm": 0.0,
+        "readout": "Slice 1 of 17"
+      },
+      {
+        "display_requested": 2,
+        "current_k": 1,
+        "slider": 2,
+        "native_k": 1.0,
+        "plane_error_mm": 0.0,
+        "readout": "Slice 2 of 17"
+      },
+      {
+        "display_requested": 3,
+        "current_k": 2,
+        "slider": 3,
+        "native_k": 2.0,
+        "plane_error_mm": 0.0,
+        "readout": "Slice 3 of 17"
+      },
+      {
+        "display_requested": 4,
+        "current_k": 3,
+        "slider": 4,
+        "native_k": 3.0,
+        "plane_error_mm": 0.0,
+        "readout": "Slice 4 of 17"
+      },
+      {
+        "display_requested": 5,
+        "current_k": 4,
+        "slider": 5,
+        "native_k": 4.0,
+        "plane_error_mm": 0.0,
+        "readout": "Slice 5 of 17"
+      },
+      {
+        "display_requested": 6,
+        "current_k": 5,
+        "slider": 6,
+        "native_k": 5.0,
+        "plane_error_mm": 0.0,
+        "readout": "Slice 6 of 17"
+      },
+      {
+        "display_requested": 7,
+        "current_k": 6,
+        "slider": 7,
+        "native_k": 6.0,
+        "plane_error_mm": 0.0,
+        "readout": "Slice 7 of 17"
+      },
+      {
+        "display_requested": 8,
+        "current_k": 7,
+        "slider": 8,
+        "native_k": 7.0,
+        "plane_error_mm": 0.0,
+        "readout": "Slice 8 of 17"
+      },
+      {
+        "display_requested": 9,
+        "current_k": 8,
+        "slider": 9,
+        "native_k": 8.0,
+        "plane_error_mm": 0.0,
+        "readout": "Slice 9 of 17"
+      },
+      {
+        "display_requested": 10,
+        "current_k": 9,
+        "slider": 10,
+        "native_k": 9.0,
+        "plane_error_mm": 0.0,
+        "readout": "Slice 10 of 17"
+      },
+      {
+        "display_requested": 11,
+        "current_k": 10,
+        "slider": 11,
+        "native_k": 10.0,
+        "plane_error_mm": 0.0,
+        "readout": "Slice 11 of 17"
+      },
+      {
+        "display_requested": 12,
+        "current_k": 11,
+        "slider": 12,
+        "native_k": 11.0,
+        "plane_error_mm": 0.0,
+        "readout": "Slice 12 of 17"
+      },
+      {
+        "display_requested": 13,
+        "current_k": 12,
+        "slider": 13,
+        "native_k": 12.0,
+        "plane_error_mm": 0.0,
+        "readout": "Slice 13 of 17"
+      },
+      {
+        "display_requested": 14,
+        "current_k": 13,
+        "slider": 14,
+        "native_k": 13.0,
+        "plane_error_mm": 0.0,
+        "readout": "Slice 14 of 17"
+      },
+      {
+        "display_requested": 15,
+        "current_k": 14,
+        "slider": 15,
+        "native_k": 14.0,
+        "plane_error_mm": 0.0,
+        "readout": "Slice 15 of 17"
+      },
+      {
+        "display_requested": 16,
+        "current_k": 15,
+        "slider": 16,
+        "native_k": 15.0,
+        "plane_error_mm": 0.0,
+        "readout": "Slice 16 of 17"
+      },
+      {
+        "display_requested": 17,
+        "current_k": 16,
+        "slider": 17,
+        "native_k": 16.0,
+        "plane_error_mm": 0.0,
+        "readout": "Slice 17 of 17"
+      }
+    ],
+    "SYNTHETIC_02": [
+      {
+        "display_requested": 1,
+        "current_k": 0,
+        "slider": 1,
+        "native_k": -1.7763568394002505e-15,
+        "plane_error_mm": 7.771561172376096e-15,
+        "readout": "Slice 1 of 23"
+      },
+      {
+        "display_requested": 2,
+        "current_k": 1,
+        "slider": 2,
+        "native_k": 1.0000000000000036,
+        "plane_error_mm": 7.327471962526033e-15,
+        "readout": "Slice 2 of 23"
+      },
+      {
+        "display_requested": 3,
+        "current_k": 2,
+        "slider": 3,
+        "native_k": 2.0000000000000036,
+        "plane_error_mm": 5.995204332975845e-15,
+        "readout": "Slice 3 of 23"
+      },
+      {
+        "display_requested": 4,
+        "current_k": 3,
+        "slider": 4,
+        "native_k": 3.0000000000000036,
+        "plane_error_mm": 7.327471962526033e-15,
+        "readout": "Slice 4 of 23"
+      },
+      {
+        "display_requested": 5,
+        "current_k": 4,
+        "slider": 5,
+        "native_k": 4.0000000000000036,
+        "plane_error_mm": 6.439293542825908e-15,
+        "readout": "Slice 5 of 23"
+      },
+      {
+        "display_requested": 6,
+        "current_k": 5,
+        "slider": 6,
+        "native_k": 5.0000000000000036,
+        "plane_error_mm": 7.327471962526033e-15,
+        "readout": "Slice 6 of 23"
+      },
+      {
+        "display_requested": 7,
+        "current_k": 6,
+        "slider": 7,
+        "native_k": 6.000000000000002,
+        "plane_error_mm": 3.3306690738754696e-15,
+        "readout": "Slice 7 of 23"
+      },
+      {
+        "display_requested": 8,
+        "current_k": 7,
+        "slider": 8,
+        "native_k": 7.0000000000000036,
+        "plane_error_mm": 7.327471962526033e-15,
+        "readout": "Slice 8 of 23"
+      },
+      {
+        "display_requested": 9,
+        "current_k": 8,
+        "slider": 9,
+        "native_k": 8.0,
+        "plane_error_mm": 2.220446049250313e-16,
+        "readout": "Slice 9 of 23"
+      },
+      {
+        "display_requested": 10,
+        "current_k": 9,
+        "slider": 10,
+        "native_k": 9.0,
+        "plane_error_mm": 5.10702591327572e-15,
+        "readout": "Slice 10 of 23"
+      },
+      {
+        "display_requested": 11,
+        "current_k": 10,
+        "slider": 11,
+        "native_k": 10.0,
+        "plane_error_mm": 1.5543122344752192e-15,
+        "readout": "Slice 11 of 23"
+      },
+      {
+        "display_requested": 12,
+        "current_k": 11,
+        "slider": 12,
+        "native_k": 11.000000000000002,
+        "plane_error_mm": 3.774758283725532e-15,
+        "readout": "Slice 12 of 23"
+      },
+      {
+        "display_requested": 13,
+        "current_k": 12,
+        "slider": 13,
+        "native_k": 12.000000000000002,
+        "plane_error_mm": 2.886579864025407e-15,
+        "readout": "Slice 13 of 23"
+      },
+      {
+        "display_requested": 14,
+        "current_k": 13,
+        "slider": 14,
+        "native_k": 13.000000000000004,
+        "plane_error_mm": 8.215650382226158e-15,
+        "readout": "Slice 14 of 23"
+      },
+      {
+        "display_requested": 15,
+        "current_k": 14,
+        "slider": 15,
+        "native_k": 14.000000000000004,
+        "plane_error_mm": 5.551115123125783e-15,
+        "readout": "Slice 15 of 23"
+      },
+      {
+        "display_requested": 16,
+        "current_k": 15,
+        "slider": 16,
+        "native_k": 15.000000000000004,
+        "plane_error_mm": 7.327471962526033e-15,
+        "readout": "Slice 16 of 23"
+      },
+      {
+        "display_requested": 17,
+        "current_k": 16,
+        "slider": 17,
+        "native_k": 16.000000000000004,
+        "plane_error_mm": 7.327471962526033e-15,
+        "readout": "Slice 17 of 23"
+      },
+      {
+        "display_requested": 18,
+        "current_k": 17,
+        "slider": 18,
+        "native_k": 17.000000000000004,
+        "plane_error_mm": 7.771561172376096e-15,
+        "readout": "Slice 18 of 23"
+      },
+      {
+        "display_requested": 19,
+        "current_k": 18,
+        "slider": 19,
+        "native_k": 18.000000000000004,
+        "plane_error_mm": 7.771561172376096e-15,
+        "readout": "Slice 19 of 23"
+      },
+      {
+        "display_requested": 20,
+        "current_k": 19,
+        "slider": 20,
+        "native_k": 19.000000000000004,
+        "plane_error_mm": 5.995204332975845e-15,
+        "readout": "Slice 20 of 23"
+      },
+      {
+        "display_requested": 21,
+        "current_k": 20,
+        "slider": 21,
+        "native_k": 20.000000000000004,
+        "plane_error_mm": 5.995204332975845e-15,
+        "readout": "Slice 21 of 23"
+      },
+      {
+        "display_requested": 22,
+        "current_k": 21,
+        "slider": 22,
+        "native_k": 21.000000000000004,
+        "plane_error_mm": 7.771561172376096e-15,
+        "readout": "Slice 22 of 23"
+      },
+      {
+        "display_requested": 23,
+        "current_k": 22,
+        "slider": 23,
+        "native_k": 22.000000000000004,
+        "plane_error_mm": 4.218847493575595e-15,
+        "readout": "Slice 23 of 23"
+      }
+    ]
+  },
+  "case_table": {
+    "row_count": 2,
+    "column_count": 2,
+    "visible": true,
+    "header_visible": true,
+    "query": "",
+    "filter": "All cases",
+    "rows": [
+      {
+        "hidden": false,
+        "identity": "SYNTHETIC_01\nM000 \u00b7 Left",
+        "status": "Needs review"
+      },
+      {
+        "hidden": false,
+        "identity": "SYNTHETIC_02\nM000 \u00b7 Left",
+        "status": "Needs review"
+      }
+    ]
+  },
+  "display": {
+    "device_pixel_ratio": 2.0,
+    "captures": [
+      {
+        "requested_logical_size": [
+          1280,
+          800
+        ],
+        "actual_logical_size": [
+          1280,
+          800
+        ],
+        "file": "synthetic-application-1280x800.png"
+      },
+      {
+        "requested_logical_size": [
+          1440,
+          900
+        ],
+        "actual_logical_size": [
+          1440,
+          900
+        ],
+        "file": "synthetic-application-1440x900.png"
+      }
+    ]
+  },
+  "screenshot": "synthetic-application-1280x800.png",
+  "passed": true
+}
