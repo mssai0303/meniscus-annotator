@@ -1,17 +1,16 @@
-# Jeff's annotation guide
+# Meniscus annotation guide
 
-This is a development version. A Windows installer candidate passed hosted
-installation/import/lifecycle checks; acceptance of the redesigned Windows
-application is paused and remains incomplete. Use the supplied synthetic package for software practice;
-it is not an anatomical teaching example. A released drawing protocol must be
-provided before research approval is enabled.
+This guide is for the doctor named in an assigned annotation package. The current
+Windows build is a test candidate; complete Windows correction acceptance is
+still pending. Use the supplied practice package while testing. A released drawing
+protocol must be provided before research approval is enabled.
 
 ![Actual Slicer application with a synthetic oblique scan](images/annotation-workflow.png)
 
 ## Open and resume
 
-After installing an accepted Windows release, download the **complete assigned pilot
-folder**, then choose **Open dataset** and select its top-level folder. The
+After receiving the software and **complete assigned case folder**, extract any
+ZIP files and keep a complete local copy. Install the supplied application, then choose **Open dataset** and select its top-level folder. The
 coordinator supplies only assigned pilot cases, not the full selection containing
 reserved test cases. Keep
 `README.txt`, `case_index.csv` and all `Cases` subfolders together. The application
@@ -109,12 +108,12 @@ the last checkpoint may be lost.
 
 Before approval, review all slices, resolve all uncertainty/flags, and confirm
 both compartment checkboxes. **Approve case** then requires your deliberate
-confirmation. In the ordinary assigned-annotation workflow, Jeff is recorded as
+confirmation. In the ordinary assigned-annotation workflow, the named reader is recorded as
 both annotator and approver; this is not an independent second-reader review. Technical checks do not establish anatomical
 correctness. Without a released protocol, approval is clearly marked **practice**.
 
 The separate **SOFTWARE PRACTICE** workspace records explicit practice/test actors,
-not Jeff. Its review and approval actions exercise software only. Every voxel in
+rather than a doctor. Its review and approval actions exercise software only. Every voxel in
 its exported validity image remains zero, including after approval; neither
 labels nor background are accepted research training annotations.
 
@@ -139,8 +138,9 @@ SOFTWARE PRACTICE exports use the `SOFTWARE_PRACTICE_ONLY-` prefix, remain separ
 must not be used as accepted research annotations.
 
 **Help → Annotation setup** is for a coordinator-supplied, dataset-bound JSON.
-It records the protocol and explicitly permitted correction mask. Without one,
-annotation starts blank and nearby predictions are ignored. Do not edit job
+It records the protocol and explicitly permitted correction mask. An MRI-only
+package without a job asks whether blank annotation is intentional. If you expect
+automated masks to correct, choose No and ask for the assigned correction package. Do not edit job
 configuration to promote a draft protocol yourself. Changing initialization or
 protocol for existing work requires a separately coordinated work folder/batch.
 

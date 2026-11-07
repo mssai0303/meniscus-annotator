@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Meniscus Annotator · Reader guide</title>
+<style>
+:root{color-scheme:light;--ink:#172d3b;--muted:#526572;--line:#d9e1e5;--accent:#146f75}
+*{box-sizing:border-box}body{margin:0;background:#f2f5f6;color:var(--ink);font:16px/1.6 "Segoe UI",-apple-system,BlinkMacSystemFont,Arial,sans-serif}
+main{max-width:880px;margin:40px auto;padding:42px 48px;background:white;border:1px solid var(--line);border-radius:16px}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:700}
+h1{font-size:34px;line-height:1.2;margin:12px 0 16px;font-weight:650;letter-spacing:-.02em}h2{font-size:20px;line-height:1.35;margin:0 0 8px}
+p{margin:0 0 12px}.intro{color:var(--muted);font-size:18px}.steps{margin:28px 0 0;padding:0;list-style:none;counter-reset:step}.steps>li{position:relative;padding:24px 0 24px 54px;border-top:1px solid var(--line);counter-increment:step}.steps>li:before{content:counter(step);position:absolute;left:0;top:24px;width:34px;height:34px;border-radius:50%;background:#e7f2f1;color:var(--accent);text-align:center;line-height:34px;font-weight:700}
+.note{padding:16px 20px;border-left:3px solid var(--accent);background:#f1f7f7;margin:20px 0}.note p:last-child,li p:last-child{margin-bottom:0}.key{display:inline-block;padding:2px 8px;border:1px solid var(--line);border-radius:5px;font-size:14px;background:#f6f8f9}footer{border-top:1px solid var(--line);padding-top:20px;color:var(--muted);font-size:14px}.colors{display:flex;gap:18px;flex-wrap:wrap;margin:10px 0}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}.medial{background:#00cdd5}.lateral{background:#eea140}.uncertain{background:#a686e8}
+@media(max-width:640px){main{margin:0;padding:28px 22px;border-radius:0;border:0}h1{font-size:29px}.steps>li{padding-left:46px}}
+@media print{body{background:white;font-size:11pt}main{margin:0;max-width:none;border:0;padding:0}h1{font-size:23pt}.steps>li{break-inside:avoid;padding-top:14px;padding-bottom:14px}.steps>li:before{top:14px}.note{break-inside:avoid}}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">Meniscus Annotator · Reader guide</div>
+<h1>Correct, review and return.</h1>
+<p class="intro">Your assigned MRI scans include automated meniscus outlines. Inspect and correct them using the supplied drawing protocol.</p>
+<div class="note"><p><strong>Before you start</strong><br>Use the software version and case folder supplied by your coordinator. The software and downloaded cases are designed for local work. Keep your saved work until the coordinator confirms receipt.</p></div>
+<ol class="steps">
+<li><h2>Install and open</h2><p>Extract the supplied ZIP folders first. Run the supplied Windows installer, then open <strong>Meniscus Annotator</strong> from the Start menu. You do not need to install Python or download Slicer separately.</p></li>
+<li><h2>Open your assignment</h2><p>Choose <strong>Dataset → Open dataset</strong>. Select the top-level folder containing <strong>case_index.csv</strong> and <strong>Cases</strong>. Confirm that the displayed reader name is yours. Choose the proposed local work folder, or another local folder outside Dropbox and OneDrive.</p><p>The MRI inputs stay unchanged. Corrections are saved in the separate work folder. Use <strong>Dataset → Show saved work</strong> to find it.</p></li>
+<li><h2>Inspect and correct</h2><p>Double-click a case. Check its ID, visit and knee side, and confirm that the header says <strong>Correction · Existing automated mask</strong>. Use the slice slider or mouse wheel to inspect the full scan, with the outlines both visible and hidden.</p><div class="colors"><span><i class="dot medial"></i>Medial</span><span><i class="dot lateral"></i>Lateral</span><span><i class="dot uncertain"></i>Uncertain area</span></div><p>Select the label, then <strong>Paint</strong>, <strong>Draw</strong> or <strong>Erase</strong>. Erase affects only the selected label. For Draw, click boundary points and right-click to fill the contour. Use Undo if needed.</p><p>An opening slice may have no outline. Inspect the other slices before deciding a mask is missing. If the application offers blank annotation when you expected predictions, cancel and contact your coordinator.</p></li>
+<li><h2>Review every slice and save</h2><p>After checking a slice, choose <strong>Mark reviewed and next</strong>, including slices with no meniscus. Editing a slice makes it need review again. Record unclear areas and notes according to your protocol.</p><p>Use <strong>Save draft</strong> before a break. To continue later, open the application and choose <strong>Resume work</strong>. Saved checkpoints restore your corrections and review progress.</p></li>
+<li><h2>Approve a completed case</h2><p>When all slices are reviewed, resolve any uncertainty or flags and confirm both compartment checks. Choose <strong>Approve case</strong> only when your review is complete. A draft protocol records practice completion; it does not create an approved training annotation.</p></li>
+<li><h2>Export and send back</h2><p>Choose <strong>Dataset → Export results</strong>. Select all approved cases or the selected case, then choose <strong>Export</strong> and a destination. For an assigned practice batch, enable the practice option.</p><p>After the completion message, choose <strong>Show exported file</strong>. Send the resulting <strong>ZIP file</strong> through the return route your coordinator provided. It contains your corrections and review records; MRI images are not duplicated in the ZIP.</p></li>
+</ol>
+<footer><p><strong>If something is wrong:</strong> preserve the work folder and contact your coordinator. Do not rename files inside the case folder, change the annotation setup, or begin again under another reader's name.</p><p>On a university virtual desktop, ask where files persist after logout. Return your exported ZIP before the desktop is reset.</p></footer>
+</main></body></html>

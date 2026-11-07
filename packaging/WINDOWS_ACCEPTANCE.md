@@ -1,6 +1,6 @@
 # Windows correction acceptance record — PENDING
 
-Application: 0.1.0. Release target: Windows 11 x64.
+Application: 0.1.0. Primary acceptance target: Windows 10 x64.
 Available compatibility test: Horizon Windows 10 Enterprise 19045 x64, 16 GB,
 approximately 108–110 GB free, NVIDIA A16-1Q/VMware graphics. The user reported a
 plain-Slicer OpenGL 3.2 rendering probe; this is not installed-annotator acceptance.
@@ -18,6 +18,8 @@ Attach hashes, test logs and screenshots outside the repository if they contain 
 | Clean standard-user installation; expected Start-menu launch | Pending |
 | Disconnect network; launch with no Python/Slicer/Qt preinstalled | Pending |
 | Open synthetic dataset; first-use local work location | Pending |
+| Explicit reader assignment; two readers use separate work folders and attribution | Pending |
+| Offline reader guide opens locally; no terminal or external Python setup required | Pending |
 | Installed source commit and file fingerprint match the frozen build, not just version 0.1.0 | Pending |
 | Flat correction package automatically loads exact permitted masks and explicit practice actor | Pending |
 | Missing/invalid/blocked masks refuse correction without silent blank labels | Pending |

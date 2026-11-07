@@ -43,3 +43,11 @@ def test_every_real_test_application_has_its_canonical_launcher_settings(tmp_pat
         assert settings.relative_to(output).as_posix() in manifest['files_sha256']
     assert (output / 'MeniscusAnnotatorTest.exe').read_bytes() == (runtime / 'Slicer.exe').read_bytes()
     assert 'name=MeniscusAnnotatorTest\n' in (output / 'bin/MeniscusAnnotatorTestLauncherSettings.ini').read_text(encoding='utf-8')
+
+    canonical = (output / 'bin/MeniscusAnnotatorTestLauncherSettings.ini').read_text(encoding='utf-8')
+    assert 'MENISCUS_TEST_ACTION=' not in canonical
+    for alias, action in [('Examples', 'create'), ('CorrectionChecks', 'correction'), ('CorrectionResumeCheck', 'correction-resume')]:
+        config = (output / ('bin/MeniscusAnnotator' + alias + 'LauncherSettings.ini')).read_text(encoding='utf-8')
+        assert 'MENISCUS_TEST_ACTION=' + action + '\n' in config
+    assert (output / 'ReaderGuide.html').read_bytes() == (repo / 'docs/QUICK_START.html').read_bytes()
+    assert 'ReaderGuide.html' in manifest['files_sha256']

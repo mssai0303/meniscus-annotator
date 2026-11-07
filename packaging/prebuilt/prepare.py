@@ -120,6 +120,10 @@ def prepare(runtime, installer, output, cache):
         test_config = test_config.replace('name=MeniscusAnnotator\n', 'name=MeniscusAnnotatorTest\n')
         test_config = test_config.replace('SLICERRC=<APPLAUNCHER_DIR>/Bootstrap.py',
                                           'SLICERRC=<APPLAUNCHER_DIR>/TestKit/RunInstalledTests.py\nMENISCUS_TEST_ACTION=' + action)
+        # Native Slicer reloads this canonical INI after the action alias.
+        # It must not overwrite the alias's selected test action.
+        if stem == 'MeniscusAnnotatorTest':
+            test_config = test_config.replace('\nMENISCUS_TEST_ACTION=' + action, '')
         if action == 'create':
             test_config = test_config.replace('arguments=--no-splash', 'arguments=--no-main-window --no-splash')
         (output / 'bin' / (stem + 'LauncherSettings.ini')).write_text(test_config, encoding='utf-8')
@@ -137,6 +141,7 @@ def prepare(runtime, installer, output, cache):
     guide = REPO / 'docs' / 'USER_GUIDE.md'
     if guide.exists():
         (output / 'UserGuide.txt').write_text(guide.read_text(encoding="utf-8").replace('images/annotation-workflow.png', 'GuideImages/annotation-workflow.png'), encoding="utf-8")
+    shutil.copy2(REPO / 'docs' / 'QUICK_START.html', output / 'ReaderGuide.html')
     image = REPO / 'docs' / 'images' / 'annotation-workflow.png'
     if image.exists():
         (output / 'GuideImages').mkdir()

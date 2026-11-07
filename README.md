@@ -15,24 +15,33 @@ input package has passed two-case Mac software-practice checks; the complete
 use this version as an accepted production release for 250 cases.
 
 - [Open the checked Mac preview](docs/MAC_PREVIEW.md)
-- [Jeff's practical guide](docs/USER_GUIDE.md)
+- [Reader quick start](docs/QUICK_START.html) and [detailed annotation guide](docs/USER_GUIDE.md)
 - [Input/output and job contract](docs/CONTRACT.md)
 - [Windows reproducible build](docs/WINDOWS.md)
 - [Test results and release gaps](docs/VALIDATION.md)
 - [Test responsibilities](docs/TEST_PLAN.md)
 - [Changelog](CHANGELOG.md)
 
+## Reader delivery
+
+The primary acceptance target is Windows 10 Enterprise x64 build 19045 on the
+available Horizon desktop. Windows 11 remains untested. The standalone installer
+bundles Slicer and the application dependencies; the assigned MRI package is
+provided separately. Each ordinary assignment names its reader before work
+starts. MRI inputs remain unchanged, and readers return one verified results ZIP.
+The quick-start guide is local HTML with no online fonts, scripts or resources.
+
 ## Development setup
 
 Use the exact pinned Slicer release from [the official download page](https://download.slicer.org/).
-A module is the development route; Jeff's final Windows product will include
+A module is the development route; the reader's Windows product will include
 its runtime in the custom application's installer. Do not install the PyPI
 package named `slicer`; it is unrelated.
 
 For local module development only, use Slicer's Python console once to install
 `nibabel==5.3.2` (or install the verified wheel offline using PythonSlicer).
 These dependencies are bundled at **build time** in the Windows application;
-Jeff will not need Python, pip, a console, a login or runtime downloads.
+Readers will not need Python, pip, a console, a GitHub account or runtime downloads.
 
 In Slicer: Edit → Application Settings → Modules → Additional module paths →
 add this repository folder. Launch with the development entry point below to open **Meniscus Annotator**
@@ -91,9 +100,11 @@ software-practice outputs remain unaccepted research annotations.
 
 ## Repository and release
 
-Source is stored in the owner's private repository
+Source is stored in the public repository
 [mssai0303/meniscus-annotator](https://github.com/mssai0303/meniscus-annotator).
-No dataset or annotation is uploaded. Built installers belong in private
-GitHub Releases after actual Windows acceptance, never in the source tree.
+No dataset or annotation is uploaded. A clearly marked Windows test prerelease
+is available for compatibility testing; it is not an accepted reader release.
+Production releases require actual Windows acceptance. Installer assets remain
+separate from the source tree and never include participant data.
 Tags identify software versions; every checkpoint records `app_version` and
 runtime details. Keep one accepted version for an annotation batch.
