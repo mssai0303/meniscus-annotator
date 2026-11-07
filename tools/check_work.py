@@ -12,11 +12,16 @@ def main():
     parser.add_argument('--dataset', required=True)
     parser.add_argument('--work', required=True)
     parser.add_argument('--job', help='Original explicit job JSON, if used')
+    parser.add_argument('--reader', help='Explicit reader name/ID for legacy work without a local reader binding')
     args = parser.parse_args()
     try:
         dataset = Dataset(args.dataset)
         job = json.loads(Path(args.job).read_text(encoding='utf-8')) if args.job else None
-        store = WorkStore(args.work, dataset, job=job)
+        reader = args.reader
+        local_binding = Path(args.work) / 'reader_assignment.json'
+        if reader is None and local_binding.is_file():
+            reader = json.loads(local_binding.read_text(encoding='utf-8')).get('reader')
+        store = WorkStore(args.work, dataset, job=job, reader=reader, read_only=True)
         reports = []
         for case in dataset.cases:
             for checkpoint in store._checkpoints(store.case_folder(case)):

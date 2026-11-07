@@ -10,17 +10,18 @@ from pathlib import Path
 import re
 
 
-def reader_workspace(dataset_version, job=None):
+def reader_workspace(dataset_version, job=None, reader=None):
     """Return a safe default folder/key without identifying the runtime operator.
 
     Explicit ordinary reader assignments get separate work locations bound to
     the entire immutable base job. A BoundCorrectionJob's ``source_job`` is used
     instead of its effective rules so additive case resolutions do not move
-    existing work. Jobs without an explicit annotator and software-practice jobs
-    retain their original version-only location and settings key.
+    existing work. Ordinary jobs without an annotator require an explicitly
+    chosen local reader, whose assignment gets its own folder and settings key.
+    Software-practice jobs retain their original version-only location and key.
 
     ``legacy_settings_key`` is a recovery hint, NOT an automatic fallback for a
-    named assignment. A coordinator may explicitly reconnect an existing work
+    reader assignment. A coordinator may explicitly reconnect an existing work
     folder after checking its original job/reader; core checkpoint validation
     still applies. Never move or relabel old work merely because this key exists.
     """
@@ -43,14 +44,36 @@ def reader_workspace(dataset_version, job=None):
                          allow_nan=False).encode('utf-8')
     identity = hashlib.sha256(encoded).hexdigest() if source else None
     named = 'annotator' in source and source.get('practice_context') is None
+    local = not named and source.get('practice_context') is None
+    assignment_identity = None
+    if local:
+        if not isinstance(reader, str) or not reader.strip():
+            raise ValueError('Enter a nonempty reader name or study ID before choosing a work folder.')
+        reader = reader.strip()
+        assignment = {'schema_version': 'meniscus_reader_assignment/1',
+                      'base_job_identity': identity, 'reader': reader}
+        assignment_identity = hashlib.sha256(json.dumps(
+            assignment, sort_keys=True, separators=(',', ':'),
+            allow_nan=False).encode('utf-8')).hexdigest()
+    elif named:
+        reader = source['annotator']
+    else:
+        reader = source['practice_context'].get('actor')
     legacy_key = 'Meniscus/work/' + dataset_version
     # Names never enter filenames, so Unicode/slashes/reserved words in a
     # legitimate reader name cannot alter filesystem layout or Windows paths.
     suffix = 'assignment-' + identity[:24] if named else None
+    settings_key = legacy_key + '/assignment-' + identity if named else legacy_key
+    if local:
+        suffix = 'reader-' + assignment_identity[:24]
+        settings_key = legacy_key + '/reader-' + assignment_identity
     return {
         'uses_named_assignment': named,
+        'uses_local_reader_assignment': local,
         'base_job_identity': identity,
-        'settings_key': legacy_key + '/assignment-' + identity if named else legacy_key,
+        'reader': reader,
+        'reader_assignment_identity': assignment_identity,
+        'settings_key': settings_key,
         'legacy_settings_key': legacy_key,
-        'relative_folder': Path(dataset_version) / suffix if named else Path(dataset_version),
+        'relative_folder': Path(dataset_version) / suffix if suffix else Path(dataset_version),
     }

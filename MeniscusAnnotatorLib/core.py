@@ -50,19 +50,18 @@ def validate_practice_context(context, protocol):
     need(context.get('purpose') == 'software_practice' and context.get('actor_type') in PRACTICE_ACTORS,
          'Unsupported software practice purpose or actor type.')
     need(context.get('actor') == PRACTICE_ACTORS[context['actor_type']],
-         'Software practice actor must use the canonical non-research role label; do not attribute automated work to Jeff.')
+         'Software practice actor must use the canonical non-research role label; automated checks cannot be attributed to a reader.')
     need(protocol.get('status') == 'draft',
          'Software practice requires a draft protocol and cannot be promoted to research annotation.')
     return copy.deepcopy(context)
 
 
 def assigned_annotator(job=None):
-    """Return the immutable job actor, retaining historical checkpoint semantics.
+    """Return an explicit job actor, or None when a local assignment is needed.
 
-    Software practice uses its explicitly scoped actor. New ordinary jobs may
-    name an annotator; jobs predating that field retain the historical Jeff
-    assignment. The UI must confirm that assignment before ordinary work starts;
-    this fallback does not identify the person operating the application.
+    An absent assignment never identifies the person operating the application.
+    Legacy checkpoint actors are preserved and checked against an explicitly
+    selected local reader by WorkStore, rather than supplied by a default name.
     """
     job = job or {}
     if 'annotator' in job:
@@ -73,7 +72,7 @@ def assigned_annotator(job=None):
         need(isinstance(context, dict) and isinstance(context.get('actor'), str)
              and bool(context['actor'].strip()), 'Software practice actor is missing.')
         return context['actor']
-    return job.get('annotator', 'Jeff')
+    return job.get('annotator')
 
 
 def now():
@@ -487,12 +486,12 @@ def require_case_prediction_available(job, case_key):
 
 
 class WorkStore:
-    def __init__(self, root, dataset, job=None):
+    def __init__(self, root, dataset, job=None, reader=None, read_only=False):
         self.root = Path(root).resolve()
         self.dataset = dataset
+        self.read_only = bool(read_only)
         need(not within(self.root, dataset.root) and not within(dataset.root, self.root), 'Work folder must be separate from the original dataset.')
         need('dropbox' not in str(self.root).lower() and 'cloudstorage' not in str(self.root).lower() and 'onedrive' not in str(self.root).lower(), 'Choose a local work folder outside live cloud sync folders.')
-        self.root.mkdir(parents=True, exist_ok=True)
         self.job = bind_correction_resolutions(dataset, copy.deepcopy(job))
         self.source_job = copy.deepcopy(self.job.source_job if isinstance(self.job, BoundCorrectionJob) else self.job)
         self.job_identity = canonical(self.source_job) if self.source_job else None
@@ -502,6 +501,19 @@ class WorkStore:
             validate_job(dataset, self.job, verify_masks=False, allow_unresolved=True)
         protocol = (self.job or {}).get('protocol', {'version': 'draft-practice-1', 'status': 'draft'})
         self.practice_context = validate_practice_context((self.job or {}).get('practice_context'), protocol)
+        self.annotator = assigned_annotator(self.job)
+        self.reader_assignment = None
+        if self.annotator is None:
+            need(isinstance(reader, str) and bool(reader.strip()),
+                 'Enter your reader name or study ID before starting annotation work.')
+            self.annotator = reader.strip()
+            self.reader_assignment = {'schema_version': 'meniscus_reader_assignment/1',
+                                      'dataset_identity': dataset.identity,
+                                      'base_job_identity': self.job_identity,
+                                      'reader': self.annotator}
+        elif reader is not None:
+            need(reader == self.annotator,
+                 'The selected reader differs from the explicit job assignment.')
         binding_path = self.root / 'dataset.json'
         binding = {'schema_version': 'meniscus_work/1', 'dataset_identity': dataset.identity, 'dataset_version': dataset.version}
         if self.practice_context is not None:
@@ -509,16 +521,75 @@ class WorkStore:
         # Claim only a previously empty/unclaimed folder; no overwrite of other datasets or practice scopes.
         if binding_path.exists():
             need(read_json(binding_path) == binding, 'Work folder belongs to a different dataset or practice scope. Reconnect the original configuration or choose a separate local work folder.')
-        else:
-            write_json(binding_path, binding)
         self.cases_root = self.root / 'cases'
-        self.cases_root.mkdir(exist_ok=True)
+        self.reader_assignment_path = self.root / 'reader_assignment.json'
+        self._reader_assignment_persisted = self.reader_assignment_path.exists()
+        if self.reader_assignment_path.exists() or self.reader_assignment_path.is_symlink():
+            need(self.reader_assignment_path.is_file() and not self.reader_assignment_path.is_symlink()
+                 and read_json(self.reader_assignment_path) == self.reader_assignment,
+                 'This work folder belongs to a different reader or assignment. Select that reader or choose a separate work folder.')
+        elif self.reader_assignment is not None:
+            # Claim an existing legacy folder only after checking every saved
+            # attribution. Never infer a reader or relabel prior checkpoints.
+            known_folders = {self.case_folder(case).name: case for case in dataset.cases}
+            if self.cases_root.exists():
+                for folder in self.cases_root.iterdir():
+                    checkpoints = self._checkpoints(folder)
+                    if not checkpoints:
+                        continue
+                    need(folder.name in known_folders,
+                         'Existing work contains an unknown case. Preserve this folder and reconnect its original dataset.')
+                    verified_attributions = 0
+                    for checkpoint in checkpoints:
+                        try:
+                            state = read_json(checkpoint / 'annotation.json')
+                            manifest = read_json(checkpoint / 'manifest.json')
+                            need(isinstance(state, dict) and isinstance(manifest, dict)
+                                 and manifest.get('files_sha256', {}).get('annotation.json') == sha256(checkpoint / 'annotation.json')
+                                 and manifest.get('source_identity') == known_folders[folder.name].identity,
+                                 'Checkpoint attribution is unavailable.')
+                        except (ValidationError, OSError, KeyError, TypeError):
+                            # Preserve damaged versions and allow the existing
+                            # intact-checkpoint recovery path to handle them.
+                            continue
+                        verified_attributions += 1
+                        need(state.get('annotator') == self.annotator
+                             and state.get('dataset_identity') == dataset.identity
+                             and state.get('job_identity') == self.job_identity,
+                             'Existing saved work has a different reader or assignment. Select its recorded reader or choose a separate work folder; saved work was not changed.')
+                        saved_binding = state.get('reader_assignment')
+                        need(saved_binding is None or saved_binding == self.reader_assignment,
+                             'Existing saved work belongs to a different local reader assignment.')
+                    need(verified_attributions > 0,
+                         'Existing reader attribution cannot be verified. Preserve this work folder and restore a verified checkpoint.')
+        if self.read_only:
+            need(binding_path.is_file() and self.cases_root.is_dir(),
+                 'Select an existing complete work folder for read-only verification.')
+        else:
+            self.root.mkdir(parents=True, exist_ok=True)
+            if not binding_path.exists():
+                write_json(binding_path, binding)
+            if self.reader_assignment is not None and not self.reader_assignment_path.exists():
+                try:
+                    write_json(self.reader_assignment_path, self.reader_assignment)
+                except FileExistsError:
+                    pass  # Another opener must have claimed exactly this reader.
+            if self.reader_assignment is not None:
+                need(self.reader_assignment_path.is_file() and not self.reader_assignment_path.is_symlink()
+                     and read_json(self.reader_assignment_path) == self.reader_assignment,
+                     'This work folder was claimed by a different reader or assignment. Choose a separate work folder.')
+                self._reader_assignment_persisted = True
+            self.cases_root.mkdir(exist_ok=True)
 
     def case_folder(self, case):
         return self.cases_root / hashlib.sha256(case.key.encode()).hexdigest()[:24]
 
     def case_resolution(self, case):
         """Recheck the explicit binding before opening, saving or exporting it."""
+        if self.reader_assignment is not None and self._reader_assignment_persisted:
+            need(self.reader_assignment_path.is_file() and not self.reader_assignment_path.is_symlink()
+                 and read_json(self.reader_assignment_path) == self.reader_assignment,
+                 'The local reader assignment changed or is unavailable. Reconnect the original work folder; saved work was not changed.')
         binding = self.resolution_bindings.get(case.key)
         if binding is not None:
             need(isinstance(self.job, BoundCorrectionJob) and canonical(self.source_job) == self.job_identity
@@ -532,6 +603,7 @@ class WorkStore:
         return copy.deepcopy(binding)
 
     def open_case(self, case):
+        need(not self.read_only, 'Read-only verification cannot open an editing session.')
         need(case.key in self.dataset.by_key and self.dataset.by_key[case.key].identity == case.identity, 'Case does not belong to this dataset.')
         self.case_resolution(case)
         require_case_prediction_available(self.job, case.key)
@@ -614,8 +686,12 @@ class WorkStore:
         need(isinstance(state.get('notes'), str) and isinstance(state.get('annotator'), str) and state['annotator'].strip(), 'Saved annotator or notes fields are invalid.')
         context = state.get('practice_context')
         need(context == self.practice_context, 'Saved software practice context differs from the explicit job configuration.')
-        expected_actor = assigned_annotator(self.job)
-        need(state['annotator'] == expected_actor, 'Saved annotation actor differs from its assigned research or software-practice role.')
+        need(state['annotator'] == self.annotator, 'Saved annotation actor differs from its explicitly selected reader or software-practice role.')
+        if self.reader_assignment is not None:
+            need(state.get('job_identity') == self.job_identity, 'Saved annotation uses a different original job assignment.')
+        saved_reader = state.get('reader_assignment')
+        need(saved_reader is None or saved_reader == self.reader_assignment,
+             'Saved annotation belongs to a different local reader assignment.')
         if context is not None:
             validate_practice_context(context, state['protocol'])
             need(state['protocol'] == (self.job or {}).get('protocol', {'version': 'draft-practice-1', 'status': 'draft'}), 'Saved software practice protocol differs from the explicit job configuration.')
@@ -638,7 +714,7 @@ class WorkStore:
                      'Saved correction initialization does not match its separate case-resolution permission.')
         if state['status'] in ('approved', 'practice_approved'):
             approval = state.get('approval')
-            need(isinstance(approval, dict) and state.get('approver') == expected_actor and bool(approval.get('approved_utc')), 'Saved approval metadata is incomplete.')
+            need(isinstance(approval, dict) and state.get('approver') == self.annotator and bool(approval.get('approved_utc')), 'Saved approval metadata is incomplete.')
             need(type(approval.get('practice_only')) is bool and approval['practice_only'] == (state['status'] == 'practice_approved'), 'Approval practice status is inconsistent.')
             need(all(r['reviewed'] and not r['flag'] for r in reviews) and all(state['compartments'].values()), 'Approved work has incomplete review or compartment consideration.')
             need(state['status'] != 'approved' or state['protocol']['status'] == 'released', 'Research approval requires a released protocol.')
@@ -661,6 +737,7 @@ def validity_array(state, uncertainty):
 
 class CaseSession:
     def __init__(self, store, case):
+        need(not store.read_only, 'Read-only verification cannot open an editing session.')
         store.case_resolution(case)
         require_case_prediction_available(store.job, case.key)
         self.store, self.case = store, case
@@ -708,7 +785,7 @@ class CaseSession:
                 'notes': '', 'compartments': {'medial': False, 'lateral': False}, 'protocol': copy.deepcopy(protocol),
                 'practice_context': copy.deepcopy(self.store.practice_context),
                 'annotation_purpose': 'software_practice' if self.store.practice_context is not None else 'research_annotation',
-                'annotator': assigned_annotator(job), 'approver': None, 'approval': None,
+                'annotator': self.store.annotator, 'approver': None, 'approval': None,
                 'initialization': {'method': mode, 'starting_mask': None}, 'job_identity': self.store.job_identity,
                 'last_slice': 0, 'status': 'in_progress', 'created_utc': now(), 'saved_utc': None,
                 'uncertainty_policy': 'Separate binary overlay may overlap anatomical labels; all uncertainty and attention flags must be resolved before approval. ' + ('SOFTWARE PRACTICE validity is zero for every voxel; review flags do not confirm anatomical labels or background.' if self.store.practice_context is not None else 'Training validity excludes uncertain and unreviewed/flagged voxels.'),
@@ -716,6 +793,8 @@ class CaseSession:
         binding = self.store.case_resolution(self.case)
         if binding is not None:
             state['initialization']['case_resolution'] = binding
+        if self.store.reader_assignment is not None:
+            state['reader_assignment'] = copy.deepcopy(self.store.reader_assignment)
         return state
 
     def blank_arrays(self):
@@ -793,6 +872,8 @@ class CaseSession:
             need(not errors, ' '.join(errors))
         # Editing previously approved content always creates a new draft checkpoint.
         state = copy.deepcopy(self.state)
+        if self.store.reader_assignment is not None:
+            state['reader_assignment'] = copy.deepcopy(self.store.reader_assignment)
         if not approve and state['status'] in ('approved', 'practice_approved'):
             state.update(status='needs_review', approval=None, approver=None)
         state['saved_utc'] = now()
@@ -807,7 +888,7 @@ class CaseSession:
                                        'human_anatomical_approval': False, 'accepted_research_annotation': False,
                                        'deliberate_approval_required_by_ui': not automated})
             else:
-                state.update(status='practice_approved' if practice else 'approved', approver=assigned_annotator(self.store.job),
+                state.update(status='practice_approved' if practice else 'approved', approver=self.store.annotator,
                              approval={'approved_utc': now(), 'role': 'assigned annotator and approver; not an independent second reader', 'practice_only': bool(practice), 'deliberate_approval_required_by_ui': True})
         elif state['status'] not in ('in_progress', 'needs_review'):
             state['status'] = 'in_progress'

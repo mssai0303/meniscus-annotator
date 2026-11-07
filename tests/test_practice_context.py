@@ -66,7 +66,7 @@ def test_software_practice_save_reopen_export_is_honestly_attributed(data, tmp_p
         assert approval['human_anatomical_approval'] is False
         assert approval['deliberate_approval_required_by_ui'] is (actor_type != 'automated')
         assert approval['approval_type'] == ('automated_software_check' if actor_type == 'automated' else 'manual_software_practice')
-        assert 'Jeff' not in json.dumps(metadata)
+        assert 'Synthetic Reader' not in json.dumps(metadata)
         assert not np.asarray(nib.load(checkpoint / 'validity.nii.gz').dataobj).any()
     with store.open_case(case) as reopened:
         actual, uncertain, _ = reopened.load()
@@ -84,7 +84,7 @@ def test_software_practice_save_reopen_export_is_honestly_attributed(data, tmp_p
         assert manifest['human_anatomical_approval'] is False
         assert manifest['practice_context'] == job['practice_context']
         assert 'SOFTWARE PRACTICE' in text and 'NOT ACCEPTED RESEARCH' in text
-        assert 'Jeff' not in text + json.dumps(manifest)
+        assert 'Synthetic Reader' not in text + json.dumps(manifest)
         exported_validity = tmp_path / 'exported-validity.nii.gz'
         exported_validity.write_bytes(archive.read(manifest['cases'][0]['folder'] + '/validity.nii.gz'))
         assert not np.asarray(nib.load(exported_validity).dataobj).any()
@@ -97,7 +97,7 @@ def test_software_practice_binding_cannot_be_opened_as_production_or_other_actor
     location = tmp_path / 'Automation-only work'
     WorkStore(location, data, job_for(data))
     with pytest.raises(ValidationError, match='practice scope'):
-        WorkStore(location, data)
+        WorkStore(location, data, reader='Synthetic Reader')
     with pytest.raises(ValidationError, match='practice scope'):
         WorkStore(location, data, job_for(data, 'human_unverified'))
     assert json.loads((location / 'dataset.json').read_text(encoding='utf-8'))['practice_context']['actor_type'] == 'automated'
@@ -105,7 +105,7 @@ def test_software_practice_binding_cannot_be_opened_as_production_or_other_actor
 
 def test_existing_production_work_cannot_receive_software_practice(data, tmp_path):
     location = tmp_path / 'Production-only work'
-    WorkStore(location, data)
+    WorkStore(location, data, reader='Synthetic Reader')
     with pytest.raises(ValidationError, match='practice scope'):
         WorkStore(location, data, job_for(data))
 
@@ -115,7 +115,7 @@ def test_invalid_or_misleading_practice_context_rejected(data, tmp_path, change)
     job = job_for(data)
     if change == 'released': job['protocol']['status'] = 'released'
     if change == 'purpose': job['practice_context']['purpose'] = 'research'
-    if change == 'actor': job['practice_context']['actor'] = 'Jeff'
+    if change == 'actor': job['practice_context']['actor'] = 'Synthetic Reader'
     if change == 'type': job['practice_context']['actor_type'] = 'independent_reader'
     if change == 'extra': job['practice_context']['research_approved'] = True
     if change == 'missing': del job['practice_context']['actor_type']
@@ -133,13 +133,13 @@ def test_corrupt_or_promoted_practice_state_rejected(data, tmp_path, change):
         reviewed(session)
         session.save(labels, uncertainty, writer, approve=True, practice=True)
         state = copy.deepcopy(session.state)
-        if change == 'actor': state['annotator'] = 'Jeff'
+        if change == 'actor': state['annotator'] = 'Synthetic Reader'
         if change == 'context': state['practice_context'] = None
         if change == 'purpose': state['annotation_purpose'] = 'research_annotation'
         if change == 'released': state['protocol']['status'] = 'released'
         if change == 'protocol_version': state['protocol']['version'] = 'invented-unconfigured-version'
         if change == 'research_status': state['status'] = 'approved'
-        if change == 'approval_actor': state['approver'] = 'Jeff'
+        if change == 'approval_actor': state['approver'] = 'Synthetic Reader'
         if change == 'approval_type': state['approval']['approval_type'] = 'manual_software_practice'
         if change == 'human_claim': state['approval']['human_anatomical_approval'] = True
         if change == 'deliberate_claim': state['approval']['deliberate_approval_required_by_ui'] = True
@@ -148,7 +148,7 @@ def test_corrupt_or_promoted_practice_state_rejected(data, tmp_path, change):
 
 
 @pytest.mark.parametrize('default_encoding', ['utf-8', 'cp1252'])
-def test_default_jeff_work_and_legacy_missing_context_remain_readable(data, tmp_path, monkeypatch, default_encoding):
+def test_explicit_reader_preserves_legacy_missing_context_and_assignment(data, tmp_path, monkeypatch, default_encoding):
     # Emulate a Windows locale even on the Mac/Linux test host. JSON fixtures
     # must use UTF-8 explicitly, as the actual checkpoint reader/writer does.
     original_read, original_write = Path.read_text, Path.write_text
@@ -163,13 +163,13 @@ def test_default_jeff_work_and_legacy_missing_context_remain_readable(data, tmp_
     monkeypatch.setattr(Path, 'read_text', locale_read)
     monkeypatch.setattr(Path, 'write_text', locale_write)
     location = tmp_path / 'Ordinary annotation'
-    store = WorkStore(location, data)
+    store = WorkStore(location, data, reader='Historical Reader')
     case = data.cases[0]
     with store.open_case(case) as session:
         labels, uncertainty, _ = session.load()
         reviewed(session)
         checkpoint = session.save(labels, uncertainty, writer, approve=True, practice=True)
-        assert session.state['annotator'] == session.state['approver'] == 'Jeff'
+        assert session.state['annotator'] == session.state['approver'] == 'Historical Reader'
         assert session.state['approval']['deliberate_approval_required_by_ui'] is True
         assert 'approval_type' not in session.state['approval']
         assert np.asarray(nib.load(checkpoint / 'validity.nii.gz').dataobj).all()
@@ -179,14 +179,21 @@ def test_default_jeff_work_and_legacy_missing_context_remain_readable(data, tmp_
     legacy = json.loads(state_path.read_text(encoding='utf-8'))
     legacy.pop('practice_context')
     legacy.pop('annotation_purpose')
+    legacy.pop('reader_assignment')
     state_path.write_text(json.dumps(legacy), encoding='utf-8')
     manifest_path = checkpoint / 'manifest.json'
     manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
     manifest['files_sha256']['annotation.json'] = sha256(state_path)
     manifest_path.write_text(json.dumps(manifest), encoding='utf-8')
+    (location / 'reader_assignment.json').unlink()
+    original_files = {p.relative_to(location).as_posix(): sha256(p) for p in location.rglob('*') if p.is_file()}
+    store = WorkStore(location, data, reader='Historical Reader')
     with store.open_case(case) as reopened:
-        assert reopened.state['annotator'] == reopened.state['approver'] == 'Jeff'
+        assert reopened.state['annotator'] == reopened.state['approver'] == 'Historical Reader'
+        assert 'reader_assignment' not in reopened.state
         assert reopened.load()[0].shape == labels.shape
+    assert all(sha256(location / name) == digest for name, digest in original_files.items())
+    assert json.loads((location / 'reader_assignment.json').read_text(encoding='utf-8'))['reader'] == 'Historical Reader'
     result = export_approved(store, tmp_path / 'Ordinary practice results', include_practice=True)
     assert result.name.startswith('PRACTICE_ONLY-')
     with zipfile.ZipFile(result) as archive:

@@ -79,11 +79,16 @@ def test_hash_is_the_canonical_base_job_not_dict_insertion_order():
 
 
 @pytest.mark.parametrize('job', [None, {}, {'protocol': {'version': 'legacy', 'status': 'draft'}}])
-def test_legacy_version_only_path_and_settings_are_unchanged(job):
-    plan = reader_workspace('SYNTHETIC_V1', job)
+def test_unassigned_job_requires_an_explicit_local_reader(job):
+    with pytest.raises(ValueError, match='reader name or study ID'):
+        reader_workspace('SYNTHETIC_V1', job)
+    plan = reader_workspace('SYNTHETIC_V1', job, reader='Synthetic Reader')
     assert not plan['uses_named_assignment']
-    assert plan['relative_folder'] == Path('SYNTHETIC_V1')
-    assert plan['settings_key'] == plan['legacy_settings_key'] == 'Meniscus/work/SYNTHETIC_V1'
+    assert plan['uses_local_reader_assignment']
+    assert plan['relative_folder'].parent == Path('SYNTHETIC_V1')
+    assert re.fullmatch(r'reader-[0-9a-f]{24}', plan['relative_folder'].name)
+    assert plan['settings_key'] != plan['legacy_settings_key']
+    assert plan['legacy_settings_key'] == 'Meniscus/work/SYNTHETIC_V1'
 
 
 @pytest.mark.parametrize('actor_type,actor', [
@@ -95,6 +100,9 @@ def test_software_practice_keeps_legacy_location_even_with_named_job(actor_type,
     job['practice_context'] = {'purpose': 'software_practice', 'actor_type': actor_type, 'actor': actor}
     plan = reader_workspace('SYNTHETIC_V1', job)
     assert not plan['uses_named_assignment']
+    assert not plan['uses_local_reader_assignment']
+    assert plan['reader'] == actor
+    assert plan['reader_assignment_identity'] is None
     assert plan['relative_folder'] == Path('SYNTHETIC_V1')
     assert plan['settings_key'] == 'Meniscus/work/SYNTHETIC_V1'
 
@@ -128,3 +136,63 @@ def test_planning_does_not_create_folder_or_mutate_job(tmp_path, monkeypatch):
     destination = tmp_path / 'Meniscus_annotation_work' / plan['relative_folder']
     assert not destination.exists() and list(tmp_path.iterdir()) == []
     assert job == before
+
+
+def test_local_readers_get_distinct_locations_without_changing_source_job():
+    job = job_for()
+    job.pop('annotator')
+    before = copy.deepcopy(job)
+    first = reader_workspace('SYNTHETIC_V1', job, reader='Synthetic Reader A')
+    second = reader_workspace('SYNTHETIC_V1', job, reader='Synthetic Reader B')
+    assert first['relative_folder'] != second['relative_folder']
+    assert first['settings_key'] != second['settings_key']
+    assert first['base_job_identity'] == second['base_job_identity']
+    assert first['reader_assignment_identity'] != second['reader_assignment_identity']
+    assert job == before
+
+
+def test_local_reader_hash_uses_normalized_reader_and_original_base_job():
+    original = job_for()
+    original.pop('annotator')
+    effective = copy.deepcopy(original)
+    effective['cases']['SYNTHETIC_A']['availability'] = 'ready'
+    bound = BoundJob(effective, original)
+    plan = reader_workspace('SYNTHETIC_V1', original, reader=' Synthetic Reader A ')
+    evidence = {'schema_version': 'meniscus_reader_assignment/1',
+                'base_job_identity': plan['base_job_identity'], 'reader': 'Synthetic Reader A'}
+    expected = hashlib.sha256(json.dumps(evidence, sort_keys=True, separators=(',', ':'),
+                                       allow_nan=False).encode()).hexdigest()
+    assert plan['reader'] == 'Synthetic Reader A'
+    assert plan['reader_assignment_identity'] == expected
+    assert plan['relative_folder'].name == 'reader-' + expected[:24]
+    assert plan['settings_key'].endswith('/reader-' + expected)
+    assert reader_workspace('SYNTHETIC_V1', bound, reader='Synthetic Reader A') == plan
+    assert reader_workspace('SYNTHETIC_V1', effective, reader='Synthetic Reader A') != plan
+    bound['cases']['SYNTHETIC_B'] = {'annotation_mode': 'blank'}
+    assert reader_workspace('SYNTHETIC_V1', bound, reader='Synthetic Reader A') == plan
+
+
+@pytest.mark.parametrize('name', [None, '', '   ', 123, False, ['Synthetic Reader']])
+def test_invalid_local_reader_cannot_reuse_the_legacy_location(name):
+    with pytest.raises(ValueError, match='reader name or study ID'):
+        reader_workspace('SYNTHETIC_V1', {}, reader=name)
+
+
+@pytest.mark.parametrize('name', ['Dr Élodie 陈', 'Dr A/B:CON', '../Synthetic/Reader', 'NUL'])
+def test_local_reader_names_never_become_path_components(name):
+    plan = reader_workspace('SYNTHETIC_V1', {}, reader=name)
+    assert plan['reader'] == name
+    assert plan['relative_folder'].parts[0] == 'SYNTHETIC_V1'
+    assert len(plan['relative_folder'].parts) == 2
+    assert re.fullmatch(r'reader-[0-9a-f]{24}', plan['relative_folder'].name)
+    assert str(plan['relative_folder']).isascii() and plan['settings_key'].isascii()
+
+
+def test_named_assignment_preserves_its_existing_location_and_actor():
+    job = job_for()
+    plan = reader_workspace('SYNTHETIC_V1', job)
+    assert plan['reader'] == job['annotator']
+    assert not plan['uses_local_reader_assignment']
+    assert plan['reader_assignment_identity'] is None
+    assert plan['relative_folder'].name == 'assignment-' + plan['base_job_identity'][:24]
+    assert plan['settings_key'] == 'Meniscus/work/SYNTHETIC_V1/assignment-' + plan['base_job_identity']

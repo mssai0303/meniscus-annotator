@@ -576,8 +576,39 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             slicer.util.errorDisplay(reason + advice, windowTitle='Meniscus annotation')
             return None
 
-    def _confirmDatasetStart(self, job):
+    def _chooseReaderIdentity(self, previous=''):
+        dialog = qt.QDialog(slicer.util.mainWindow())
+        dialog.objectName = 'MeniscusReaderIdentityDialog'
+        dialog.setWindowTitle('Reader identity')
+        layout = qt.QVBoxLayout(dialog)
+        explanation = qt.QLabel('Enter the name or study ID to record with your corrections. Use your own identity. Each reader’s work is kept separately.')
+        explanation.wordWrap = True
+        layout.addWidget(explanation)
+        layout.addWidget(qt.QLabel('Reader name or study ID'))
+        entry = qt.QLineEdit()
+        entry.objectName = 'MeniscusReaderIdentityInput'
+        entry.setPlaceholderText('Enter your name or assigned reader ID')
+        entry.setText(previous)
+        layout.addWidget(entry)
+        buttons = qt.QDialogButtonBox()
+        proceed = buttons.addButton('Continue', qt.QDialogButtonBox.AcceptRole)
+        proceed.objectName = 'MeniscusReaderIdentityContinue'
+        buttons.addButton('Cancel', qt.QDialogButtonBox.RejectRole)
+        proceed.setEnabled(bool(str(entry.text).strip()))
+        entry.connect('textChanged(QString)', lambda text: proceed.setEnabled(bool(str(text).strip())))
+        buttons.connect('accepted()', dialog.accept)
+        buttons.connect('rejected()', dialog.reject)
+        layout.addWidget(buttons)
+        entry.setFocus()
+        entry.selectAll()
+        if dialog.exec_() != qt.QDialog.Accepted:
+            return None
+        reader = str(entry.text).strip()
+        return reader or None
+
+    def _confirmDatasetStart(self, job, previous_reader=''):
         """Confirm intentional blank work and the assigned reader before writing work."""
+        self._confirmedReader = None
         if (job or {}).get('practice_context'):
             # These fixed jobs already explicitly identify software-practice actors.
             return True
@@ -593,6 +624,9 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
                 return False
         from MeniscusAnnotatorLib.core import assigned_annotator
         actor = assigned_annotator(job)
+        if actor is None:
+            self._confirmedReader = self._chooseReaderIdentity(previous_reader)
+            return self._confirmedReader is not None
         dialog = qt.QMessageBox(slicer.util.mainWindow())
         dialog.objectName = 'MeniscusReaderConfirmDialog'
         dialog.setWindowTitle('Confirm assigned reader')
@@ -600,7 +634,10 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         dialog.setInformativeText('Continue only if this is your assigned reader identity. Software testing must use a separate practice job. A coordinator must supply a different named job for another reader. Are you the assigned reader?')
         dialog.setStandardButtons(qt.QMessageBox.Yes | qt.QMessageBox.No)
         dialog.setDefaultButton(qt.QMessageBox.No)
-        return dialog.exec_() == qt.QMessageBox.Yes
+        confirmed = dialog.exec_() == qt.QMessageBox.Yes
+        if confirmed:
+            self._confirmedReader = actor
+        return confirmed
 
     def _chooseDataset(self):
         root = qt.QFileDialog.getExistingDirectory(slicer.util.mainWindow(), 'Open dataset', str(self.settings.value('Meniscus/dataset', '')))
@@ -627,11 +664,15 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         job, job_path = load_dataset_job_config(ds, remembered_path=job_path, fixed_job_path=fixed_job)
         if self._practiceConfig and (not job or job.get('practice_context',{}).get('purpose')!='software_practice'):
             raise ValidationError('The software-practice actor and protocol configuration is missing or invalid.')
-        if not self._confirmDatasetStart(job):
+        from MeniscusAnnotatorLib.core import canonical
+        source_job = getattr(job, 'source_job', job)
+        reader_key = 'Meniscus/reader/' + ds.identity + '/' + (canonical(source_job) if source_job else 'blank')
+        if not self._confirmDatasetStart(job, str(self.settings.value(reader_key, ''))):
             self.message.setText('Opening cancelled. No new annotation work was created.')
             return None
         from MeniscusAnnotatorLib.reader_workspace import reader_workspace
-        workspace = reader_workspace(version, job)
+        reader = self._confirmedReader
+        workspace = reader_workspace(version, job, reader=reader)
         remembered = self.settings.value(workspace['settings_key'], '')
         location = work_root or (self._practiceConfig['work_root'] if self._practiceConfig else remembered) or str(Path(documents) / 'Meniscus_annotation_work' / workspace['relative_folder'])
         if self._practiceConfig and Path(location).resolve()!=Path(self._practiceConfig['work_root']).resolve():
@@ -643,21 +684,35 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             dialog.setInformativeText(str(location))
             use = dialog.addButton('Use this folder', qt.QMessageBox.AcceptRole)
             change = dialog.addButton('Change location', qt.QMessageBox.ActionRole)
+            existing = dialog.addButton('Open existing work', qt.QMessageBox.ActionRole)
+            cancel = dialog.addButton('Cancel', qt.QMessageBox.RejectRole)
             dialog.exec_()
-            if dialog.clickedButton() == change:
+            clicked = dialog.clickedButton()
+            if clicked in (None, cancel):
+                return
+            if clicked == existing:
+                chosen = qt.QFileDialog.getExistingDirectory(slicer.util.mainWindow(), 'Open existing work folder', documents)
+                if not chosen:
+                    return
+                if not (Path(chosen) / 'dataset.json').is_file():
+                    raise ValidationError('Select the saved work folder containing dataset.json and cases. The dataset folder contains the original scans, not saved work.')
+                location = str(chosen)
+            elif clicked == change:
                 chosen = qt.QFileDialog.getExistingDirectory(slicer.util.mainWindow(), 'Choose local work folder', documents)
                 if not chosen:
                     return
                 location = str(Path(chosen) / workspace['relative_folder'])
-        store = WorkStore(location, ds, job=job)
+        store = WorkStore(location, ds, job=job, reader=reader)
         self.closeCase()
         self.dataset, self.store = ds, store
+        self._lastCaseSettingsKey = workspace['settings_key'] + '/lastCase' if workspace['uses_local_reader_assignment'] else 'Meniscus/lastCase'
         self._updatePracticeContext()
         self.settings.setValue('Meniscus/dataset', str(Path(root).resolve()))
         self.settings.setValue(workspace['settings_key'], str(location))
+        if workspace['uses_local_reader_assignment']:
+            self.settings.setValue(reader_key, reader)
         blocked = sum(rule.get('availability') == 'unresolved' for rule in (job or {}).get('cases', {}).values())
-        from MeniscusAnnotatorLib.core import assigned_annotator
-        self.datasetLabel.setText(version + '\nReader: ' + assigned_annotator(job) + '\n' + str(len(ds.cases)) + ' MRI scans' + (f' · {blocked} blocked' if blocked else '') + ' · local work connected')
+        self.datasetLabel.setText(version + '\nReader: ' + store.annotator + '\n' + str(len(ds.cases)) + ' MRI scans' + (f' · {blocked} blocked' if blocked else '') + ' · local work connected')
         self._populate()
         if self.caseTable.rowCount:
             self.caseTable.selectRow(0)
@@ -678,10 +733,10 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         def load():
             require_full = (self.dataset.root / 'correction_job.json').exists() or correction_inputs_present(self.dataset) or Path(path).name == 'correction_job.json'
             job = load_job_config(path, self.dataset, require_full_correction=require_full, allow_unresolved=True)
-            if not self._confirmDatasetStart(job):
+            if not self._confirmDatasetStart(job, self.store.annotator):
                 return
             self.closeCase()
-            self.store = WorkStore(self.store.root, self.dataset, job=job)
+            self.store = WorkStore(self.store.root, self.dataset, job=job, reader=self._confirmedReader)
             self.settings.setValue('Meniscus/job/' + self.dataset.identity, str(path))
             self.message.setText('Explicit job loaded. Open a case; only permitted starting masks will be loaded.')
         self._safe(load)
@@ -730,7 +785,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             root = str(self.settings.value('Meniscus/dataset', ''))
             if not root or self._safe(lambda: self.openDataset(root)) is None:
                 return
-        key = str(self.settings.value('Meniscus/lastCase', ''))
+        key = str(self.settings.value(getattr(self, '_lastCaseSettingsKey', 'Meniscus/lastCase'), ''))
         if key:
             self._safe(lambda: self.openCase(key))
 
@@ -831,7 +886,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             self._enable(True)
             self.setLabel('medial')
             self.setTool('Paint')
-            self.settings.setValue('Meniscus/lastCase', key)
+            self.settings.setValue(getattr(self, '_lastCaseSettingsKey', 'Meniscus/lastCase'), key)
         except Exception:
             self.dirty = False
             self._loading = True  # Release a partial load without trying to serialize missing nodes.
@@ -1241,7 +1296,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             return
         context = self.session.state.get('practice_context')
         if context:
-            text = 'SOFTWARE PRACTICE ONLY. This records completion of a practice workflow, not an accepted research annotation or anatomical validation.\n\nRecorded practice actor: ' + self.session.state['annotator'] + '. Automated test work is never attributed to Jeff.\n\nRecord this practice version?'
+            text = 'SOFTWARE PRACTICE ONLY. This records completion of a practice workflow, not an accepted research annotation or anatomical validation.\n\nRecorded practice actor: ' + self.session.state['annotator'] + '. Automated checks are not attributed to a reader.\n\nRecord this practice version?'
         else:
             actor = self.session.state['annotator']
             text = ('This protocol is a draft. This creates an approved PRACTICE version, excluded from research exports.\n\n' if practice else '') + 'I, ' + actor + ', have considered both compartments and reviewed every acquired slice under the recorded protocol. This is my own approval, not an independent second-reader assessment.\n\nApprove this version?'

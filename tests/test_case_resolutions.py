@@ -94,6 +94,31 @@ def test_resolution_loads_without_mutating_base_global_identity_or_old_checkpoin
     assert (dataset.root / 'correction_job.json').read_bytes() == raw_bytes
 
 
+def test_local_reader_assignment_survives_additive_resolution(resolved, tmp_path):
+    dataset, job, _, registry, case = resolved
+    job.pop('practice_context')
+    registry['base_job_identity'] = core.canonical(job)
+    put(dataset.root / 'correction_job.json', job)
+    (dataset.root / FILENAME).unlink()
+    store = core.WorkStore(tmp_path / 'Local reader work', dataset, job, reader='Synthetic Reader A')
+    reader_binding = store.reader_assignment_path.read_bytes()
+    with store.open_case(dataset.cases[1]) as session:
+        checkpoint = save(session)
+    checkpoint_bytes = {p.name: p.read_bytes() for p in checkpoint.iterdir() if p.is_file()}
+    put(dataset.root / FILENAME, registry)
+    loaded, _ = core.load_dataset_job_config(dataset)
+    resumed = core.WorkStore(store.root, dataset, loaded, reader='Synthetic Reader A')
+    assert resumed.job_identity == core.canonical(job)
+    assert resumed.reader_assignment_path.read_bytes() == reader_binding
+    with resumed.open_case(case) as session:
+        save(session)
+        assert session.state['annotator'] == 'Synthetic Reader A'
+        assert session.state['initialization']['case_resolution'] == resumed.resolution_bindings[case.key]
+    with resumed.open_case(dataset.cases[1]) as session:
+        assert session.current_checkpoint == checkpoint
+    assert checkpoint_bytes == {p.name: p.read_bytes() for p in checkpoint.iterdir() if p.is_file()}
+
+
 @pytest.mark.parametrize('field', ['base_job_identity', 'dataset_identity', 'case_key', 'source_identity',
                                   'source_series_key', 'series_instance_uid', 'source_image_sha256',
                                   'original_rule_identity', 'mask_sha256', 'provenance_sha256',

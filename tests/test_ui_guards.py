@@ -32,6 +32,8 @@ def widget_method(name, **globals_override):
 @pytest.fixture
 def dialogs():
     replies = deque()
+    readers = deque()
+    requested_readers = []
     shown = []
 
     class MessageBox:
@@ -59,8 +61,13 @@ def dialogs():
     qt = SimpleNamespace(QMessageBox=MessageBox)
     slicer = SimpleNamespace(util=SimpleNamespace(mainWindow=lambda: None))
     method = widget_method('_confirmDatasetStart', qt=qt, slicer=slicer)
-    return SimpleNamespace(replies=replies, shown=shown, box=MessageBox,
-                           confirm=lambda job: method(SimpleNamespace(), job))
+    def choose(previous):
+        requested_readers.append(previous)
+        return readers.popleft() if readers else None
+    widget = SimpleNamespace(_chooseReaderIdentity=choose)
+    return SimpleNamespace(replies=replies, readers=readers, requested_readers=requested_readers,
+                           widget=widget, shown=shown, box=MessageBox,
+                           confirm=lambda job, previous='': method(widget, job, previous))
 
 
 def test_missing_job_defaults_to_no_before_reader_prompt(dialogs):
@@ -79,17 +86,19 @@ def test_cancel_or_no_on_blank_warning_stops_before_actor_prompt(dialogs, answer
 
 
 def test_intentional_blank_requires_second_explicit_reader_confirmation(dialogs):
-    dialogs.replies.extend([dialogs.box.Yes, dialogs.box.No])
+    dialogs.replies.append(dialogs.box.Yes)
     assert dialogs.confirm(None) is False
-    assert len(dialogs.shown) == 2
-    assert dialogs.shown[1].objectName == 'MeniscusReaderConfirmDialog'
-    assert dialogs.shown[1].text.endswith('Jeff')
+    assert len(dialogs.shown) == 1
+    assert dialogs.requested_readers == ['']
+    assert dialogs.widget._confirmedReader is None
 
 
 def test_intentional_legacy_blank_can_continue_after_both_confirmations(dialogs):
-    dialogs.replies.extend([dialogs.box.Yes, dialogs.box.Yes])
+    dialogs.replies.append(dialogs.box.Yes)
+    dialogs.readers.append('Synthetic Reader')
     assert dialogs.confirm(None) is True
-    assert len(dialogs.shown) == 2
+    assert len(dialogs.shown) == 1
+    assert dialogs.widget._confirmedReader == 'Synthetic Reader'
 
 
 def test_named_reader_is_shown_and_requires_yes(dialogs):
@@ -99,7 +108,7 @@ def test_named_reader_is_shown_and_requires_yes(dialogs):
     assert len(dialogs.shown) == 1
     assert dialogs.shown[0].objectName == 'MeniscusReaderConfirmDialog'
     assert dialogs.shown[0].text.endswith('Synthetic Reader B')
-    assert 'Jeff' not in dialogs.shown[0].text
+    assert dialogs.widget._confirmedReader == 'Synthetic Reader B'
 
 
 def test_named_reader_confirmation_defaults_to_no(dialogs):
@@ -109,8 +118,12 @@ def test_named_reader_confirmation_defaults_to_no(dialogs):
 
 def test_legacy_assignment_is_explicitly_confirmed(dialogs):
     assert dialogs.confirm({'cases': {}}) is False
-    assert len(dialogs.shown) == 1
-    assert dialogs.shown[0].text.endswith('Jeff')
+    assert not dialogs.shown
+    assert dialogs.requested_readers == ['']
+    dialogs.readers.append('Synthetic Reader C')
+    assert dialogs.confirm({'cases': {}}, 'Synthetic Reader B') is True
+    assert dialogs.requested_readers[-1] == 'Synthetic Reader B'
+    assert dialogs.widget._confirmedReader == 'Synthetic Reader C'
 
 
 @pytest.mark.parametrize('actor_type,actor', [
@@ -149,7 +162,7 @@ def test_cancelled_dataset_confirmation_creates_no_store_or_settings(tmp_path):
                              message=SimpleNamespace(setText=messages.append),
                              settings=SimpleNamespace(value=lambda key, default: default,
                                                       setValue=lambda *args: events.append(args)),
-                             _confirmDatasetStart=lambda job: False)
+                             _confirmDatasetStart=lambda job, previous: False)
     assert method(widget, tmp_path / 'Synthetic dataset',
                   work_root=str(tmp_path / 'Separate work')) is None
     assert events == []

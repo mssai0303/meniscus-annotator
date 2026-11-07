@@ -21,7 +21,7 @@ from tools.make_synthetic import make_synthetic
 def setup(tmp_path):
     source = make_synthetic(tmp_path / 'Source données with spaces')
     ds = Dataset(source)
-    store = WorkStore(tmp_path / 'Local travail 工作', ds)
+    store = WorkStore(tmp_path / 'Local travail 工作', ds, reader='Synthetic Reader')
     return source, ds, store
 
 
@@ -227,11 +227,11 @@ def test_disk_full_and_unwritable_payload_preserve_previous(setup, monkeypatch):
 
 def test_work_folder_source_protected_and_dataset_binding(setup, tmp_path):
     source, ds, store = setup
-    with pytest.raises(ValidationError, match='separate'): WorkStore(source/'work', ds)
-    with pytest.raises(ValidationError, match='cloud'): WorkStore(tmp_path/'Dropbox'/'work', ds)
+    with pytest.raises(ValidationError, match='separate'): WorkStore(source/'work', ds, reader='Synthetic Reader')
+    with pytest.raises(ValidationError, match='cloud'): WorkStore(tmp_path/'Dropbox'/'work', ds, reader='Synthetic Reader')
     changed = Dataset(source)
     changed.identity = 'another'
-    with pytest.raises(ValidationError, match='different dataset'): WorkStore(store.root, changed)
+    with pytest.raises(ValidationError, match='different dataset'): WorkStore(store.root, changed, reader='Synthetic Reader')
 
 
 def test_explicit_verified_correction_preserved(setup, tmp_path):
@@ -242,7 +242,7 @@ def test_explicit_verified_correction_preserved(setup, tmp_path):
     core.write_native(path, labels, c)
     job = {'schema_version': 'meniscus_job/1', 'dataset_identity': ds.identity, 'protocol': {'version': 'test-released-1', 'status': 'released'},
            'cases': {c.key: {'annotation_mode': 'correction', 'starting_mask': {'path': str(path), 'source': 'SYNTHETIC phantom', 'version': '1', 'sha256': sha256(path)}}}}
-    store = WorkStore(tmp_path/'Correction work', ds, job)
+    store = WorkStore(tmp_path/'Correction work', ds, job, reader='Synthetic Reader')
     with store.open_case(c) as session:
         actual, uncertainty, _ = session.load()
         assert np.array_equal(actual, labels)
@@ -292,7 +292,7 @@ def test_reconnect_same_package_at_new_location(setup, tmp_path):
     shutil.copytree(source, moved)
     reconnected = Dataset(moved)
     assert reconnected.identity == ds.identity
-    store2 = WorkStore(store.root, reconnected)
+    store2 = WorkStore(store.root, reconnected, reader='Synthetic Reader')
     with store2.open_case(reconnected.cases[0]) as session:
         assert session.load()[0][8, 6, 7] == 1
 
@@ -365,19 +365,20 @@ def test_changed_prediction_permission_blocks_saved_correction(setup, tmp_path):
     core.write_native(start, np.zeros(case.shape_xyz[::-1], dtype=np.uint8), case)
     job = {'schema_version': 'meniscus_job/1', 'dataset_identity': ds.identity, 'cases': {case.key: {'annotation_mode': 'correction', 'starting_mask': {'path': str(start), 'source': 'SYNTHETIC', 'version': '1', 'sha256': sha256(start)}}}}
     location = tmp_path/'Correction local'
-    with WorkStore(location, ds, job).open_case(case) as session:
+    with WorkStore(location, ds, job, reader='Synthetic Reader').open_case(case) as session:
         labels, uncertainty, _ = session.load()
         session.save(labels, uncertainty, seg_writer)
-    blank_store = WorkStore(location, ds)
-    with pytest.raises(ValidationError, match='initialization permissions'):
-        blank_store.open_case(case)
+    before = {p.relative_to(location).as_posix(): sha256(p) for p in location.rglob('*') if p.is_file()}
+    with pytest.raises(ValidationError, match='different reader or assignment'):
+        WorkStore(location, ds, reader='Synthetic Reader')
+    assert before == {p.relative_to(location).as_posix(): sha256(p) for p in location.rglob('*') if p.is_file()}
 
 
 def test_lock_released_after_abrupt_process_exit(setup):
     import subprocess
     _, ds, store = setup
     repo = str(Path(__file__).resolve().parents[1])
-    script = "import sys,os;sys.path.insert(0,%r);from MeniscusAnnotatorLib import Dataset,WorkStore;d=Dataset(%r);s=WorkStore(%r,d).open_case(d.cases[0]);os._exit(17)" % (repo, str(ds.root), str(store.root))
+    script = "import sys,os;sys.path.insert(0,%r);from MeniscusAnnotatorLib import Dataset,WorkStore;d=Dataset(%r);s=WorkStore(%r,d,reader='Synthetic Reader').open_case(d.cases[0]);os._exit(17)" % (repo, str(ds.root), str(store.root))
     result = subprocess.run([sys.executable, '-c', script], capture_output=True)
     assert result.returncode == 17, result.stderr.decode()
     store.open_case(ds.cases[0]).close()
@@ -453,4 +454,4 @@ def test_current_pointer_failure_recovers_complete_committed_version(setup, monk
 def test_malformed_or_prediction_free_job_rejected(setup, tmp_path, rule):
     _, ds, _ = setup
     job = {'schema_version': 'meniscus_job/1', 'dataset_identity': ds.identity, 'cases': {ds.cases[0].key: rule}}
-    with pytest.raises(ValidationError): WorkStore(tmp_path/'Bad job work', ds, job)
+    with pytest.raises(ValidationError): WorkStore(tmp_path/'Bad job work', ds, job, reader='Synthetic Reader')

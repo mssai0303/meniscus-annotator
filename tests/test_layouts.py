@@ -41,7 +41,7 @@ def test_both_layouts_keep_original_input_checks_and_workflow(tmp_path, layout):
     assert all(c.folder.relative_to(source).as_posix() == case_folder_options(c.metadata)[0 if layout == 'flat' else 1] for c in dataset.cases)
     if layout == 'flat':
         assert all({p.name for p in c.folder.iterdir()} == {'image.nii.gz', 'case.json', 'slice_review.csv'} for c in dataset.cases)
-    store = WorkStore(tmp_path / 'Local work', dataset)
+    store = WorkStore(tmp_path / 'Local work', dataset, reader='Synthetic Reader')
     case = dataset.cases[1]
     with store.open_case(case) as session:
         labels, uncertainty, _ = session.load()
@@ -118,7 +118,7 @@ def test_old_saved_work_reconnects_after_folder_only_migration(tmp_path):
     dataset = Dataset(source)
     case = dataset.cases[1]
     location = tmp_path / 'Local work preserved'
-    store = WorkStore(location, dataset)
+    store = WorkStore(location, dataset, reader='Synthetic Reader')
     with store.open_case(case) as session:
         labels, uncertainty, _ = session.load()
         labels[5, 13, 17] = 1
@@ -141,7 +141,7 @@ def test_old_saved_work_reconnects_after_folder_only_migration(tmp_path):
     migrated = Dataset(new_source)
     assert migrated.identity == dataset.identity
     assert [(c.key, c.identity) for c in migrated.cases] == [(c.key, c.identity) for c in dataset.cases]
-    with WorkStore(location, migrated).open_case(migrated.by_key[case.key]) as resumed:
+    with WorkStore(location, migrated, reader='Synthetic Reader').open_case(migrated.by_key[case.key]) as resumed:
         assert resumed.state['notes'] == 'Synthetic saved notes before folder relocation'
         assert resumed.state['last_slice'] == 5
         assert np.array_equal(resumed.load()[0], labels)

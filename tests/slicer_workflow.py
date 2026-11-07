@@ -132,7 +132,7 @@ def run():
         slicer.util.selectModule('MeniscusAnnotator')
         widget = slicer.modules.meniscusannotator.widgetRepresentation().self()
         widget.settings = qt.QSettings(str(SETTINGS_FILE), qt.QSettings.IniFormat)  # Exact file also survives --testing's different application name.
-        widget.openDataset(str(previous / 'Synthetic dataset 空間'), work_root=str(previous / 'Local work Jeff'))
+        widget.openDataset(str(previous / 'Synthetic dataset 空間'), work_root=str(previous / 'Local synthetic work'))
         widget._resume()
         events()
         check('restart resumes last case', widget.session.case.key == widget.dataset.cases[-1].key)
@@ -162,7 +162,7 @@ def run():
         REPORT['passed'] = True
         return
     dataset_root = OUTPUT / 'Synthetic dataset 空間'
-    work_root = OUTPUT / 'Local work Jeff'
+    work_root = OUTPUT / 'Local synthetic work'
     layout = os.environ.get('MENISCUS_TEST_LAYOUT', 'legacy')
     REPORT['folder_layout'] = layout
     make_synthetic(dataset_root, layout=layout)
