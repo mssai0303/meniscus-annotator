@@ -2,9 +2,13 @@
 
 The preview launches the actual Meniscus Annotator module directly with the
 existing pinned Slicer 5.12.4 Intel runtime under Rosetta on this Apple Silicon Mac.
-The single preview launcher now opens a real SOFTWARE PRACTICE case with a visible
+The single preview launcher now targets a real CORRECTION SOFTWARE PRACTICE case with a visible
 acquired-slice slider and counter. This is a development preview, not a Mac
 installer or Windows acceptance.
+Save and close any earlier blank-practice window normally first. The launcher
+blocks a duplicate/confusing preview rather than closing that window or losing
+unsaved work. The correction workflow has passed actual-module tests; the manual
+correction launcher still needs its first launch after that earlier window closes.
 
 [Open the preview](/Users/saim/Downloads/Meniscus_Annotator_Preview_20261106/Open_Meniscus_Preview.command)
 
@@ -17,16 +21,20 @@ Full absolute Terminal command:
 The window is titled **Meniscus Annotator — SOFTWARE PRACTICE — not research annotations**.
 It is restricted to two permitted cases copied without changing bytes from the
 completed flat-folder package: one baseline scan with 37 acquired slices and one
-month-72 oblique scan with 35. Your saved practice work remains in:
+month-72 oblique scan with 35. Both load explicitly verified existing automated
+starting masks. These are unreviewed predictions, not reference annotations.
+Your new correction practice work is saved in:
 
 ```text
-/Users/saim/Downloads/Meniscus_Annotator_Real_Practice_20261106/Interactive_work/
+/Users/saim/Downloads/Meniscus_Annotator_Real_Correction_Practice_20261106/Interactive_work/
 ```
 
 Your exports go to the adjacent `Practice_exports/` folder. Automated QA work is
 separate in `Automated_QA/` and is never loaded into your interactive practice.
 The launcher resumes your saved case/slice; a fresh workspace opens the oblique
-case. Original Dropbox inputs remain unchanged. All local real work, results,
+case on a slice with a visible prediction, with Navigate selected. Previous real
+blank-practice work in `Meniscus_Annotator_Real_Practice_20261106/Interactive_work/`
+is preserved separately. Original Dropbox images and metadata remain unchanged. All local real work, results,
 exposure records and evidence stay outside the repository. The previous synthetic
 dataset and practice checkpoints remain preserved in the original preview folder
 for regression work. Windows acceptance is paused during Mac review.
@@ -96,3 +104,20 @@ annotations or anatomical validation. Actual images, identities, private reports
 and logs remain outside Git; committed screenshots use synthetic inputs only.
 
 This runtime is **Intel Slicer 5.12.4 under Rosetta**, not a native ARM build.
+
+## Existing-mask correction checks
+
+After the explicit correction adapter was added, both permitted real cases passed
+**337 actual-module checks**, followed by **45 fresh-process restore checks** on
+the oblique case and **65 cold-restore checks** on the baseline in another process.
+Existing medial/lateral voxels were erased natively, Undo/Redo
+restored exact arrays, and Paint/Draw, review invalidation, save/switch/reopen,
+guarded software-practice approval and export passed. The original starting-mask
+bytes and source/version/hash provenance were preserved in work and export.
+
+The maintained read-only application input check found 250 explicit correction
+rules, 249 verified masks and one unresolved case in the updated package. That
+case is blocked; this is not a complete 250-case correction set. The original 750
+MRI/metadata/review files and index matched their earlier immutable receipt.
+All 1,252 files in the newly frozen correction package remained unchanged during
+application testing. Detailed real-data evidence remains private.

@@ -74,13 +74,20 @@ only synthetic data and writes its results/screenshots there. It drives the
 native Paint, Erase and Draw tools through view events, checks oblique planes,
 reopens saved files, approves practice versions and exports/reopens ZIP results.
 It cannot establish anatomical correctness or replace Windows acceptance.
-The scoped app/adapter suite currently passes 125 tests. Practice-specific run
+The scoped app/adapter suite currently passes 151 tests. Practice-specific run
 counts and remaining limits are recorded in [VALIDATION.md](docs/VALIDATION.md);
 private MRI evidence is not committed.
 
 In the workspace, Draw closes point-to-point clicks into a filled polygon on the
 current acquired slice; Paint/Erase provide touch-ups. For contrast choose
 **Window/level** in Display and orientation, then left-drag. Right-drag zooms.
+
+The existing-mask correction route passed 337 actual-module checks on two permitted
+practice scans, 45 oblique fresh-process restore checks and 65 baseline cold-restore
+checks. The updated source package has
+249 technically verified starting masks and one explicitly blocked unresolved
+case; it is not a complete 250-case correction set. These predictions and all
+software-practice outputs remain unaccepted research annotations.
 
 ## Repository and release
 

@@ -15,6 +15,11 @@ folder**, then choose **Open dataset** and select its top-level folder. Keep
 `README.txt`, `case_index.csv` and all `Cases` subfolders together. The application
 checks identities, hashes and geometry before offering editing.
 
+A prepared correction package includes an explicit `correction_job.json`. Its
+verified starting masks load as unreviewed predictions to correct, not completed
+annotations. Missing or unresolved masks are blocked instead of replaced with
+blank labels. MRI-only packages without correction permissions start blank.
+
 The first connection proposes your operating system's Documents folder:
 `Documents/Meniscus_annotation_work/<dataset_version>/`. You can choose another
 **local** work folder then. It must be separate from the source dataset and

@@ -23,3 +23,11 @@ application build is prepared; release gates are recorded in docs/WINDOWS.md.
   immediate tool-overlay refresh without changing the stored image grid.
 - Two permitted real scans exercised through editing, erase/undo, review,
   save/restart and geometry-checked export; private evidence remains outside Git.
+
+### Explicit correction inputs
+
+- Portable package-relative starting masks, explicit full correction jobs and
+  blocked unresolved inputs; no missing-mask fallback to blank annotation.
+- Actual-module tests erase existing medial/lateral prediction voxels, check
+  exact undo/redo and preserve the original mask/provenance through export.
+- A separate correction practice launcher/workspace preserves previous blank work.

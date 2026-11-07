@@ -6,6 +6,7 @@ must remain outside the repository and original source package. Marks in this
 test are arbitrary software probes, never anatomical reference annotations.
 """
 import datetime
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -25,6 +26,7 @@ import vtk
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 from MeniscusAnnotatorLib import Dataset, ValidationError, export_approved, sha256
+from MeniscusAnnotatorLib.core import resolve_starting_mask_path
 
 CONFIG_PATH = Path(os.environ['MENISCUS_REAL_PRACTICE_CONFIG']).resolve()
 CONFIG = json.loads(CONFIG_PATH.read_text(encoding='utf-8'))
@@ -234,6 +236,176 @@ def confirm_practice_approval(widget):
     events()
 
 
+def correction_start(widget, prefix):
+    """Check the explicit permitted prediction and its preserved original."""
+    check(prefix + ' correction configuration explicit', CONFIG.get('annotation_mode') == 'correction' and CONFIG.get('require_initial_provenance') is True)
+    case = widget.session.case
+    rule = widget.store.job['cases'][case.key]
+    start = rule.get('starting_mask', {})
+    check(prefix + ' correction permission ready', rule.get('annotation_mode') == 'correction' and rule.get('availability', 'ready') == 'ready' and all(start.get(name) for name in ('path', 'source', 'version', 'sha256')))
+    source = resolve_starting_mask_path(widget.dataset, start)
+    check(prefix + ' permitted starting mask checksum', source.is_file() and sha256(source) == start['sha256'])
+    independent = nib.load(str(source))
+    q, qc = independent.header.get_qform(coded=True)
+    sf, sc = independent.header.get_sform(coded=True)
+    initial = np.asarray(independent.dataobj).transpose(2, 1, 0).copy()
+    check(prefix + ' permitted mask nonempty fixed compartment values', np.issubdtype(initial.dtype, np.integer) and set(np.unique(initial)) == {0, 1, 2})
+    check(prefix + ' permitted mask native geometry and transforms', independent.shape == case.shape_xyz and independent.header.get_xyzt_units()[0] == 'mm' and qc > 0 and sc > 0 and np.allclose(q, sf, atol=1e-4) and np.allclose(independent.affine, case.affine_ras, atol=1e-4))
+    independent_sitk = sitk.ReadImage(str(source))
+    check(prefix + ' permitted mask independent reader exact voxels', np.array_equal(sitk.GetArrayFromImage(independent_sitk), initial))
+    expected_provenance = {name: start[name] for name in ('source', 'version', 'sha256')}
+    check(prefix + ' initialization provenance retained', widget.session.state['initialization'] == {'method': 'correction', 'starting_mask': expected_provenance})
+    preserved = widget.session.folder / ('starting-mask-' + start['sha256'] + '.nii.gz')
+    check(prefix + ' original prediction preserved byte for byte', preserved.is_file() and sha256(preserved) == start['sha256'])
+    check(prefix + ' automated correction is not Jeff work', widget.session.state['annotator'] == 'Software QA (automated)' and widget.session.state['annotation_purpose'] == 'software_practice' and widget.session.state['practice_context']['actor_type'] == 'automated')
+    return initial
+
+
+def empty_patch(labels, k):
+    """Find a fully empty in-plane fixture area; never assume MRI background."""
+    plane = labels[k]
+    half = 32
+    candidates = [(i, j) for j in range(half + 4, plane.shape[0] - half - 4, 12)
+                  for i in range(half + 4, plane.shape[1] - half - 4, 12)]
+    candidates.sort(key=lambda point: (point[0] - plane.shape[1] / 2) ** 2 + (point[1] - plane.shape[0] / 2) ** 2)
+    for i, j in candidates:
+        if not plane[j-half:j+half+1, i-half:i+half+1].any():
+            return i, j
+    raise AssertionError('No verified empty in-plane patch for arbitrary software probes.')
+
+
+def run_correction_workflow():
+    """Exercise native correction controls on explicitly supplied predictions.
+
+    Test marks are software fixtures. They never establish anatomical validity,
+    and practice approval/export continues through the ordinary guarded workflow.
+    """
+    REPORT['ui_source_sha256'] = sha256(REPO / 'MeniscusAnnotator.py')
+    REPORT['core_source_sha256'] = sha256(REPO / 'MeniscusAnnotatorLib' / 'core.py')
+    count = verify_original()
+    check('correction original source matches frozen manifest before test', count > 0)
+    copied_hashes = {str(path.relative_to(INPUTS)): sha256(path) for path in INPUTS.rglob('*') if path.is_file()}
+    widget, keys = open_widget()
+    approved_arrays = {}
+    REPORT['cases'] = []
+    for ordinal, key in enumerate(keys, 1):
+        prefix = 'correction case ' + str(ordinal)
+        widget.openCase(key)
+        events()
+        case = widget.session.case
+        dims = case.shape_xyz
+        initial = correction_start(widget, prefix + ' initial')
+        labels, uncertainty = widget.collectArrays()
+        check(prefix + ' exact permitted labels initially displayed', np.array_equal(labels, initial) and not uncertainty.any() and widget.session.current_checkpoint is None)
+        meta = case.metadata
+        header = str(widget.identityLabel.text)
+        check(prefix + ' source identity and complete acquired slices displayed', meta['participant_id'] in header and ('M%03d' % meta['visit_month']) in header and ('Left' if meta['knee_side'] == 'L' else 'Right') in header and widget.sliceSlider.maximum == dims[2])
+        REPORT['cases'].append({'case_key': key, 'shape_xyz': dims, 'initial_label_counts': {str(value): int(np.count_nonzero(initial == value)) for value in (1, 2)}, 'initialization': widget.session.state['initialization']})
+
+        for label, value in [('medial', 1), ('lateral', 2)]:
+            points = np.argwhere(widget.collectArrays()[0] == value)
+            k, j, i = [int(number) for number in points[len(points) // 2]]
+            widget.goSlice(k)
+            widget._resetView()
+            events()
+            widget.reviewButton.click()
+            widget.goSlice(k)
+            events()
+            check(prefix + ' explicit software review before ' + label + ' erase', widget.session.state['review'][k]['reviewed'])
+            before = widget.collectArrays()[0].copy()
+            stroke(widget, (i, j, k), label, 'Erase')
+            erased = widget.collectArrays()[0].copy()
+            changed = np.argwhere(before != erased)
+            check(prefix + ' native ' + label + ' Erase changes existing prediction only on intended acquired slice', erased[k, j, i] == 0 and len(changed) > 0 and set(changed[:, 0]) == {k} and np.all(before[before != erased] == value) and np.all(erased[before != erased] == 0))
+            check(prefix + ' native ' + label + ' Erase invalidates reviewed slice', not widget.session.state['review'][k]['reviewed'])
+            widget.editor.undo()
+            events()
+            check(prefix + ' native ' + label + ' Erase Undo exact', np.array_equal(widget.collectArrays()[0], before))
+            widget.editor.redo()
+            events()
+            check(prefix + ' native ' + label + ' Erase Redo exact', np.array_equal(widget.collectArrays()[0], erased))
+
+        k = dims[2] // 2
+        labels = widget.collectArrays()[0]
+        i, j = empty_patch(labels, k)
+        widget.goSlice(k)
+        widget._resetView()
+        widget.setTool('')
+        events()
+        wheel(widget, (i, j, k))
+        check(prefix + ' native correction wheel moves one acquired slice', abs(widget.currentSlice - k) == 1)
+        wheel(widget, (i, j, widget.currentSlice), backward=True)
+        check(prefix + ' reverse correction wheel restores acquired slice', widget.currentSlice == k and abs(plane_index(widget) - k) < .001)
+        before = widget.collectArrays()[0].copy()
+        stroke(widget, (i - 18, j + 12, k), 'medial')
+        medial = widget.collectArrays()[0].copy()
+        changed = np.argwhere(before != medial)
+        check(prefix + ' native medial Paint in verified empty patch', medial[k, j+12, i-18] == 1 and len(changed) > 0 and set(changed[:, 0]) == {k})
+        stroke(widget, (i + 18, j + 12, k), 'lateral')
+        both = widget.collectArrays()[0].copy()
+        changed = np.argwhere(medial != both)
+        check(prefix + ' native lateral Paint fixed mapping and acquired slice', both[k, j+12, i+18] == 2 and both[k, j+12, i-18] == 1 and len(changed) > 0 and set(changed[:, 0]) == {k})
+        draw(widget, [(i-10, j-14, k), (i+10, j-14, k), (i+10, j-4, k), (i-10, j-4, k)])
+        drawn = widget.collectArrays()[0].copy()
+        changed = np.argwhere(both != drawn)
+        check(prefix + ' native Draw contour in verified empty patch only intended slice', drawn[k, j-9, i] == 1 and len(changed) > 0 and set(changed[:, 0]) == {k})
+        widget.editor.undo()
+        events()
+        check(prefix + ' native Draw Undo exact', np.array_equal(widget.collectArrays()[0], both))
+        widget.editor.redo()
+        events()
+        check(prefix + ' native Draw Redo exact', np.array_equal(widget.collectArrays()[0], drawn))
+        stroke(widget, (i-18, j+12, k), 'uncertain')
+        labels, uncertainty = widget.collectArrays()
+        check(prefix + ' correction uncertainty independent of anatomical labels', np.array_equal(labels, drawn) and uncertainty[k, j+12, i-18] == 1 and set(np.unique(labels)) == {0, 1, 2})
+        stroke(widget, (i-18, j+12, k), 'uncertain', 'Erase')
+        check(prefix + ' correction uncertainty resolved separately', not widget.collectArrays()[1].any() and np.array_equal(widget.collectArrays()[0], drawn))
+        widget.visible.setChecked(False)
+        check(prefix + ' correction display visibility toggles', not widget.anatomy.GetDisplayNode().GetVisibility())
+        widget.visible.setChecked(True)
+        widget.fill.setChecked(False)
+        check(prefix + ' correction outline display', widget.anatomy.GetDisplayNode().GetOpacity2DFill() == 0 and widget.anatomy.GetDisplayNode().GetOpacity2DOutline() > 0)
+        widget.fill.setChecked(True)
+        widget.opacity.setValue(35)
+        check(prefix + ' correction transparent fill display', abs(widget.anatomy.GetDisplayNode().GetOpacity2DFill() - .35) < .001)
+        widget.notes.setPlainText('AUTOMATED SOFTWARE QA: arbitrary native correction-control probes on an existing permitted prediction; no anatomical assessment and not Jeff annotations.')
+        widget.saveButton.click()
+        events()
+        saved_labels, saved_uncertainty = widget.collectArrays()
+        check(prefix + ' correction changes differ from original and original remains preserved', not np.array_equal(saved_labels, initial))
+        verify_saved_case(widget, widget.session.current_checkpoint, saved_labels, saved_uncertainty, prefix + ' saved')
+        correction_start(widget, prefix + ' saved provenance')
+        other = keys[ordinal % len(keys)]
+        widget.openCase(other)
+        widget.openCase(key)
+        widget.goSlice(k)
+        events()
+        reopened_labels, reopened_uncertainty = widget.collectArrays()
+        check(prefix + ' case switching restores exact correction arrays', np.array_equal(reopened_labels, saved_labels) and np.array_equal(reopened_uncertainty, saved_uncertainty))
+        check(prefix + ' case switching restores software QA notes', 'AUTOMATED SOFTWARE QA' in widget.session.state['notes'])
+        correction_start(widget, prefix + ' reopened provenance')
+        for acquired in range(dims[2]):
+            widget.sliceSlider.setValue(acquired + 1)
+            events()
+            displayed = [int(value) for value in re.findall(r'\d+', str(widget.sliceReadout.text))]
+            check(prefix + ' correction acquired plane ' + str(acquired+1), widget.currentSlice == acquired and abs(plane_index(widget)-acquired) < .001 and displayed[:2] == [acquired+1, dims[2]])
+            widget.reviewButton.click()
+            events()
+        widget.medialConsidered.setChecked(True)
+        widget.lateralConsidered.setChecked(True)
+        labels, uncertainty = widget.collectArrays()
+        check(prefix + ' correction research approval remains blocked', bool(widget.session.approval_errors(labels, uncertainty, practice=False)))
+        check(prefix + ' correction practice approval normal requirements satisfied', not widget.session.approval_errors(labels, uncertainty, practice=True))
+        confirm_practice_approval(widget)
+        state = widget.session.state
+        check(prefix + ' correction approval is automated software only', state['status'] == 'practice_approved' and state['annotator'] == state['approver'] == 'Software QA (automated)' and state['approval']['approval_type'] == 'automated_software_check' and not state['approval']['accepted_research_annotation'] and not state['approval']['human_anatomical_approval'])
+        verify_saved_case(widget, widget.session.current_checkpoint, labels, uncertainty, prefix + ' approved software practice')
+        approved_arrays[key] = (labels.copy(), uncertainty.copy())
+    check('correction UI source unchanged during checks', sha256(REPO / 'MeniscusAnnotator.py') == REPORT['ui_source_sha256'])
+    check('correction core source unchanged during checks', sha256(REPO / 'MeniscusAnnotatorLib' / 'core.py') == REPORT['core_source_sha256'])
+    finish_workflow(widget, keys, approved_arrays, copied_hashes, count)
+
+
 def run_workflow():
     count = verify_original()
     check('original source bytes match frozen manifest before test', count > 0)
@@ -421,6 +593,12 @@ def finish_workflow(widget, keys, approved_arrays, copied_hashes, count):
             metadata = json.loads(archive.read(item['folder'] + '/annotation.json'))
             check('export actor ' + str(ordinal), metadata['annotator'] == metadata['approver'] == 'Software QA (automated)' and metadata['practice_context']['purpose'] == 'software_practice' and metadata['approval']['accepted_research_annotation'] is False and metadata['approval']['human_anatomical_approval'] is False)
             case = widget.dataset.by_key[item['case_key']]
+            if CONFIG.get('annotation_mode') == 'correction':
+                start = widget.store.job['cases'][case.key]['starting_mask']
+                provenance = {name: start[name] for name in ('source', 'version', 'sha256')}
+                check('export correction provenance ' + str(ordinal), metadata['initialization'] == {'method': 'correction', 'starting_mask': provenance})
+                check('export original permitted prediction byte identity ' + str(ordinal), hashlib.sha256(archive.read(item['folder'] + '/original-starting-mask.nii.gz')).hexdigest() == start['sha256'])
+                check('export permitted prediction source unchanged ' + str(ordinal), sha256(resolve_starting_mask_path(widget.dataset, start)) == start['sha256'])
             expected_labels, expected_uncertainty = approved_arrays[item['case_key']]
             for filename, expected in [('labels.nii.gz', expected_labels), ('uncertainty.nii.gz', expected_uncertainty), ('validity.nii.gz', np.zeros_like(expected_labels, dtype=np.uint8))]:
                 temporary = REPORT_DIR / ('export-check-' + str(ordinal) + '-' + filename)
@@ -491,9 +669,94 @@ def run_resume():
     labels, uncertainty = widget.collectArrays()
     check('fresh process restores exact annotations', np.array_equal(labels, arrays['labels']) and np.array_equal(uncertainty, arrays['uncertainty']))
     check('fresh process preserves honest software practice actor', widget.session.state['annotator'] == 'Software QA (automated)' and widget.session.state['practice_context']['purpose'] == 'software_practice')
+    if CONFIG.get('annotation_mode') == 'correction':
+        REPORT['ui_source_sha256'] = sha256(REPO / 'MeniscusAnnotator.py')
+        REPORT['core_source_sha256'] = sha256(REPO / 'MeniscusAnnotatorLib' / 'core.py')
+        correction_start(widget, 'fresh process correction')
     verify_saved_case(widget, widget.session.current_checkpoint, labels, uncertainty, 'fresh process')
+    if CONFIG.get('annotation_mode') == 'correction':
+        slicer.util.mainWindow().resize(1440, 900)
+        events()
+        red().sliceView().forceRender()
+        screenshot = REPORT_DIR / 'private-correction-restored.png'
+        slicer.util.mainWindow().grab().save(str(screenshot))
+        screenshot.chmod(0o600)
     check('fresh process leaves original source unchanged', verify_original() > 0)
     widget.closeCase()
+
+
+def run_correction_cold_all():
+    """Cold-open the correction case not covered by the last-case resume phase.
+
+    Expected arrays come from the approved ZIP already compared with the original
+    native workflow's in-memory arrays. No new drawings, reviews or approvals.
+    """
+    REPORT['ui_source_sha256'] = sha256(REPO / 'MeniscusAnnotator.py')
+    REPORT['core_source_sha256'] = sha256(REPO / 'MeniscusAnnotatorLib' / 'core.py')
+    previous = json.loads((REPORT_DIR / 'private-workflow-correction_workflow.json').read_text(encoding='utf-8'))
+    prior_resume = json.loads((REPORT_DIR / 'private-workflow-resume.json').read_text(encoding='utf-8'))
+    resumed = json.loads((REPORT_DIR / 'private-resume-expectation.json').read_text(encoding='utf-8'))
+    check('cold correction original workflow and last-case resume passed', previous.get('passed') is True and prior_resume.get('passed') is True and all(item['passed'] for item in previous['checks']) and all(item['passed'] for item in prior_resume['checks']))
+    check('cold correction same tested UI and core source', previous['ui_source_sha256'] == REPORT['ui_source_sha256'] and previous['core_source_sha256'] == REPORT['core_source_sha256'] and prior_resume['ui_source_sha256'] == REPORT['ui_source_sha256'] and prior_resume['core_source_sha256'] == REPORT['core_source_sha256'])
+    widget, keys = open_widget()
+    remaining = [key for key in keys if key != resumed['case_key']]
+    check('cold correction exactly one case remains after prior last-case resume', resumed['case_key'] == keys[-1] and len(remaining) == 1)
+    REPORT['cold_restored_case_keys'] = remaining
+    REPORT['previously_cold_restored_case_key'] = resumed['case_key']
+    copied_hashes = {str(path.relative_to(INPUTS)): sha256(path) for path in INPUTS.rglob('*') if path.is_file()}
+    archives = sorted(RESULTS.glob('SOFTWARE_PRACTICE_ONLY-*.zip'))
+    check('cold correction exact prior export available', len(archives) == 1)
+    with zipfile.ZipFile(archives[0]) as archive:
+        manifest = json.loads(archive.read('results.json'))
+        check('cold correction prior export identity and integrity', archive.testzip() is None and manifest['dataset_identity'] == widget.dataset.identity and manifest.get('software_practice') is True and manifest.get('practice_only') is True)
+        for ordinal, key in enumerate(remaining, 1):
+            prefix = 'cold correction case ' + str(ordinal)
+            case = widget.dataset.by_key[key]
+            receipts = [item for item in manifest['cases'] if item['case_key'] == key]
+            check(prefix + ' exact source receipt in prior export', len(receipts) == 1 and receipts[0]['source_identity'] == case.identity and receipts[0]['source_image_sha256'] == case.metadata['image_sha256'])
+            receipt = receipts[0]
+            base = receipt['folder'] + '/'
+            checkpoint_payload = archive.read(base + 'manifest.json')
+            checkpoint_manifest = json.loads(checkpoint_payload)
+            check(prefix + ' prior export manifest checksum', hashlib.sha256(checkpoint_payload).hexdigest() == receipt['manifest_sha256'])
+            metadata = json.loads(archive.read(base + 'annotation.json'))
+            check(prefix + ' prior export automated unaccepted approval', metadata['status'] == 'practice_approved' and metadata['annotator'] == metadata['approver'] == 'Software QA (automated)' and metadata['approval']['accepted_research_annotation'] is False and metadata['approval']['human_anatomical_approval'] is False)
+            expected = {}
+            for filename in ('labels.nii.gz', 'uncertainty.nii.gz', 'validity.nii.gz'):
+                payload = archive.read(base + filename)
+                check(prefix + ' prior export payload checksum ' + filename, hashlib.sha256(payload).hexdigest() == checkpoint_manifest['files_sha256'][filename])
+                extracted = REPORT_DIR / ('private-cold-expected-' + str(ordinal) + '-' + filename)
+                extracted.write_bytes(payload)
+                extracted.chmod(0o600)
+                image = sitk.ReadImage(str(extracted))
+                independent = nib.load(str(extracted))
+                expected[filename] = sitk.GetArrayFromImage(image)
+                check(prefix + ' prior export source grid ' + filename, image.GetSize() == case.shape_xyz and independent.shape == case.shape_xyz and np.allclose(independent.affine, case.affine_ras, atol=1e-4))
+            check(prefix + ' prior export practice validity all zero', not expected['validity.nii.gz'].any())
+            folder = widget.store.case_folder(case)
+            checkpoints_before = [path.name for path in widget.store._checkpoints(folder)]
+            widget.openCase(key)
+            events()
+            check(prefix + ' actual module opened intended source case', widget.session.case.key == key and widget.session.case.identity == receipt['source_identity'])
+            check(prefix + ' actual module restored exact approved checkpoint', widget.session.current_checkpoint.name == receipt['checkpoint'] and widget.session.state['status'] == 'practice_approved')
+            labels, uncertainty = widget.collectArrays()
+            check(prefix + ' actual module arrays equal prior exact export', np.array_equal(labels, expected['labels.nii.gz']) and np.array_equal(uncertainty, expected['uncertainty.nii.gz']))
+            correction_start(widget, prefix + ' provenance')
+            check(prefix + ' actual module initialization equals prior export', widget.session.state['initialization'] == metadata['initialization'])
+            start = widget.store.job['cases'][key]['starting_mask']
+            check(prefix + ' original prediction export checksum', hashlib.sha256(archive.read(base + 'original-starting-mask.nii.gz')).hexdigest() == start['sha256'])
+            matrix = vtk.vtkMatrix4x4()
+            widget.volume.GetIJKToRASMatrix(matrix)
+            check(prefix + ' actual module full native source grid', widget.volume.GetImageData().GetDimensions() == case.shape_xyz and np.allclose(array_matrix(matrix), case.affine_ras, atol=1e-4))
+            check(prefix + ' cold native plane aligned with displayed acquired slice', abs(plane_index(widget)-widget.currentSlice) < .001)
+            verify_saved_case(widget, widget.session.current_checkpoint, labels, uncertainty, prefix + ' restored')
+            widget.closeCase()
+            check(prefix + ' no annotation checkpoint created by read-only cold check', [path.name for path in widget.store._checkpoints(folder)] == checkpoints_before)
+    check('cold correction private input copies unchanged', copied_hashes == {str(path.relative_to(INPUTS)): sha256(path) for path in INPUTS.rglob('*') if path.is_file()})
+    check('cold correction final UI and core source unchanged', sha256(REPO / 'MeniscusAnnotator.py') == REPORT['ui_source_sha256'] and sha256(REPO / 'MeniscusAnnotatorLib' / 'core.py') == REPORT['core_source_sha256'])
+    slicer.util.mainWindow().close()
+    events()
+    check('cold correction QA closes normally', widget.session is None)
 
 
 def run_orientation_recheck():
@@ -685,10 +948,14 @@ def run_status_recheck():
 try:
     if PHASE == 'workflow':
         run_workflow()
+    elif PHASE == 'correction_workflow':
+        run_correction_workflow()
     elif PHASE == 'finish':
         run_finish()
     elif PHASE == 'resume':
         run_resume()
+    elif PHASE == 'correction_cold_all':
+        run_correction_cold_all()
     elif PHASE == 'orientation_recheck':
         run_orientation_recheck()
     elif PHASE == 'status_recheck':

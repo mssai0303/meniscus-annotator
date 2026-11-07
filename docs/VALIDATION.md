@@ -12,6 +12,7 @@ research annotations or readiness for the full annotation batch.
 | --- | --- | --- |
 | Application core and practice-context tests | 70 passed | Existing annotation behaviour and explicit practice-role isolation |
 | Layout, migration and apply tests | 55 passed | App/adapter source identity, both layouts and saved-work continuity |
+| Correction-job tests | 26 passed | Relative permissions, complete job coverage, relocation and unresolved-case blocking |
 | Redesigned synthetic native workflow | 182 assertions per run passed | Actual Slicer editing, navigation, saving, approval/export and source preservation |
 | Fresh-process synthetic restore | 7 assertions passed | Case, slice, notes, masks and controls after restart |
 | Direct bootstrap startup | 5 assertions passed | Focused workspace without test-driven module selection |
@@ -20,10 +21,14 @@ research annotations or readiness for the full annotation batch.
 | Targeted checks after superior-up display correction | 203 checks passed | Acquired-plane display, interaction and saved-grid behaviour on the permitted scans |
 | Post-correction practice restore | 36 checks passed | Restoring the post-correction practice state |
 | Final practice status | 27/27 passed | Final status covering both permitted scans |
+| Existing-mask correction module workflow | 337 passed | Both permitted real scans, native existing-label erase/undo, Draw/Paint, review, save and export |
+| Correction fresh-process restore | 45 passed | Last case arrays, native geometry, original prediction and provenance |
+| Baseline correction cold restore | 65 passed | Separate process; exact baseline export arrays, geometry and original provenance; no new checkpoint |
+| Full correction package input check | 249 verified; 1 unresolved | All 250 explicit rules validated; unresolved case remains blocked and package incomplete |
 | Hosted Windows installer lifecycle | Passed | Installation, hashes, runtime imports, duplicate-install/locked-runtime guards and safe uninstall |
 | Redesigned Windows application acceptance | Paused; incomplete | No full acceptance claim |
 
-The app/adapter total is **125 tests**. Broad collection of separate preparation
+The app/adapter total is **151 tests**. Broad collection of separate preparation
 tool tests could not run in the lean app environment because pydicom/SimpleITK
 were absent there; no preparation code or dependencies were changed, and no
 complete preparation-suite pass is claimed. The Slicer runtime includes its own
@@ -68,6 +73,15 @@ complete extents, spacing, origin and direction. Technical acceptance also check
 spatial units, qform/sform consistency, integer label values, fixed medial/lateral
 mapping, uncertainty/validity records and hashes. Editable segmentations reopen
 against the original reference grid. Source files remain unchanged.
+
+Correction tests compare initial in-app arrays with the exact explicitly permitted
+nonzero mask, erase existing voxels from each compartment on the intended acquired
+slice, and compare exact arrays after Undo/Redo. Saved/exported original prediction
+bytes retain their source/version/SHA provenance. All 1,252 current package files
+matched the post-addition source manifest after testing; original 750 case files
+and index also matched the earlier immutable pre-addition receipt. These checks
+do not accept the predictions anatomically. One unresolved source mask remains a
+dataset completion gap and is never replaced by blank annotation.
 
 **Draw** closes point-to-point clicks into a filled polygon on the current acquired
 slice; Paint/Erase provide touch-ups. To adjust brightness/contrast choose
