@@ -953,9 +953,24 @@ def ui_open_case(widget, key, prefix):
     check(prefix + ' case appears in actual case list', len(rows) == 1)
     widget.caseTable.setCurrentCell(rows[0], 0)
     widget.caseTable.selectRow(rows[0])
-    widget.openCaseButton.click()
+    # An unexpected application error must become a failed private receipt,
+    # rather than leaving unattended native QA waiting forever in a modal.
+    errors = []
+    watcher = qt.QTimer()
+    watcher.setInterval(25)
+    def dismiss_error():
+        dialog = qt.QApplication.activeModalWidget()
+        if dialog and str(dialog.windowTitle) in ('Meniscus annotation', 'Save required before closing'):
+            errors.append(widget._diagnostic or str(dialog.windowTitle))
+            dialog.accept()
+    watcher.connect('timeout()', dismiss_error)
+    watcher.start()
+    try:
+        widget.openCaseButton.click()
+    finally:
+        watcher.stop()
     events()
-    check(prefix + ' Open selected case control opens intended source', widget.session is not None and widget.session.case.key == key)
+    check(prefix + ' Open selected case control opens intended source', not errors and widget.session is not None and widget.session.case.key == key, errors or None)
 
 
 def ui_draw_points(widget, vertices, label):
@@ -1081,7 +1096,7 @@ def run_zhang_workflow():
         before_checkpoint = widget.session.current_checkpoint
         ui_draw_points(widget, vertices, 'medial')
         pending = widget._pendingDraw()
-        check(prefix + ' native unfinished contour and bottom guidance visible', pending is not None and pending.rasPoints.GetNumberOfPoints() == 4 and 'not saved' in str(widget.instruction.text) and 'Unsaved contour' in str(widget.saveStatus.text) and widget.finishContourButton.isVisible() and widget.discardContourButton.isVisible())
+        check(prefix + ' native unfinished contour and bottom guidance visible', pending is not None and pending.rasPoints.GetNumberOfPoints() == 4 and ('Unfinished contour' in str(widget.instruction.text) or 'Finish or discard' in str(widget.instruction.text)) and 'Unsaved contour' in str(widget.saveStatus.text) and widget.finishContourButton.isVisible() and widget.discardContourButton.isVisible())
         check(prefix + ' pending contour has not changed voxels', np.array_equal(widget.collectArrays()[0], before))
         widget.saveButton.click()
         events()
@@ -1139,7 +1154,7 @@ def run_zhang_workflow():
         check(prefix + ' actual Erase resolves only uncertainty', not widget.collectArrays()[1].any() and np.array_equal(widget.collectArrays()[0], anatomical_before_uncertainty))
         widget.toolButtons['Draw'].click()
         events()
-        check(prefix + ' returning to Draw hides brush and restores guidance', not widget.brushRow.isVisible() and widget.toolButtons['Draw'].checked and str(widget.instruction.text).startswith('Draw:'))
+        check(prefix + ' returning to Draw hides brush and restores guidance', not widget.brushRow.isVisible() and widget.toolButtons['Draw'].checked and 'Click around the boundary. Right-click to close and fill.' in str(widget.instruction.text))
         widget.notesPanel.collapsed = False
         widget.notes.setPlainText('AUTOMATED SOFTWARE QA: Draw-first interface regression. Arbitrary control probes on a permitted prediction; not anatomical assessment, not reader work or research approval.')
         widget.notes.moveCursor(qt.QTextCursor.End)
@@ -1372,6 +1387,159 @@ def run_blank_compatibility():
     check('blank compatibility isolated process closes normally',widget.session is None)
 
 
+def verify_saved_regions(widget, path, regions, regional_uncertainty, prefix):
+    """Independent native-grid checks; no anatomical correctness claim."""
+    for name, expected in [('regions.nii.gz', regions), ('regional_uncertainty.nii.gz', regional_uncertainty), ('regional_validity.nii.gz', np.zeros_like(regions, dtype=np.uint8))]:
+        image = sitk.ReadImage(str(Path(path)/name))
+        check(prefix+' exact reopened '+name, np.array_equal(sitk.GetArrayFromImage(image), expected))
+        check(prefix+' full native dimensions '+name, image.GetSize() == widget.session.case.shape_xyz)
+        independent = nib.load(str(Path(path)/name))
+        check(prefix+' native physical grid '+name, np.allclose(independent.affine, widget.session.case.affine_ras, atol=1e-4) and independent.header.get_xyzt_units()[0] == 'mm')
+    metadata = json.loads((Path(path)/'regions.json').read_text())
+    check(prefix+' pending protocol and honest actor', metadata['protocol']['status'] == 'pending_expert_protocol' and metadata['research_approved'] is False and metadata['annotator'] == 'Software QA (automated)' and metadata['source_identity'] == widget.session.case.identity)
+    check(prefix+' explicit unassigned dictionary', metadata['label_mapping']['7'] == 'medial unassigned' and metadata['label_mapping']['8'] == 'lateral unassigned')
+    reopened = slicer.util.loadSegmentation(str(Path(path)/'segmentation.seg.nrrd'))
+    try:
+        from MeniscusAnnotatorLib.regions import REGIONS
+        for item in REGIONS:
+            actual = slicer.util.arrayFromSegmentBinaryLabelmap(reopened,item['id'],widget.volume)
+            check(prefix+' editable regional segment '+item['id'],np.array_equal(actual>0,regions == item['value']))
+        actual = slicer.util.arrayFromSegmentBinaryLabelmap(reopened,'regional_uncertain',widget.volume)
+        check(prefix+' editable regional uncertainty',np.array_equal(actual>0,regional_uncertainty>0))
+    finally:
+        helpers=[reopened.GetDisplayNode(),reopened.GetStorageNode()]
+        slicer.mrmlScene.RemoveNode(reopened)
+        for helper in helpers:
+            if helper: slicer.mrmlScene.RemoveNode(helper)
+
+
+def run_visual_regions():
+    """Arbitrary software probes on the same two authorized practice scans."""
+    REPORT['ui_source_sha256']=sha256(REPO/'MeniscusAnnotator.py')
+    REPORT['core_source_sha256']=sha256(REPO/'MeniscusAnnotatorLib/core.py')
+    REPORT['regional_source_sha256']=sha256(REPO/'MeniscusAnnotatorLib/regions.py')
+    REPORT['source_hash_scope']=CONFIG.get('source_hash_scope')
+    check('regional scoped original hashes verified',verify_original()>0)
+    widget,keys=open_widget()
+    expected={}
+    for ordinal,key in enumerate(keys,1):
+        prefix='regional real software case '+str(ordinal)
+        ui_open_case(widget,key,prefix)
+        widget.taskCombo.setCurrentIndex(0)
+        # The close/recovery regression intentionally left one later whole
+        # draft after approval. Complete its explicit software-practice approval
+        # before testing an independent regional draft; never export that later
+        # draft as if its older approval covered it.
+        if widget.session.state['status'] != 'practice_approved':
+            labels, uncertainty = widget.collectArrays()
+            check(prefix+' primary practice setup satisfies existing approval safeguards',not widget.session.approval_errors(labels,uncertainty,practice=True))
+            widget.caseReviewPanel.collapsed=False
+            confirm_practice_approval(widget)
+            check(prefix+' primary practice setup approved through actual control',widget.session.state['status'] == 'practice_approved' and widget.session.state['approval']['accepted_research_annotation'] is False)
+        whole,whole_uncertain=widget.collectArrays()
+        initial_regions,initial_uncertain=widget.collectRegionalArrays()
+        check(prefix+' starts explicitly unassigned',not np.isin(initial_regions,range(1,7)).any() and np.all(initial_regions[whole==1] == 7) and np.all(initial_regions[whole==2] == 8))
+        primary_review=json.loads(json.dumps(widget.session.state['review']))
+        primary_approval=json.loads(json.dumps(widget.session.state['approval']))
+        widget.taskCombo.setCurrentIndex(1)
+        events()
+        check(prefix+' task shown and regional approval disabled',widget.annotationTask == 'regions' and widget.regionCombo.isVisible() and not widget.approveButton.enabled)
+        for parent,value,assigned in [('medial',1,1),('lateral',2,4)]:
+            positions=np.argwhere(whole == value)
+            k,j,i=[int(v) for v in positions[len(positions)//2]]
+            widget.goSlice(k)
+            widget.regionCombo.setCurrentIndex(0)
+            before,uncertain_before=widget.collectRegionalArrays()
+            vertices=[(i-8,j-8,k),(i+8,j-8,k),(i+8,j+8,k),(i-8,j+8,k)]
+            ui_draw_points(widget,vertices,parent)
+            check(prefix+' unfinished regional Draw retains original target '+parent,widget._pendingDraw() is not None)
+            ui_close_contour(widget,vertices[-1])
+            regions,_=widget.collectRegionalArrays()
+            changed=np.argwhere(regions != before)
+            check(prefix+' native region Draw stays inside parent and one acquired slice '+parent,len(changed)>0 and set(changed[:,0]) == {k} and np.all(whole[regions == assigned] == value) and np.any(regions == assigned))
+            check(prefix+' regional Draw preserves both whole masks '+parent,np.array_equal(widget.collectArrays()[0],whole))
+            widget.undoButton.click();events()
+            check(prefix+' regional Draw Undo exact '+parent,np.array_equal(widget.collectRegionalArrays()[0],before))
+            widget.redoButton.click();events()
+            check(prefix+' regional Draw Redo exact '+parent,np.array_equal(widget.collectRegionalArrays()[0],regions))
+            point=np.argwhere(regions[k] == assigned)[len(np.argwhere(regions[k] == assigned))//2]
+            pj,pi=[int(v) for v in point]
+            widget.regionCombo.setCurrentIndex(1)
+            ui_stroke(widget,(pi,pj,k),parent,tool='Paint',diameter=3.)
+            body,_=widget.collectRegionalArrays()
+            check(prefix+' actual Paint changes region without changing parent '+parent,np.any(body == assigned+1) and np.array_equal(widget.collectArrays()[0],whole))
+            ui_stroke(widget,(pi,pj,k),parent,tool='Erase',diameter=3.)
+            erased,_=widget.collectRegionalArrays()
+            check(prefix+' regional Erase returns tissue to unassigned '+parent,np.any((body == assigned+1) & (erased == (7 if value==1 else 8))) and np.array_equal(widget.collectArrays()[0],whole))
+            widget.undoButton.click();events()
+            check(prefix+' regional Erase Undo exact '+parent,np.array_equal(widget.collectRegionalArrays()[0],body))
+            widget.redoButton.click();events()
+            check(prefix+' regional Erase Redo exact '+parent,np.array_equal(widget.collectRegionalArrays()[0],erased))
+            widget.boundaryUncertainButton.click()
+            ui_stroke(widget,(pi,pj,k),parent,tool='Paint',diameter=2.)
+            check(prefix+' boundary uncertainty is independent '+parent,widget.collectRegionalArrays()[1].any() and np.array_equal(widget.collectArrays()[0],whole) and np.array_equal(widget.collectArrays()[1],whole_uncertain))
+            widget.boundaryUncertainButton.click()
+            widget.regionCombo.setCurrentIndex(2)
+            widget.regionalAssessmentPanel.collapsed=False
+            widget.regionStatusCombo.setCurrentIndex(2)
+            events()
+            check(prefix+' absent posterior region allowed without tissue '+parent,widget.regionalState['assessments'][parent+'_posterior']['status'] == 'absent' and not np.any(widget.collectRegionalArrays()[0] == assigned+2))
+        widget.regionNotes.setPlainText('AUTOMATED SOFTWARE QA only: arbitrary regional control probe, not expert boundaries.')
+        widget.regionNotes.moveCursor(qt.QTextCursor.End)
+        widget.regionNotes.setFocus()
+        active=widget.editor.activeEffect().name
+        for kind in (qt.QEvent.KeyPress,qt.QEvent.KeyRelease):
+            qt.QApplication.sendEvent(widget.regionNotes,qt.QKeyEvent(kind,qt.Qt.Key_D,qt.Qt.NoModifier,'d'))
+        events()
+        check(prefix+' region notes do not trigger Draw shortcut',str(widget.regionNotes.toPlainText()).endswith('d') and widget.editor.activeEffect().name == active)
+        check(prefix+' whole review and approval remain independent',widget.session.state['review'] == primary_review and widget.session.state['approval'] == primary_approval)
+        widget.saveButton.click();events()
+        check(prefix+' actual Save includes regions without claiming regional approval',not widget.dirty and widget.session.state['status'] == 'practice_approved' and widget.session.state['approval'] == primary_approval and widget.regionalState['research_approved'] is False)
+        regions,uncertain=widget.collectRegionalArrays()
+        verify_saved_regions(widget,widget.session.current_checkpoint,regions,uncertain,prefix)
+        arrays=REPORT_DIR/('private-regions-expected-'+str(ordinal)+'.npz')
+        np.savez_compressed(arrays,whole=whole,whole_uncertainty=whole_uncertain,regions=regions,regional_uncertainty=uncertain)
+        arrays.chmod(0o600)
+        expected[key]={'arrays_path':str(arrays),'regional_state':widget.regionalState,'whole_review':primary_review,'whole_approval':primary_approval,'slice_index':widget.currentSlice,'region':widget.activeRegion,'compartment':widget._parentCompartment()}
+        image=REPORT_DIR/('private-regional-real-'+str(ordinal)+'.png')
+        slicer.util.mainWindow().grab().save(str(image));image.chmod(0o600)
+    write_private(REPORT_DIR/'private-regional-expectations.json',expected)
+    archive=export_through_actual_ui(widget)
+    with zipfile.ZipFile(archive) as z:
+        for key,item in expected.items():
+            folder='cases/'+hashlib.sha256(key.encode()).hexdigest()[:24]+'/'
+            metadata=json.loads(z.read(folder+'regions.json'))
+            check('regional exported draft metadata remains pending '+str(keys.index(key)+1),metadata['research_approved'] is False and metadata['protocol']['status'] == 'pending_expert_protocol')
+            for filename,field in [('regions.nii.gz','regions'),('regional_uncertainty.nii.gz','regional_uncertainty'),('regional_validity.nii.gz',None)]:
+                temp=REPORT_DIR/('private-export-regional-'+str(keys.index(key))+'-'+filename)
+                temp.write_bytes(z.read(folder+filename));temp.chmod(0o600)
+                image=sitk.ReadImage(str(temp));array=sitk.GetArrayFromImage(image)
+                arrays=np.load(item['arrays_path'])
+                check('regional export exact grid and voxels '+str(keys.index(key))+' '+filename,image.GetSize() == widget.dataset.by_key[key].shape_xyz and np.array_equal(array,arrays[field] if field else np.zeros_like(arrays['regions'])))
+                temp.unlink()
+    check('regional original input files remain unchanged',verify_original()>0)
+    widget.closeCase()
+    events()
+
+
+def run_visual_regions_cold():
+    widget,keys=open_widget()
+    expected=json.loads((REPORT_DIR/'private-regional-expectations.json').read_text())
+    prior=json.loads((REPORT_DIR/'private-workflow-visual_regions.json').read_text())
+    check('regional cold follows passed same application',prior['passed'] and prior['ui_source_sha256'] == sha256(REPO/'MeniscusAnnotator.py') and prior['regional_source_sha256'] == sha256(REPO/'MeniscusAnnotatorLib/regions.py'))
+    for ordinal,key in enumerate(keys,1):
+        prefix='regional cold real case '+str(ordinal)
+        ui_open_case(widget,key,prefix)
+        item=expected[key];arrays=np.load(item['arrays_path'])
+        whole,whole_uncertain=widget.collectArrays();regions,uncertain=widget.collectRegionalArrays()
+        check(prefix+' exact whole and regional arrays after process restart',all(np.array_equal(a,b) for a,b in [(whole,arrays['whole']),(whole_uncertain,arrays['whole_uncertainty']),(regions,arrays['regions']),(uncertain,arrays['regional_uncertainty'])]))
+        check(prefix+' whole review/approval and regional metadata preserved',widget.session.state['review'] == item['whole_review'] and widget.session.state['approval'] == item['whole_approval'] and widget.regionalState == item['regional_state'])
+        check(prefix+' task compartment region and slice restored',widget.annotationTask == 'regions' and widget._parentCompartment() == item['compartment'] and widget.activeRegion == item['region'] and widget.currentSlice == item['slice_index'])
+        verify_saved_regions(widget,widget.session.current_checkpoint,regions,uncertain,prefix)
+    check('regional cold original input files unchanged',verify_original()>0)
+    widget.closeCase();events()
+
+
 try:
     if PHASE == 'workflow':
         run_workflow()
@@ -1397,6 +1565,10 @@ try:
         run_zhang_contour_probe()
     elif PHASE == 'zhang_contour_recheck':
         run_zhang_contour_probe()
+    elif PHASE == 'visual_regions':
+        run_visual_regions()
+    elif PHASE == 'visual_regions_cold':
+        run_visual_regions_cold()
     elif PHASE == 'blank_compatibility':
         run_blank_compatibility()
     else:

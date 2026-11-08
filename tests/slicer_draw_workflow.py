@@ -232,6 +232,15 @@ def discard(widget, confirm):
 
 
 def approve(widget):
+    widget.caseReviewPanel.collapsed = False
+    events()
+    scroll = widget.rightDock.findChild(qt.QScrollArea)
+    if scroll is not None:
+        scroll.ensureWidgetVisible(widget.approveButton)
+    events()
+    check('whole approval remains reachable inside expanded case details',
+          widget.approveButton.isVisible()
+          and widget.approveButton.visibleRegion().boundingRect().contains(widget.approveButton.rect))
     state = {'seen': False, 'error': None}
     timer = qt.QTimer()
     timer.setInterval(20)
@@ -334,7 +343,7 @@ def open_case_ui(widget, key_value):
           and widget.session.case.key == key_value)
 
 
-def open_widget(source, work):
+def open_widget(source, work, force_docks=True):
     global WIDGET
     slicer.util.selectModule('MeniscusAnnotator')
     WIDGET = slicer.modules.meniscusannotator.widgetRepresentation().self()
@@ -342,8 +351,9 @@ def open_widget(source, work):
     settings.parent.mkdir(parents=True, exist_ok=True)
     WIDGET.settings = qt.QSettings(str(settings), qt.QSettings.IniFormat)
     WIDGET.openDataset(str(source), work_root=str(work))
-    WIDGET.casesToggle.setChecked(True)
-    WIDGET.toolsToggle.setChecked(True)
+    if force_docks:
+        WIDGET.casesToggle.setChecked(True)
+        WIDGET.toolsToggle.setChecked(True)
     events()
     app_source = Path(inspect.getsourcefile(WIDGET.__class__)).resolve()
     REPORT['application_source_path'] = str(app_source)
@@ -755,7 +765,6 @@ def workflow(exit_application):
             widget.notesPanel.collapsed = True
             widget.caseReviewPanel.collapsed = True
             widget.goSlice(item['medial_seed_ijk'][2])
-            widget._resetView()
             slicer.util.mainWindow().resize(1280, 800)
             events()
             red().sliceView().forceRender()
@@ -963,13 +972,13 @@ def layout():
     while time.monotonic() < startup_until:
         events()
         time.sleep(.01)
-    widget.notesPanel.collapsed = False
-    widget.caseReviewPanel.collapsed = False
+    widget.notesPanel.collapsed = True
+    widget.caseReviewPanel.collapsed = True
     REPORT['scale_scope'] = ('QT_SCALE_FACTOR simulation in an actual desktop process; '
                              'not human review or native Windows display-setting acceptance')
     REPORT['scale_factor_environment'] = os.environ.get('QT_SCALE_FACTOR')
     REPORT['layouts'] = []
-    for width, height in [(1280, 800), (1366, 768), (1440, 900)]:
+    for width, height in [(1280, 800), (1366, 768), (1440, 900), (1024, 640)]:
         window.resize(width, height)
         events()
         red().sliceView().forceRender()
@@ -1059,9 +1068,10 @@ def layout():
         red().sliceView().forceRender()
         entry['pending_actual_logical_size'] = [window.width, window.height]
         entry['pending_controls'] = []
-        for control in (widget.finishContourButton, widget.discardContourButton, widget.instruction,
-                        widget.saveButton, widget.reviewButton, widget.approveButton,
-                        widget.progress, widget.sliceReadout, widget.sliceState):
+        pending_controls = [widget.finishContourButton, widget.discardContourButton, widget.instruction,
+                            widget.saveButton, widget.reviewButton, widget.sliceReadout]
+        pending_controls += [control for control in (widget.progress, widget.sliceState) if control.isVisible()]
+        for control in pending_controls:
             rect = qt.QRect(control.mapTo(window, qt.QPoint(0, 0)), control.size)
             detail = {'text': str(getattr(control, 'text', '')),
                       'window_rect': [rect.x(), rect.y(), rect.width(), rect.height()],
@@ -1073,6 +1083,21 @@ def layout():
                   detail['visible'] and detail['contained'] and detail['fully_visible_region'], detail)
         window.grab().save(str(OUTPUT / ('synthetic-draw-pending-' + SCALE_NAME + '-' + str(width) + '.png')))
         discard(widget, True)
+        widget.notesPanel.collapsed = False
+        widget.caseReviewPanel.collapsed = False
+        events()
+        if scroll is not None:
+            scroll.ensureWidgetVisible(widget.approveButton)
+        events()
+        check('scale ' + SCALE_NAME + ' approval is reachable in expanded case details',
+              widget.approveButton.isVisible()
+              and widget.approveButton.visibleRegion().boundingRect().contains(widget.approveButton.rect))
+        window.grab().save(str(OUTPUT / ('synthetic-draw-details-' + SCALE_NAME + '-' + str(width) + '.png')))
+        widget.notesPanel.collapsed = True
+        widget.caseReviewPanel.collapsed = True
+        if scroll is not None:
+            scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().minimum)
+        events()
     widget.closeCase()
 
 

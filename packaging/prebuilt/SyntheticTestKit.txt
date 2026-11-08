@@ -25,6 +25,14 @@ Start menu. Open that folder in File Explorer and run the named executable:
   fixture. Maintainer CI can set QT_SCALE_FACTOR and MENISCUS_DRAW_SCALE_NAME
   before launch. Such simulation is not physical Windows display-DPI testing.
 
+  MeniscusAnnotatorRegionsChecks.exe - exercises the optional regional draft
+  workflow on known synthetic grids, with separate six-region state and whole
+  medial/lateral labels preserved. Expert protocol remains pending; technical
+  checks do not approve regions or accept any regional training voxels.
+
+  MeniscusAnnotatorRegionsResumeCheck.exe - after successful regional checks,
+  reopens that same managed synthetic work in a separate process.
+
   MeniscusAnnotatorCorrectionChecks.exe - uses a separate automated fixture through Open dataset,
   exact starting-mask loading, native-plane paint/erase/undo/redo, save/reopen,
   practice approval, actual Export/Cancel dialog buttons and ZIP verification.
@@ -48,6 +56,7 @@ location / Meniscus Annotator synthetic tests. Input examples, work, exports and
 reports stay there, outside the installation and ordinary annotation work.
 Reports are installed-tests.json, correction-workflow.json (correction routes),
 draw-workflow.json/draw-resume.json/draw-layout-SCALE.json (Draw routes), and
+regions-workflow.json/regions-resume.json (regional routes), and
 slicer-workflow.json (general workflow/resume). Reports include the installed
 source commit and source fingerprint; the 0.1.0 label alone is not build identity.
 Uncertainty and practice results remain explicitly marked. Technical acceptance
@@ -62,6 +71,8 @@ Python installation (set $install to the chosen installation folder):
   & (Join-Path $install 'MeniscusAnnotatorCorrectionResumeCheck.exe')
   & (Join-Path $install 'MeniscusAnnotatorDrawChecks.exe')
   & (Join-Path $install 'MeniscusAnnotatorDrawResumeCheck.exe')
+  & (Join-Path $install 'MeniscusAnnotatorRegionsChecks.exe')
+  & (Join-Path $install 'MeniscusAnnotatorRegionsResumeCheck.exe')
 
 RunSyntheticChecks.ps1 is an optional convenience for maintainers. Do not bypass
 institutional script restrictions; the native executables above are available.

@@ -25,8 +25,9 @@ cancel and obtain the correction package. In **Reader identity**, enter your
 **Reader name or study ID** and choose **Continue**. Use the same spelling each
 time. If the assignment already names a reader, confirm it only if it is yours.
 
-The header shows the case, knee side and active compartment. **Case details and
-review** identifies correction or blank annotation. A slice can have no starting
+The header shows the case, visit, knee side and save state. The selected compartment
+appears in the annotation panel. **Case details and approval** shows the reader,
+dataset information and correction or blank mode. A slice can have no starting
 mask even when a prediction is loaded for the case. The neutral message **No
 starting mask on this slice** does not mean the meniscus is absent or that one
 must be drawn. Inspect the complete acquired stack under the supplied protocol.
@@ -95,36 +96,65 @@ On reopening, recover work from saved checkpoints; the previous session's
 in-memory undo history is not restored.
 
 Use **Show annotation** beside the editing tools to inspect the underlying MRI.
-Thin outlines are the default. **Display and orientation** provides adjustable
+Thin outlines are the default. **Image and annotation display** provides adjustable
 transparent fill, window/level, Reset view and orientation reformats. These are
 display settings; they do not move, smooth or change the saved boundary.
 Use the slice slider, Previous/Next, mouse wheel or Go to for acquired-slice
 navigation. **Ctrl+wheel zooms; middle-button dragging pans.** Draw reserves the
 right button for finishing: a right-drag keeps the unfinished contour and does
-not zoom or apply it. To adjust brightness and contrast, open **Display and orientation**,
+not zoom or apply it. To adjust brightness and contrast, open **Image and annotation display**,
 choose **Window/level**, then **left-drag on the image**. Choose Paint, Draw or
 Erase to return to annotation. Zoom and window/level remain in effect while
 stepping through the case. **Cases** and **Tools** in the
-header collapse the side panels. Panel widths and brush diameter are remembered.
+header collapse and reopen the side panels. Their visibility and widths are
+remembered. Close Cases while drawing to give the MRI more space. Brush diameter
+is also remembered.
 
-## Compartments and anatomical regions
+## Whole menisci and regions
 
-Labels are the complete medial meniscus (1) and lateral meniscus (2), including
-the body, plus separate uncertainty. Knee side, screen mirroring and acquisition
-order never swap these identities. Orientation letters come from the verified
-physical image geometry, not screen-side assumptions.
+Whole-meniscus labels remain the complete medial meniscus (1) and lateral
+meniscus (2), including the body. Knee side, mirroring and slice order never swap
+these identities. Correct the whole masks first under the supplied protocol.
 
-Separate anterior/posterior or horn annotations are not provided. They require
-expert-defined boundaries, a versioned label schema and downstream training-loader
-support. Geometric halves are not anatomical horns, and the existing
-post-processing does not establish validated anatomical horn separation.
+**Task → Regions** assigns **Anterior horn**, **Body** or **Posterior horn** within
+the selected Medial or Lateral mask. The same Draw, Erase and Paint tools apply
+only inside that parent meniscus. To add missing tissue, return to **Whole
+meniscus**. Erasing a regional assignment makes that tissue unassigned; it does
+not erase the whole mask. Turn off **Show regions** to inspect the MRI.
+
+Existing whole-only masks start **Not assigned**. Regions are never initialized
+from image halves, bounding-box thirds, screen position or slice number. Use
+**Regional assessment** to record Present, Absent or Uncertain for the selected
+region and add a note; leave **Not assessed** until it has been considered. An
+absent region need not contain voxels, and a region with assigned voxels cannot
+be recorded as absent. **Boundary
+uncertain** records separate regional uncertainty; it never creates another
+training class. **Flag regional review** records attention. In
+Regions, **Mark reviewed and next** reviews the selected compartment on the
+acquired slice. Repeat regional review for both compartments; this is tracked
+separately from whole-meniscus review.
+
+![Actual regional practice controls with a synthetic volume](images/regional-workflow.png)
+
+**The regional anatomical protocol is pending.** Study experts must
+supply the boundaries and handling of roots, tears, maceration, surgery and
+uncertain tissue. The controls support draft software practice; they do not
+establish anatomical rules or validated horn separation. Regional research
+approval is unavailable, and all regional training-validity voxels are zero in
+this version, even if the whole mask has been approved.
+
+If a whole mask changes, assignments outside its updated parent are removed,
+new tissue becomes unassigned and affected regional review needs rechecking.
+Earlier saved versions remain intact. Save draft preserves both representations;
+saving never approves either task. See [the regional file contract](REGIONAL_CONTRACT.md)
+for the fixed six-region dictionary and explicit unassigned values.
 
 ## Review, save and approve
 
 Scrolling does **not** mark a slice reviewed. After inspecting each slice,
-including an empty one, use **Mark reviewed and next**. **Jump to → Next unreviewed slice** and
+including an empty one, use **Mark reviewed and next**. **Jump → Next unreviewed slice** and
 **Next flagged slice** help finish review. A flag records attention separately from
-review. **Reviewed** or **Not reviewed** appears below the slice counter. Any
+review. **Reviewed** or **Not reviewed** appears in the bottom strip. Any
 anatomical or uncertainty edit marks affected slices for rechecking. Expand
 **Slice notes and flags** for notes or attention flags; keyboard drawing shortcuts
 do not act while typing.
@@ -138,8 +168,10 @@ two instances on the same case. If the application crashes, reopen the dataset
 and case to restore the newest intact saved checkpoint. Unsaved changes since
 the last checkpoint may be lost.
 
-Before approval, review all slices, resolve all uncertainty/flags, and confirm
-both compartment checkboxes. **Approve case** then requires your deliberate
+For whole-meniscus approval, choose **Task → Whole meniscus**, review all slices,
+resolve whole-mask uncertainty and flags, and expand
+**Case details and approval**. Confirm both compartment checkboxes there, then choose
+**Approve case**. Approval requires your deliberate
 confirmation. In the ordinary assigned-annotation workflow, the named reader is recorded as
 both annotator and approver; this is not an independent second-reader review. Technical checks do not establish anatomical
 correctness. Without a released protocol, approval is clearly marked **practice**.
@@ -166,6 +198,10 @@ labels, separate uncertainty/validity images, slice-review tables, hashes and
 annotation/approval metadata. It uses the latest preserved eligible approval,
 even when a later unfinished draft exists. Never substitute a draft for an
 approved export. Training code must respect validity and uncertainty records.
+When regional work is included, its labels, separate uncertainty, review records
+and protocol provenance remain draft regional files. Whole-meniscus approval
+does not approve them. Their regional validity image is zero everywhere while
+the expert protocol is pending.
 SOFTWARE PRACTICE exports use the `SOFTWARE_PRACTICE_ONLY-` prefix, remain separate, have all-zero validity images and
 must not be used as accepted research annotations.
 

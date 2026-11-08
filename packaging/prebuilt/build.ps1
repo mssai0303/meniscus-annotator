@@ -84,6 +84,8 @@ $receipt = [ordered]@{
   nsis='3.13'; sevenzip='26.05'; install_test='NOT RUN'; runtime_import_test='NOT RUN'
   synthetic_desktop_test='NOT RUN'; synthetic_resume_test='NOT RUN'; synthetic_correction_test='NOT RUN'; synthetic_correction_resume_test='NOT RUN'
   synthetic_draw_test='NOT RUN'; synthetic_draw_resume_test='NOT RUN'; synthetic_draw_layout_tests='NOT RUN'
+  synthetic_regional_test='NOT RUN'; synthetic_regional_resume_test='NOT RUN'; synthetic_regional_legacy_test='NOT RUN'
+  regional_reader_example_import_test='NOT RUN'
   installed_graphics_probe='NOT RUN'; installed_graphics_mode='system'
   offline_runtime_import_test='NOT RUN'; process_network_block='NOT RUN'
   Windows11_interactive_acceptance='NOT RUN'; Horizon_Windows10_19045_acceptance='NOT RUN'
@@ -135,6 +137,19 @@ if ($TestInstall) {
   $receipt['runtime_import_test']=$health
   if ($NetworkRules.Count -eq 2) { $receipt['offline_runtime_import_test']='PASSED: installed normal runtime imports/identity completed while its native process had outbound network denied' }
   Remove-Item Env:\MENISCUS_PACKAGE_CHECK
+  $RegionalExample = Join-Path $Installed 'Examples\read_regional_annotation.py'
+  if (Test-Path -LiteralPath $RegionalExample) {
+    $ReaderEvidence = Join-Path $BuildRoot 'regional-reader-check'
+    New-Item -ItemType Directory -Force $ReaderEvidence | Out-Null
+    $ReaderProcess = Start-Process -FilePath (Join-Path $Installed 'bin\PythonSlicer.exe') `
+      -ArgumentList @(('"' + $RegionalExample + '"'),'--help') -WorkingDirectory $Installed `
+      -RedirectStandardOutput (Join-Path $ReaderEvidence 'stdout.txt') `
+      -RedirectStandardError (Join-Path $ReaderEvidence 'stderr.txt') -PassThru
+    if (-not $ReaderProcess.WaitForExit(60000)) { $ReaderProcess.Kill($true); throw 'Installed optional regional reader import exceeded one minute.' }
+    $ReaderHelp = Get-Content -Raw (Join-Path $ReaderEvidence 'stdout.txt')
+    if ($ReaderProcess.ExitCode -ne 0 -or $ReaderHelp -notmatch '--case-key' -or $ReaderHelp -notmatch '--source-image') { throw 'Installed optional regional reader failed to import through the bundled runtime.' }
+    $receipt['regional_reader_example_import_test']='PASSED: optional example loads installed application helpers via bundled Python; no annotation input read, edited or approved'
+  }
   $TestBase = Join-Path $env:LOCALAPPDATA 'Meniscus Annotator synthetic tests'
   $env:MENISCUS_TEST_AUTOCLOSE = '1'
   $env:MENISCUS_TEST_RUN_ID = [Guid]::NewGuid().ToString('N')
@@ -160,6 +175,35 @@ if ($TestInstall) {
     $receipt['installed_graphics_mode']=$Graphics.selected_mode
     $GraphicsContext = Enter-InstalledGraphicsMode -Installed $Installed -Mode $Graphics.selected_mode
     try {
+    # Optional regional draft workflow uses separate synthetic state, preserves
+    # whole labels, and never treats protocol-pending regions as research labels.
+    foreach ($Action in @('regions','regions-resume','regions-legacy')) {
+      $env:MENISCUS_TEST_RUN_ID = [Guid]::NewGuid().ToString('N')
+      $RegionalRoot = Join-Path $TestBase $env:MENISCUS_TEST_RUN_ID
+      $RegionalEvidence = Join-Path $BuildRoot ('synthetic-' + $Action)
+      New-Item -ItemType Directory -Force $RegionalEvidence | Out-Null
+      $Entry = switch ($Action) {
+        'regions' { 'MeniscusAnnotatorRegionsChecks.exe' }
+        'regions-resume' { 'MeniscusAnnotatorRegionsResumeCheck.exe' }
+        'regions-legacy' { 'MeniscusAnnotatorRegionsLegacyCheck.exe' }
+      }
+      $RegionalProcess = Start-Process -FilePath (Join-Path $Installed $Entry) `
+        -RedirectStandardOutput (Join-Path $RegionalEvidence 'stdout.txt') `
+        -RedirectStandardError (Join-Path $RegionalEvidence 'stderr.txt') -PassThru
+      if (-not $RegionalProcess.WaitForExit(300000)) { $RegionalProcess.Kill($true); throw "Installed $Action checks exceeded five minutes." }
+      if (Test-Path -LiteralPath $RegionalRoot) {
+        Get-ChildItem -LiteralPath $RegionalRoot -Recurse -File | Where-Object { $_.Extension -in @('.json','.png') } | Copy-Item -Destination $RegionalEvidence
+      }
+      if ($RegionalProcess.ExitCode -ne 0) { throw "Installed $Action failed; inspect its reports." }
+      $RegionalReport = Get-Content -Raw (Join-Path $RegionalRoot 'installed-tests.json') | ConvertFrom-Json
+      if (-not $RegionalReport.passed -or $RegionalReport.application_source_sha256 -ne $Distribution.application_source_sha256) { throw "Installed $Action result or source identity failed." }
+      $Key = switch ($Action) {
+        'regions' { 'synthetic_regional_test' }
+        'regions-resume' { 'synthetic_regional_resume_test' }
+        'regions-legacy' { 'synthetic_regional_legacy_test' }
+      }
+      $receipt[$Key]=$RegionalReport
+    }
     # New Draw/Erase interaction and the eight known-geometry combinations.
     # Layout passes simulate Qt scale factors; they are not physical display-DPI
     # or human interaction acceptance on Windows 10/11.
@@ -255,6 +299,9 @@ if ($TestInstall) {
       $receipt['synthetic_draw_test']=$Blocked
       $receipt['synthetic_draw_resume_test']=$Blocked
       $receipt['synthetic_draw_layout_tests']=$Blocked
+      $receipt['synthetic_regional_test']=$Blocked
+      $receipt['synthetic_regional_resume_test']=$Blocked
+      $receipt['synthetic_regional_legacy_test']=$Blocked
       $receipt['installed_graphics_mode']=$null
       Checked $Python @((Join-Path $PSScriptRoot 'verify-installed.py'),$Installed)
       $receipt['graphics_probe_cleanup']='PASSED: all probe aliases removed; original installed payload hashes retained'

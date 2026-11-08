@@ -1,5 +1,25 @@
 # Changelog
 
+## Visual and regional review 1 — 8 November 2026
+
+- Replace the large tool tiles and three-row footer with a compact clinical
+  workspace: one-line case header, narrow annotation toolbar and two-row slice
+  controls. Approval sits with its case-review requirements.
+- Use quieter gray panels, regular 11 pt system text, restrained selection/focus
+  states and consistent line icons. Keep mask display and native image geometry
+  unchanged.
+- Remember explicit Cases/Tools visibility, retain direct access to case selection
+  and adapt secondary information to smaller logical work areas.
+- Prepare a separate Mac preview and Windows x64 review candidate. Earlier
+  preview work and the shared installer remain preserved.
+
+- Add a separate draft regional task for anterior horn/body/posterior horn inside
+  each whole meniscus, with explicit unassigned tissue, boundary uncertainty,
+  separate reviews and parent-constrained native editing. Regional research
+  approval and training validity remain blocked pending expert definitions.
+- Preserve whole-only checkpoint compatibility and attribution; extended atomic
+  saves/exports retain both native-grid representations and fixed dictionaries.
+
 ## Draw workflow review — 8 November 2026
 
 - Draw is the case-opening default; Draw/Erase lead the compact tools, and brush

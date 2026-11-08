@@ -16,7 +16,7 @@ import zipfile
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 LOCK = json.loads((HERE / 'dependencies.json').read_text(encoding="utf-8"))
-GUIDE_IMAGES = ('annotation-workflow.png', 'draw-unfinished.png')
+GUIDE_IMAGES = ('annotation-workflow.png', 'draw-unfinished.png', 'regional-workflow.png')
 
 def digest(path, algorithm='sha256'):
     h = hashlib.new(algorithm)
@@ -101,7 +101,8 @@ def prepare(runtime, installer, output, cache):
     # source checkout/application copy is placed in TestKit.
     kit = output / 'TestKit'
     for relative in ('tests/slicer_workflow.py', 'tests/slicer_export_dialog.py',
-                     'tests/slicer_draw_workflow.py', 'tests/draw_fixture.py', 'tools/make_synthetic.py'):
+                     'tests/slicer_draw_workflow.py', 'tests/slicer_regions_workflow.py',
+                     'tests/draw_fixture.py', 'tools/make_synthetic.py'):
         destination = kit / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO / relative, destination)
@@ -116,7 +117,7 @@ def prepare(runtime, installer, output, cache):
     # The real application derives this canonical settings filename from
     # MeniscusAnnotatorTestApp-real.exe, even when an action alias launched it.
     # Both the canonical pair and action aliases must exist.
-    for stem, action in (('MeniscusAnnotatorTest', 'workflow'), ('MeniscusAnnotatorChecks', 'workflow'), ('MeniscusAnnotatorResumeCheck', 'resume'), ('MeniscusAnnotatorExamples', 'create'), ('MeniscusAnnotatorCorrectionChecks', 'correction'), ('MeniscusAnnotatorCorrectionResumeCheck', 'correction-resume'), ('MeniscusAnnotatorDrawChecks', 'draw'), ('MeniscusAnnotatorDrawResumeCheck', 'draw-resume'), ('MeniscusAnnotatorDrawLayoutChecks', 'draw-layout')):
+    for stem, action in (('MeniscusAnnotatorTest', 'workflow'), ('MeniscusAnnotatorChecks', 'workflow'), ('MeniscusAnnotatorResumeCheck', 'resume'), ('MeniscusAnnotatorExamples', 'create'), ('MeniscusAnnotatorCorrectionChecks', 'correction'), ('MeniscusAnnotatorCorrectionResumeCheck', 'correction-resume'), ('MeniscusAnnotatorDrawChecks', 'draw'), ('MeniscusAnnotatorDrawResumeCheck', 'draw-resume'), ('MeniscusAnnotatorDrawLayoutChecks', 'draw-layout'), ('MeniscusAnnotatorRegionsChecks', 'regions'), ('MeniscusAnnotatorRegionsResumeCheck', 'regions-resume'), ('MeniscusAnnotatorRegionsLegacyCheck', 'regions-legacy')):
         shutil.copy2(output / 'Slicer.exe', output / (stem + '.exe'))
         test_config = config.replace('/bin/MeniscusAnnotatorApp-real.exe', '/bin/MeniscusAnnotatorTestApp-real.exe')
         test_config = test_config.replace('name=MeniscusAnnotator\n', 'name=MeniscusAnnotatorTest\n')
@@ -152,6 +153,21 @@ def prepare(runtime, installer, output, cache):
             guide_text = guide_text.replace('images/' + name, 'GuideImages/' + name)
         (output / 'UserGuide.txt').write_text(guide_text, encoding='utf-8')
     shutil.copy2(REPO / 'docs' / 'QUICK_START.html', output / 'ReaderGuide.html')
+    for name in ('REGIONAL_CONTRACT.md', 'REGIONAL_READER.md'):
+        shutil.copy2(REPO / 'docs' / name, output / name)
+    example = REPO / 'tools' / 'read_regional_annotation.py'
+    if example.is_file():
+        examples = output / 'Examples'
+        examples.mkdir()
+        shutil.copy2(example, examples / example.name)
+        (examples / 'README.txt').write_text(
+            'Optional coordinator/developer regional loading example\n\n'
+            'read_regional_annotation.py is an inspectable technical example, not a reader startup dependency or accepted training integration.\n'
+            'Ordinary annotation uses the installed application; the reader does not need a terminal, Python installation or dependency setup.\n'
+            'Coordinators can use a compatible Python environment with numpy/nibabel or the bundled Slicer Python runtime. '
+            'The example locates MeniscusAnnotatorLib in this installation or a source checkout.\n'
+            'Read ../REGIONAL_READER.md and ../REGIONAL_CONTRACT.md. Current regional protocol is pending; the example excludes every training target.\n',
+            encoding='utf-8')
     (output / 'GuideImages').mkdir()
     # Explicit data-free screenshots only, never a general source-image copy.
     for name in GUIDE_IMAGES:

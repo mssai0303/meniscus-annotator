@@ -146,7 +146,14 @@ def run():
         events()
         red = slicer.app.layoutManager().sliceWidget('Red')
         red.sliceView().forceRender()
-        check('collapsed tools retain active label and Draw guidance', 'Medial meniscus' in str(widget.identityLabel.text) and 'Draw' in str(widget.instruction.text) and 'Right-click to close and fill' in str(widget.instruction.text))
+        guidance = plain_label(widget.instruction)
+        case_header = plain_label(widget.identityLabel)
+        side_text = 'Left knee' if widget.session.case.metadata['knee_side'] == 'L' else 'Right knee'
+        check('collapsed tools retain active label and Draw guidance',
+              'Medial meniscus' in guidance and 'Draw' in guidance
+              and 'Right-click to close and fill' in guidance
+              and widget.session.case.metadata['participant_id'] in case_header
+              and side_text in case_header)
         check('collapsed panels retain acquired-slice readout and slider', widget.sliceReadout.isVisible() and widget.sliceSlider.isVisible() and str(widget.currentSlice+1) in plain_label(widget.sliceReadout))
         matrix = red.mrmlSliceNode().GetSliceToRAS()
         point = np.array([matrix.GetElement(axis,3) for axis in range(3)]+[1])

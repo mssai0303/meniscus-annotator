@@ -18,7 +18,8 @@ ROOT = Path(qt.QStandardPaths.writableLocation(qt.QStandardPaths.GenericDataLoca
 STATE = ROOT / 'last-workflow.json'
 CORRECTION_STATE = ROOT / 'last-correction-workflow.json'
 DRAW_STATE = ROOT / 'last-draw-workflow.json'
-ACTIONS = {'workflow', 'resume', 'create', 'correction', 'correction-resume', 'draw', 'draw-resume', 'draw-layout'}
+REGIONS_STATE = ROOT / 'last-regions-workflow.json'
+ACTIONS = {'workflow', 'resume', 'create', 'correction', 'correction-resume', 'draw', 'draw-resume', 'draw-layout', 'regions', 'regions-resume', 'regions-legacy'}
 
 
 def text_file(path, value):
@@ -95,6 +96,41 @@ def start():
         for key in ('MENISCUS_TEST_OUTPUT', 'MENISCUS_RESUME_FROM', 'MENISCUS_TEST_KEEP_OPEN', 'MENISCUS_TEST_CLOSE_WINDOW', 'MENISCUS_TEST_LAYOUT'):
             os.environ.pop(key, None)
         make_synthetic = source_helpers()
+        if action in ('regions', 'regions-resume', 'regions-legacy'):
+            original = output
+            if action == 'regions-resume':
+                previous = json.loads(REGIONS_STATE.read_text(encoding='utf-8'))
+                previous_id = checked_run_id(previous['run_id'])
+                original = ROOT / previous_id
+                marker = json.loads((original / 'installed-tests.json').read_text(encoding='utf-8'))
+                if marker.get('action') != 'regions' or not marker.get('passed') or marker.get('run_id') != previous_id:
+                    raise ValueError('No completed synthetic regional workflow is available for this check.')
+                if marker.get('application_source_sha256') != receipt['application_source_sha256']:
+                    raise ValueError('Regional restart checks require the same installed application build.')
+            phase = {'regions': 'workflow', 'regions-resume': 'resume', 'regions-legacy': 'legacy'}[action]
+            regions_root = original / 'Regional workflow'
+            os.environ['MENISCUS_REGIONS_OUTPUT'] = str(regions_root)
+            os.environ['MENISCUS_REGIONS_PHASE'] = phase
+            report_name = 'regions-' + phase + '.json'
+            qt.QApplication.setQuitOnLastWindowClosed(False)
+            runpy.run_path(str(INSTALL / 'WorkflowShell.py'))['focus_workflow_shell']()
+            namespace = runpy.run_path(str(KIT / 'tests' / 'slicer_regions_workflow.py'))
+            report = namespace['run_phase'](exit_application=False)
+            if original != output:
+                import shutil
+                shutil.copy2(regions_root / report_name, output / report_name)
+                for screenshot in regions_root.glob('*.png'):
+                    shutil.copy2(screenshot, output / screenshot.name)
+            receipt.update(passed=bool(report.get('passed')), checks=len(report.get('checks', [])),
+                           report=str((regions_root / report_name).relative_to(output)) if original == output else report_name,
+                           regional_phase=phase,
+                           regional_scope='Technical synthetic workflow only; pending expert protocol, no accepted regional training annotations')
+            text_file(output / 'installed-tests.json', receipt)
+            if receipt['passed'] and action == 'regions':
+                text_file(REGIONS_STATE, {'run_id': run_id})
+            finish(('Passed ' if receipt['passed'] else 'Failed during ') + str(receipt['checks']) +
+                   ' synthetic regional checks.', output, receipt['passed'])
+            return
         if action in ('draw', 'draw-resume', 'draw-layout'):
             original = output
             if action != 'draw':

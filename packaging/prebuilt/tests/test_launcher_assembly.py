@@ -48,10 +48,12 @@ def test_every_real_test_application_has_its_canonical_launcher_settings(tmp_pat
     canonical = (output / 'bin/MeniscusAnnotatorTestLauncherSettings.ini').read_text(encoding='utf-8')
     assert 'MENISCUS_TEST_ACTION=' not in canonical
     for alias, action in [('Examples', 'create'), ('CorrectionChecks', 'correction'), ('CorrectionResumeCheck', 'correction-resume'),
-                          ('DrawChecks', 'draw'), ('DrawResumeCheck', 'draw-resume'), ('DrawLayoutChecks', 'draw-layout')]:
+                          ('DrawChecks', 'draw'), ('DrawResumeCheck', 'draw-resume'), ('DrawLayoutChecks', 'draw-layout'),
+                          ('RegionsChecks', 'regions'), ('RegionsResumeCheck', 'regions-resume'),
+                          ('RegionsLegacyCheck', 'regions-legacy')]:
         config = (output / ('bin/MeniscusAnnotator' + alias + 'LauncherSettings.ini')).read_text(encoding='utf-8')
         assert 'MENISCUS_TEST_ACTION=' + action + '\n' in config
-    for relative in ('tests/slicer_draw_workflow.py', 'tests/draw_fixture.py'):
+    for relative in ('tests/slicer_draw_workflow.py', 'tests/slicer_regions_workflow.py', 'tests/draw_fixture.py'):
         assert (output / 'TestKit' / relative).read_bytes() == (repo / relative).read_bytes()
         assert 'TestKit/' + relative in manifest['files_sha256']
     assert not (output / 'TestKit/MeniscusAnnotator.py').exists()
@@ -60,12 +62,18 @@ def test_every_real_test_application_has_its_canonical_launcher_settings(tmp_pat
     assert 'ReaderGuide.html' in manifest['files_sha256']
     guide_text = (output / 'UserGuide.txt').read_text(encoding='utf-8')
     references = set(re.findall(r'!\[[^\]]*\]\(([^)]+)\)', guide_text))
-    assert references == {'GuideImages/annotation-workflow.png', 'GuideImages/draw-unfinished.png'}
+    assert references == {'GuideImages/annotation-workflow.png', 'GuideImages/draw-unfinished.png', 'GuideImages/regional-workflow.png'}
     for relative in references:
         target = output / relative
         source = repo / 'docs/images' / target.name
         assert target.is_file() and target.read_bytes() == source.read_bytes()
         assert manifest['files_sha256'][relative] == prepare.digest(source)
+    for name in ('REGIONAL_CONTRACT.md', 'REGIONAL_READER.md'):
+        assert (output / name).read_bytes() == (repo / 'docs' / name).read_bytes()
+        assert manifest['files_sha256'][name] == prepare.digest(repo / 'docs' / name)
+    example = repo / 'tools/read_regional_annotation.py'
+    assert (output / 'Examples' / example.name).read_bytes() == example.read_bytes()
+    assert manifest['files_sha256']['Examples/' + example.name] == prepare.digest(example)
 
     test_defaults = (output / 'share/Slicer-5.12/MeniscusAnnotatorTestDefaultSettings.ini').read_text(encoding='utf-8')
     assert 'HomeModule=MeniscusAnnotator\n' in test_defaults

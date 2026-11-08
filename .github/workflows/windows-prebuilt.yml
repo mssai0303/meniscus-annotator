@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       run_integration:
-        description: Run installed synthetic correction, real Export dialog, restart and general workflow checks (not human Windows acceptance)
+        description: Run installed synthetic regional draft, Draw, correction, Export dialog and restart checks (not human Windows acceptance)
         required: true
         default: true
         type: boolean
@@ -64,6 +64,7 @@ jobs:
             C:\D\MP\installer-build.json
             C:\D\MP\download-receipts.jsonl
             C:\D\MP\installed-runtime-check.json
+            C:\D\MP\regional-reader-check\*.txt
             C:\D\MP\graphics-probe\*.json
             C:\D\MP\graphics-probe\*.txt
             C:\D\MP\graphics-probe\*.png
@@ -80,3 +81,6 @@ jobs:
             C:\D\MP\synthetic-draw*\*.json
             C:\D\MP\synthetic-draw*\*.txt
             C:\D\MP\synthetic-draw*\*.png
+            C:\D\MP\synthetic-regions*\*.json
+            C:\D\MP\synthetic-regions*\*.txt
+            C:\D\MP\synthetic-regions*\*.png

@@ -1,28 +1,33 @@
-# Mac review preview — Draw workflow
+# Mac review preview — visual and regional revision 1
 
 Windows x64 remains the release target. This Mac preview runs the actual
 Meniscus Annotator module in pinned **Intel Slicer 5.12.4 through Rosetta on
 Apple Silicon**; it is not a native ARM build or a browser mock-up.
 
-[Open Meniscus Annotator](/Users/saim/Downloads/Meniscus_Annotator_Mac_Preview_20261108/Open_Meniscus_Annotator.command)
+[Open Meniscus Annotator](/Users/saim/Downloads/Meniscus_Annotator_Visual_Preview_20261108/Open_Meniscus_Annotator.command)
 
 Full Terminal command:
 
 ```sh
-/bin/zsh /Users/saim/Downloads/Meniscus_Annotator_Mac_Preview_20261108/Open_Meniscus_Annotator.command
+/bin/zsh /Users/saim/Downloads/Meniscus_Annotator_Visual_Preview_20261108/Open_Meniscus_Annotator.command
 ```
 
-The preview uses read-only copies of the same two authorized development scans,
+This revision has a separate preview profile and work folder. The earlier
+November 8 preview, its launcher and all saved work remain intact. The new
+preview uses read-only copies of the same two authorized development scans,
 including the oblique acquisition, with their unchanged explicit starting-mask
 permissions and practice protocol. It opens directly into the focused workspace.
+The compact header contains case identity and save state; active compartment
+and the Draw/Erase/Paint toolbar remain beside the MRI. Cases reopens the
+remembered browser, and approval is inside Case details and review.
 The human practice actor is **Preview user (identity unverified)**. No automated
 QA drawing, note, review or approval is loaded into this workspace.
 
 Your work and exports are separate:
 
 ```text
-/Users/saim/Downloads/Meniscus_Annotator_Mac_Preview_20261108/Practice_work/
-/Users/saim/Downloads/Meniscus_Annotator_Mac_Preview_20261108/Practice_exports/
+/Users/saim/Downloads/Meniscus_Annotator_Visual_Preview_20261108/Practice_work/
+/Users/saim/Downloads/Meniscus_Annotator_Visual_Preview_20261108/Practice_exports/
 ```
 
 Earlier synthetic, real blank-practice and correction work folders are preserved.
@@ -43,8 +48,17 @@ there are no automatic runtime downloads.
    on its original target until Finish or an explicitly confirmed Discard.
 4. Ctrl+wheel zooms; middle-drag pans. Show annotation is immediately available.
    Display and orientation adds transparent fill and window/level.
-5. Save draft, close normally and relaunch to check restoration. Review and
+5. Switch **Task** to **Regions**. Choose a meniscus and Anterior horn, Body or
+   Posterior horn. Region tools assign only inside the whole mask; return to
+   Whole meniscus to add tissue. Show regions hides that overlay. Boundary
+   uncertain and Regional assessment record unresolved boundaries or absence.
+6. Save draft, close normally and relaunch to check restoration. Review and
    approval are separate actions; all preview outputs remain software practice.
+
+Regional assignments start Not assigned. Their anatomical protocol remains
+pending: no regional research approval is available and regional training
+validity is zero everywhere. Whole-mask approval never approves the regions.
+The preview loads no automated regional drawings or expert-boundary examples.
 
 The header shows **Unsaved contour** while a contour is incomplete. Such points
 are not saved checkpoints. Saving and autosave wait until the contour is finished
