@@ -203,7 +203,33 @@ The reader application, reader guide and uninstall shortcuts are present.
 
 ## Hosted CI resources, limits and cost
 
-### Zhang revision candidate — 8 November 2026
+### Final Zhang review candidate — 8 November 2026
+
+[Run 42496348555](https://github.com/mssai0303/meniscus-annotator/actions/runs/42496348555)
+built immutable tag `v0.1.0-zhang-review.4`, source
+`ed3aa91fc75141b85ee6af3718c1fbc1a9f49e0c`. This resource revision preserves
+the reviewed application/core bytes and explicitly bundles both approved
+synthetic guide PNGs. All 268 portable Windows tests and fresh installation,
+payload/runtime identity, synthetic generation and uninstall protections passed.
+Independent NSIS extraction also verified every local guide-image reference and
+both image hashes against the source and installed-payload manifest.
+
+The final review copy is
+`MeniscusAnnotator-0.1.0-Windows-x64-ed3aa91.exe`, 362,641,975 bytes, SHA-256
+`5b6b917e4b1b80d443f1171bcd1ba1a8c76f60573059a28ce5f334907ed66bc2`.
+The earlier review.3 binary is retained unchanged. Neither shared Dropbox
+installer nor GitHub Release was replaced.
+
+The fresh run reproduced the hosted graphics limit: Windows Server 2025 x64
+build 26100; system rendering failed and both bundled software modes reported
+OpenGL 3.0 with black pixels. All native Draw/correction/restart/export/scaling
+workflow fields remain **BLOCKED**, not passed. Temporary aliases were removed
+and installed bytes rechecked. Verified offline isolation was unavailable under
+host policy. Windows 10/11 interactive and physical-DPI claims remain absent;
+no new manual Horizon session is requested. See the current generic
+[CI summary](../packaging/evidence/windows-zhang-review-ci.json).
+
+### Earlier application candidate (review.3)
 
 [Run 42494734647](https://github.com/mssai0303/meniscus-annotator/actions/runs/42494734647)
 built immutable tag `v0.1.0-zhang-review.3`, source
@@ -230,7 +256,7 @@ verified outbound isolation, so offline imports/workflow are not claimed.
 The user reports successful testing of an earlier Windows build; that history
 does not verify this revision. Current Windows 10 interactive/DPI verification
 and Windows 11 testing remain unclaimed. No additional manual Horizon session is
-requested. The generic [CI summary](../packaging/evidence/windows-zhang-review-ci.json)
+requested. The historical [CI summary](../packaging/evidence/windows-zhang-review.3-ci.json)
 is committed; full synthetic receipts and logs remain in the separate maintainer
 QA folder. Graphics failure on this hosted server does not establish Windows
 incompatibility on a GPU-equipped desktop.
