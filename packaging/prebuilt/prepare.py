@@ -16,6 +16,7 @@ import zipfile
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 LOCK = json.loads((HERE / 'dependencies.json').read_text(encoding="utf-8"))
+GUIDE_IMAGES = ('annotation-workflow.png', 'draw-unfinished.png')
 
 def digest(path, algorithm='sha256'):
     h = hashlib.new(algorithm)
@@ -142,11 +143,21 @@ def prepare(runtime, installer, output, cache):
     (output / 'README-FIRST.txt').write_text('Meniscus Annotator 0.1.0\nBased on official 3D Slicer 5.12.4 r34645.\nOpen Meniscus Annotator from the Start menu, then Open dataset.\nDo not edit files in this installation directory. Saved work and exports live in your chosen local work/results folders.\nThis wrapped distribution retains upstream Slicer branding and runtime version. It is not a custom-compiled Slicer application.\n', encoding="utf-8")
     guide = REPO / 'docs' / 'USER_GUIDE.md'
     if guide.exists():
-        (output / 'UserGuide.txt').write_text(guide.read_text(encoding="utf-8").replace('images/annotation-workflow.png', 'GuideImages/annotation-workflow.png'), encoding="utf-8")
+        guide_text = guide.read_text(encoding='utf-8')
+        references = set(re.findall(r'!\[[^\]]*\]\(([^)]+)\)', guide_text))
+        allowed = {'images/' + name for name in GUIDE_IMAGES}
+        if references - allowed:
+            raise ValueError('Reader guide references an image outside the explicit synthetic-image whitelist.')
+        for name in GUIDE_IMAGES:
+            guide_text = guide_text.replace('images/' + name, 'GuideImages/' + name)
+        (output / 'UserGuide.txt').write_text(guide_text, encoding='utf-8')
     shutil.copy2(REPO / 'docs' / 'QUICK_START.html', output / 'ReaderGuide.html')
-    image = REPO / 'docs' / 'images' / 'annotation-workflow.png'
-    if image.exists():
-        (output / 'GuideImages').mkdir()
+    (output / 'GuideImages').mkdir()
+    # Explicit data-free screenshots only, never a general source-image copy.
+    for name in GUIDE_IMAGES:
+        image = REPO / 'docs' / 'images' / name
+        if not image.is_file():
+            raise ValueError('Required synthetic reader guide image is missing: ' + name)
         shutil.copy2(image, output / 'GuideImages' / image.name)
     for name, sha in original_files.items():
         if digest(output / name) != sha:

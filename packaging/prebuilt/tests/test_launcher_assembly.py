@@ -2,6 +2,7 @@
 import importlib.util
 import json
 from pathlib import Path
+import re
 import zipfile
 
 
@@ -57,6 +58,14 @@ def test_every_real_test_application_has_its_canonical_launcher_settings(tmp_pat
     assert not (output / 'bin/opengl32.dll').exists()  # diagnostic alias is never shipped
     assert (output / 'ReaderGuide.html').read_bytes() == (repo / 'docs/QUICK_START.html').read_bytes()
     assert 'ReaderGuide.html' in manifest['files_sha256']
+    guide_text = (output / 'UserGuide.txt').read_text(encoding='utf-8')
+    references = set(re.findall(r'!\[[^\]]*\]\(([^)]+)\)', guide_text))
+    assert references == {'GuideImages/annotation-workflow.png', 'GuideImages/draw-unfinished.png'}
+    for relative in references:
+        target = output / relative
+        source = repo / 'docs/images' / target.name
+        assert target.is_file() and target.read_bytes() == source.read_bytes()
+        assert manifest['files_sha256'][relative] == prepare.digest(source)
 
     test_defaults = (output / 'share/Slicer-5.12/MeniscusAnnotatorTestDefaultSettings.ini').read_text(encoding='utf-8')
     assert 'HomeModule=MeniscusAnnotator\n' in test_defaults
