@@ -4,11 +4,13 @@ The preferred low-resource route is documented in [WINDOWS_PREBUILT.md](WINDOWS_
 It wraps official prebuilt Slicer in a real installer; this document retains the
 alternative native custom-application superbuild for complete compiled branding.
 
-The authorised private source repository contains a native Slicer custom application, adapted from the
+The source repository contains a native Slicer custom application, adapted from the
 [official template](https://github.com/KitwareMedical/SlicerCustomAppTemplate/tree/1863e64fe2c622a4de8021b145de180a91d8de52).
-This is an implementation/build configuration. **No Windows installer has been
-built or tested in this session.** The development host is macOS arm64; no local
-Windows VM/compiler was discovered. A Mac launch never qualifies as Windows verification.
+This alternative full-source configuration has not been built. The preferred
+prebuilt route has produced an actual Windows x64 review installer with hosted
+installation/runtime checks; see WINDOWS_PREBUILT.md and VALIDATION.md. The
+development host is Apple Silicon macOS; no large VM or local Windows compiler
+was installed. A Mac launch never qualifies as Windows verification.
 
 ## Pinned baseline
 

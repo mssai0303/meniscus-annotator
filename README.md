@@ -14,15 +14,23 @@ input package has passed two-case Mac software-practice checks; the complete
 250-case production batch has not been accepted. A released anatomical protocol has not been supplied. Do not
 use this version as an accepted production release for 250 cases.
 
-The 8 November Draw-workflow revision opens cases in Draw, keeps unfinished
-contours on their original target until Finish/Discard, and uses thin outlines
-with one contextual instruction. The prepared dataset, starting masks, research
-protocol and saved-file schema are unchanged. Mac review and Windows automated
-candidate evidence are recorded separately in [VALIDATION.md](docs/VALIDATION.md).
+The current review tag is **v0.1.0-visual-regions-review.1** (`b575000`). Its
+compact clinical workspace preserves native Draw/Erase/Paint and adds a separate
+regional task for anterior horn, body and posterior horn within each whole
+meniscus. The complete medial/lateral masks remain primary. Regional work starts
+Not assigned and has separate review, uncertainty and full-grid files. Expert
+regional definitions are pending, so regional research approval is unavailable
+and regional validity is zero everywhere.
+
+The prepared dataset, predictions, existing job/protocol and old checkpoints are
+preserved. New regional saves add a versioned optional extension without rewriting
+historical files or attribution. Actual Mac and Windows automation scopes are
+recorded separately in [VALIDATION.md](docs/VALIDATION.md).
 
 - [Open the checked Mac preview](docs/MAC_PREVIEW.md)
 - [Reader quick start](docs/QUICK_START.html) and [detailed annotation guide](docs/USER_GUIDE.md)
 - [Input/output and job contract](docs/CONTRACT.md)
+- [Regional schema](docs/REGIONAL_CONTRACT.md) and [technical reader example](docs/REGIONAL_READER.md)
 - [Windows reproducible build](docs/WINDOWS.md)
 - [Test results and release gaps](docs/VALIDATION.md)
 - [Test responsibilities](docs/TEST_PLAN.md)
@@ -89,13 +97,13 @@ only synthetic data and writes its results/screenshots there. It drives the
 native Paint, Erase and Draw tools through view events, checks oblique planes,
 reopens saved files, approves practice versions and exports/reopens ZIP results.
 It cannot establish anatomical correctness or replace Windows acceptance.
-The scoped app/adapter/packaging suite currently passes 268 tests. Practice-specific run
+The scoped app/adapter/packaging suite currently passes 315 tests. Practice-specific run
 counts and remaining limits are recorded in [VALIDATION.md](docs/VALIDATION.md);
 private MRI evidence is not committed.
 
 In the workspace, Draw closes point-to-point clicks into a filled polygon on the
 current acquired slice; Paint/Erase provide touch-ups. For contrast choose
-**Window/level** in Display and orientation, then left-drag. Ctrl+wheel zooms;
+**Window/level** in Image and annotation display, then left-drag. Ctrl+wheel zooms;
 right-drag while Draw is active retains the unfinished contour.
 
 The existing-mask correction route passed 337 actual-module checks on two permitted
@@ -111,8 +119,9 @@ remain unaccepted research annotations until the required expert review.
 
 Source is stored in the public repository
 [mssai0303/meniscus-annotator](https://github.com/mssai0303/meniscus-annotator).
-No dataset or annotation is uploaded. A clearly marked Windows test prerelease
-is available for compatibility testing; it is not an accepted reader release.
+No dataset or annotation is uploaded. Windows review installers are retained
+separately from source; the current candidate does not replace the shared
+installer or constitute an accepted reader release.
 Production releases require actual Windows acceptance. Installer assets remain
 separate from the source tree and never include participant data.
 Tags identify software versions; every checkpoint records `app_version` and

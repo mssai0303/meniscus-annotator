@@ -1,0 +1,88 @@
+{
+  "schema_version": "meniscus_visual_regional_review/1",
+  "recorded_utc": "2026-11-08T22:17:04.362997+00:00",
+  "source_commit": "b5750000436b935d24993e2690ed0ad29ecd4882",
+  "version_tag": "v0.1.0-visual-regions-review.1",
+  "application_fingerprint_sha256": "897372b05d751f8d53e9f292fcbd9aa5c766dd0a74962698225362004f6547ff",
+  "main_sha256": "34e4be300d5a2ba80c1477a65b59735694472269e04cd4ded5c0384c79629fc4",
+  "core_sha256": "97d441461ae384fdf2f58eecadb1f681842b3c3713d7f6fc80102dfd25bd2768",
+  "regions_sha256": "1d99854799e54c33b7db8755a6ced6b0cbcc6af4c2c155fa89388f6aec8bec4d",
+  "runtime": "Intel Slicer 5.12.4 r34645 through Rosetta on Apple Silicon; not native ARM",
+  "passed_checks": {
+    "portable": 315,
+    "native_whole_workflow": 991,
+    "native_whole_restart": 172,
+    "native_regional_workflow": 971,
+    "native_regional_restart": 205,
+    "native_legacy_compatibility": 33,
+    "mac_layout_and_preference_checks": 1036,
+    "real_whole_workflow": 274,
+    "real_whole_restart": 91,
+    "real_regional_workflow": 116,
+    "real_regional_restart": 52,
+    "existing_saved_work_compatibility": 124,
+    "regional_example_reader_cases": 2
+  },
+  "scope": "Native Qt/VTK automated desktop interactions and visual inspection; no anatomical validation, accepted regional reference or human Windows acceptance. Counts overlap and are not independent clinical validations.",
+  "geometry_fixtures": "Left/right knees × both physical acquisition directions × regular/oblique grids; complete native extent, exact label values, independent readers, parent masks, shared Undo/Redo.",
+  "real_practice": "Same two previously authorized scans only, isolated copies and automated actors; private reports, pixels, identifiers and masks remain outside Git. Source hashes and earlier practice work remained unchanged.",
+  "layout": {
+    "dpr_simulations": [
+      1,
+      1.25,
+      1.5,
+      2
+    ],
+    "logical_sizes": "1280×800 and1024×640;1440×900 where desktop permits, fractional rounding and DPR2 available-height847 recorded.",
+    "header_height": 55,
+    "footer_height": 95,
+    "ordinary_resolved_font": "Mac system UI11pt weight50 regular",
+    "heading_font": "Requested63; native Mac runtime resolves75 bold for restricted headings",
+    "no_essential_horizontal_clipping": true,
+    "fresh_process_preferences": true
+  },
+  "regional_protocol": {
+    "status": "pending_expert_protocol",
+    "research_approval_available": false,
+    "all_regional_validity_zero": true,
+    "missing_expert_decisions": [
+      "Horn/body boundaries",
+      "Roots",
+      "Tears",
+      "Maceration",
+      "Surgery",
+      "Uncertain tissue"
+    ],
+    "training_loader_integration": "Unavailable; validated standalone reader/example only"
+  },
+  "guide": {
+    "word_pages": 5,
+    "rendered_and_all_pages_inspected": true,
+    "synthetic_images_sha256": {
+      "annotation-workflow.png": "db19d7ebbaadecaf9dbee916466f62980fef2441a9792ef44c7745e5e229f454",
+      "draw-unfinished.png": "9516460819019a737a81c19b173917b1b66424ffacc6dfd983ca20fdfc2b81e9",
+      "regional-workflow.png": "3077979eb1bdddc08126a9ffdf5cfd0dd9933a298687cc71d0dc5e4cca895473"
+    }
+  },
+  "windows": {
+    "ci_run": 42529049659,
+    "url": "https://github.com/mssai0303/meniscus-annotator/actions/runs/42529049659",
+    "receipt": "packaging/evidence/windows-visual-regions-review-ci.json",
+    "native_windows_interactive_acceptance": "Not established by Mac or hosted portable checks",
+    "windows_11": "Untested",
+    "host": "Windows Server2025 x64 build26100; image20261103.298.1",
+    "installer_filename": "MeniscusAnnotator-0.1.0-Windows-x64-b575000.exe",
+    "installer_sha256": "daf4845a3ec51e9ea3d824bc8e71aed0abaa4aaadc45ee992d2808da7845e617",
+    "installer_bytes": 363146298,
+    "portable_tests_passed": 315,
+    "installation_and_payload_hashes": "PASSED",
+    "runtime_imports": "PASSED",
+    "regional_helper_initialization": "PASSED",
+    "guide_and_example_resources": "PASSED",
+    "native_workflows": "BLOCKED: hosted actual software OpenGL3.0 and black canvas below3.2 minimum; regional workflow/resume/legacy, Draw/correction/export/restart/scaling not passed",
+    "offline_runtime": "NOT VERIFIED: host policy did not fully enforce outbound rules",
+    "windows_10_new_revision": "Untested"
+  },
+  "shared_installer_replaced": false,
+  "published_release": false
+}

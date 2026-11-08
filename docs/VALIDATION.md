@@ -8,6 +8,80 @@ research annotations or readiness for the full annotation batch.
 
 ## Executed checks and their scope
 
+### Visual and regional review 1 — 8 November 2026
+
+Source/tag: `b5750000436b935d24993e2690ed0ad29ecd4882` /
+`v0.1.0-visual-regions-review.1`. Main SHA-256 is
+`34e4be300d5a2ba80c1477a65b59735694472269e04cd4ded5c0384c79629fc4`;
+combined application fingerprint is
+`897372b05d751f8d53e9f292fcbd9aa5c766dd0a74962698225362004f6547ff`.
+All following Mac checks use this final source, after fixing the excessive
+pending-contour footer and expanded-panel clipping.
+
+| Route | Passed checks | Scope |
+| --- | ---: | --- |
+| Portable application/adapter/packaging | 315 | Includes 47 new regional tests |
+| Native whole-meniscus workflow / separate restart | 991 / 172 | Eight left/right × physical stack direction × regular/oblique fixtures |
+| Native regional workflow / separate restart | 971 / 205 | Parent-restricted Draw/Paint/Erase, exact ten-segment Undo/Redo, assessments, review, source/native-grid export |
+| Independent whole-only legacy fixture | 33 | Unchanged six-file checkpoint retained; first regional save adds a new immutable version |
+| Actual Mac layout/scaling and cold preferences | 1,036 | Four actual Qt DPR simulations; normal/pending/collapsed/expanded states |
+| Two isolated real practice scans, whole / restart | 274 / 91 | Full acquired stacks, actual controls, unchanged original predictions and sources |
+| Same two practice scans, regional / restart | 116 / 52 | Assign/change/erase regions, uncertainty/absence, separate reviews/approval, full-grid export |
+| Existing human-unverified saved work | 124 | Exact old arrays, attribution, notes/review and all four checkpoints preserved |
+| Standalone regional reader | 2 cases | Final exported ZIP/source checks; every regional target correctly excluded |
+
+These scopes overlap. They are automated native Qt/VTK interactions and visual
+inspection, not independent clinical validations. Real probes used automated
+software-practice attribution and isolated work. No anatomical reference or Jeff
+approval was created. Original source checks covered the two permitted scans and
+shared metadata; no broad cohort audit was repeated. Earlier practice files also
+matched their frozen hashes after testing.
+
+The application now distinguishes the whole task from regional assignment. Native
+editor masks restrict region edits to the selected parent; whole-mask changes
+remove incompatible assignments and invalidate affected regional reviews. Values
+7/8 explicitly retain unassigned medial/lateral tissue. Regional research approval
+is unavailable while expert horn/body definitions are pending; regional validity
+is zero throughout, including after whole approval. The reader example is not
+integration with a downstream training pipeline.
+
+The compact header/footer measure 55/95 logical pixels in the recorded Mac runs.
+The footer remains compact with Finish/Discard present. Expanded CTK panels fit
+their viewport with a vertical scrollbar and no essential horizontal clipping.
+Actual 1280×800 and 1024×640 were achieved. The 1440×900 request was achieved at
+DPR 1 and 1.5; fractional rounding and the DPR 2 available-height limit (847) are
+recorded. Ordinary controls resolve to native Mac 11 pt regular; restricted
+headings request semibold but this runtime resolves them to bold. These Qt DPR
+simulations are not Windows operating-system DPI acceptance. The updated five-page
+Word guide was rendered and every page inspected.
+
+The separate Mac preview is open with a real practice scan, Draw selected,
+Regions initially Not assigned, and no automated QA marks or approvals. Its
+launcher/profile/work are separate from all earlier previews. Source data,
+correction jobs and the shared installer remain unchanged.
+
+The tagged Windows x64 candidate is built separately in
+[CI 42529049659](https://github.com/mssai0303/meniscus-annotator/actions/runs/42529049659).
+On Windows Server 2025 x64 build 26100, all 315 portable tests and actual
+installation, payload hashes, runtime imports, regional helper initialization,
+optional reader import, generation and uninstall safeguards passed. All three
+guide figures, both regional documents and the reader example were independently
+extracted from the actual installer and matched source/manifest hashes. The
+installed application fingerprint matches this Mac source.
+
+Native GUI workflows remain blocked: the host supplied actual OpenGL 3.0 and
+black canvas pixels, below 3.2. Regional editing/restart/legacy, Draw, export and
+scaling were not passed. Strict offline isolation also remains unverified because
+host policy did not fully enforce the outbound rules. See
+[the Windows receipt](../packaging/evidence/windows-visual-regions-review-ci.json).
+Mac tests and earlier Windows 10 success do not establish this revision's native
+Windows interaction acceptance. Windows 11 remains untested. No new user-run
+Horizon session is requested.
+
+The [generic review receipt](evidence/visual-regional-review-20261108.json) contains
+source/image hashes and platform scope. Private MRI evidence remains outside Git.
+
+
 ### Draw-first revision — 8 November 2026
 
 Tested application file SHA-256:

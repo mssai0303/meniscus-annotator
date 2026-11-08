@@ -15,6 +15,34 @@ retains original executable bytes, adds its module and nibabel, and supplies an
 installer, Start-menu application and Reader guide shortcuts, and uninstaller. Jeff needs no terminal, Python,
 Slicer installation, SCC account or runtime download.
 
+## Current visual and regional review candidate
+
+Tag `v0.1.0-visual-regions-review.1`, source `b575000`, produces the separate
+`MeniscusAnnotator-0.1.0-Windows-x64-b575000.exe` review candidate. SHA-256:
+`daf4845a3ec51e9ea3d824bc8e71aed0abaa4aaadc45ee992d2808da7845e617`.
+It was built and checked in [CI 42529049659](https://github.com/mssai0303/meniscus-annotator/actions/runs/42529049659)
+on Windows Server 2025 x64 build 26100. All 315 portable tests, actual installation,
+payload hashes, runtime imports, regional helper initialization, optional reader
+import, synthetic generation and installation/uninstall safeguards passed. Three
+synthetic guide figures, their references, regional documents and reader example
+were independently extracted from the actual installer and hash checked.
+
+Hosted rendering supplied actual OpenGL 3.0 and black image pixels, below the
+required 3.2. Native drawing/regional/restart/export/scaling workflows remain
+blocked; a green build is not their acceptance. Strict offline isolation could
+not be verified under host policy. New-revision Windows 10 interactive testing
+and Windows 11 testing remain pending. No further Horizon session is requested.
+The shared installer and previous candidate remain unchanged. See the
+[dated receipt](../packaging/evidence/windows-visual-regions-review-ci.json).
+
+A maintainer can check out the immutable tag and run the command below. The
+GitHub Actions job uses the same prebuilt route, a 20-minute bound and one-day
+artifact retention. It needs network access for the locked build inputs and
+space for extracted, assembled and installed copies of the roughly 1.1 GiB
+runtime, plus the installer. It requires no full Slicer/Qt/VTK source build or
+paid VM. Native workflow tests require a usable OpenGL context and actual MRI
+pixels; missing hosted graphics are recorded as blocked, never passed.
+
 ## Locked inputs and contents
 
 `packaging/prebuilt/dependencies.json` pins the official Slicer 5.12.4 revision
@@ -27,7 +55,7 @@ participant list, notes or saved annotations enter the installer.
 `prepare.py` verifies the official installer/wheel hashes, preserves all 9,161
 original runtime files byte-for-byte, and records every output file hash. It
 adds the module, startup script, cloned launcher/native executable, isolated
-settings defaults, licences and the practical guide with its synthetic screenshot.
+settings defaults, licences and the practical guide with its three synthetic screenshots.
 The startup file is selected through the documented `SLICERRC` environment
 variable, avoiding unsafe command-line parsing of paths containing spaces.
 Automatic application/extension update checks are disabled in this separate
@@ -96,7 +124,7 @@ installer timestamps may differ, so bit-identical output is not promised.
 ## Installed synthetic test kit
 
 The payload whitelists `tests/slicer_workflow.py`, `tests/slicer_export_dialog.py`,
-`tests/slicer_draw_workflow.py`, `tests/draw_fixture.py`, `tools/make_synthetic.py`, and the procedural correction fixture/workflow from
+`tests/slicer_draw_workflow.py`, `tests/slicer_regions_workflow.py`, `tests/draw_fixture.py`, `tools/make_synthetic.py`, and the procedural correction fixture/workflow from
 `packaging/prebuilt/` under `TestKit/`, with a small installed runner. It contains no second copy of
 the application/core implementation: imports must resolve from the installed
 `qt-scripted-modules` directory. Native test launchers use a separate
@@ -351,3 +379,14 @@ build. The new hosted graphics limitation and remaining rows in
 `packaging/WINDOWS_ACCEPTANCE.md` stay explicit until a suitable environment is
 available. Windows 11 is untested, not declared incompatible. No manual Horizon
 request or shared-installer replacement is part of this revision.
+
+
+The installed regional routes are `MeniscusAnnotatorRegionsChecks.exe`,
+`MeniscusAnnotatorRegionsResumeCheck.exe` and
+`MeniscusAnnotatorRegionsLegacyCheck.exe`. They use only procedural eight-grid
+fixtures and the installed application. They test parent-masked regional drawing,
+whole-mask edits, ten-segment Undo/Redo, separate reviews, native-grid files,
+restart, export and unchanged legacy checkpoints. They are behind the same
+actual-rendering gate in CI. The installed `Examples/read_regional_annotation.py`
+is optional coordinator material; ordinary readers need no terminal or Python.
+Regional protocol is pending and every regional training-validity voxel is zero.
