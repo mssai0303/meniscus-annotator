@@ -316,9 +316,12 @@ The hosted Windows installer lifecycle/import tests passed, as recorded in
 its older source/layout scope. It does not prove desktop rendering, offline
 annotation or human mouse/keyboard behaviour.
 
-Continue on the actual Horizon Windows10 configuration: install the final fixed
-candidate, then exercise native-plane editing, review, save/reopen, fresh-process
-resume, deliberate approval and export using synthetic data. Record resizing,
-display scaling, input and offline behaviour. Complete the corresponding rows in
-`packaging/WINDOWS_ACCEPTANCE.md`; Windows11 stays pending until it is actually
-tested. Normal signing/security prompts and institutional restrictions can apply.
+The current user constraint is to complete available automated work without
+requesting another user-run Horizon session. This revision still lacks native
+interactive Windows 10/11 verification of editing, review, save/reopen, approval,
+export, physical display scaling and offline operation in a capable environment.
+The earlier user-reported Windows success is historical evidence for that earlier
+build. The new hosted graphics limitation and remaining rows in
+`packaging/WINDOWS_ACCEPTANCE.md` stay explicit until a suitable environment is
+available. Windows 11 is untested, not declared incompatible. No manual Horizon
+request or shared-installer replacement is part of this revision.
