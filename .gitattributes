@@ -1,0 +1,2 @@
+# Keep installed Python source fingerprints identical across Mac and Windows.
+*.py text eol=lf
