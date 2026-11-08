@@ -1,123 +1,65 @@
-# Redesigned Mac development preview
+# Mac review preview — Draw workflow
 
-The preview launches the actual Meniscus Annotator module directly with the
-existing pinned Slicer 5.12.4 Intel runtime under Rosetta on this Apple Silicon Mac.
-The single preview launcher now targets a real CORRECTION SOFTWARE PRACTICE case with a visible
-acquired-slice slider and counter. This is a development preview, not a Mac
-installer or Windows acceptance.
-Save and close any earlier blank-practice window normally first. The launcher
-blocks a duplicate/confusing preview rather than closing that window or losing
-unsaved work. The correction workflow has passed actual-module tests; the manual
-correction launcher still needs its first launch after that earlier window closes.
+Windows x64 remains the release target. This Mac preview runs the actual
+Meniscus Annotator module in pinned **Intel Slicer 5.12.4 through Rosetta on
+Apple Silicon**; it is not a native ARM build or a browser mock-up.
 
-[Open the preview](/Users/saim/Downloads/Meniscus_Annotator_Preview_20261106/Open_Meniscus_Preview.command)
+[Open Meniscus Annotator](/Users/saim/Downloads/Meniscus_Annotator_Mac_Preview_20261108/Open_Meniscus_Annotator.command)
 
-Full absolute Terminal command:
+Full Terminal command:
 
 ```sh
-/bin/zsh /Users/saim/Downloads/Meniscus_Annotator_Preview_20261106/Open_Meniscus_Preview.command
+/bin/zsh /Users/saim/Downloads/Meniscus_Annotator_Mac_Preview_20261108/Open_Meniscus_Annotator.command
 ```
 
-The window is titled **Meniscus Annotator — SOFTWARE PRACTICE — not research annotations**.
-It is restricted to two permitted cases copied without changing bytes from the
-completed flat-folder package: one baseline scan with 37 acquired slices and one
-month-72 oblique scan with 35. Both load explicitly verified existing automated
-starting masks. These are unreviewed predictions, not reference annotations.
-Your new correction practice work is saved in:
+The preview uses read-only copies of the same two authorized development scans,
+including the oblique acquisition, with their unchanged explicit starting-mask
+permissions and practice protocol. It opens directly into the focused workspace.
+The human practice actor is **Preview user (identity unverified)**. No automated
+QA drawing, note, review or approval is loaded into this workspace.
+
+Your work and exports are separate:
 
 ```text
-/Users/saim/Downloads/Meniscus_Annotator_Real_Correction_Practice_20261106/Interactive_work/
+/Users/saim/Downloads/Meniscus_Annotator_Mac_Preview_20261108/Practice_work/
+/Users/saim/Downloads/Meniscus_Annotator_Mac_Preview_20261108/Practice_exports/
 ```
 
-Your exports go to the adjacent `Practice_exports/` folder. Automated QA work is
-separate in `Automated_QA/` and is never loaded into your interactive practice.
-The launcher resumes your saved case/slice; a fresh workspace opens the oblique
-case on a slice with a visible prediction, with Navigate selected. Previous real
-blank-practice work in `Meniscus_Annotator_Real_Practice_20261106/Interactive_work/`
-is preserved separately. Original Dropbox images and metadata remain unchanged. All local real work, results,
-exposure records and evidence stay outside the repository. The previous synthetic
-dataset and practice checkpoints remain preserved in the original preview folder
-for regression work. Windows acceptance is paused during Mac review.
+Earlier synthetic, real blank-practice and correction work folders are preserved.
+Scripts, diagnostics, test evidence and real-image captures stay in the separate
+private review area, outside this reader-facing folder and Git. The launcher
+checks its own running PID and loaded source hash; it never force-closes another
+window. Keep the launching Terminal open until closing normally. If macOS removes
+`/tmp/meniscus-runtime/Slicer.app`, restore the pinned local runtime before launch;
+there are no automatic runtime downloads.
 
-The launcher uses `/tmp/meniscus-runtime/Slicer.app`, the existing tested runtime.
-If macOS removes that temporary runtime after restart/cleanup, restore that pinned
-runtime before launching; the launcher reports a missing runtime rather than
-performing downloads. Keep the launching Terminal open until the application is
-closed normally. Clicking the launcher while the same preview is already running
-reports that it is already open instead of opening the same case twice.
+## Try this revision
 
-## Checks of this redesigned version
+1. Confirm the case, knee side, active compartment and acquired-slice counter.
+   Scroll through the full stack, including empty starting-mask slices.
+2. Draw opens by default. Click around a boundary; right-click without dragging
+   to close and fill. Use Erase and Undo/Redo. Paint remains for small additions.
+3. Begin another contour and try Next slice or another label. The contour stays
+   on its original target until Finish or an explicitly confirmed Discard.
+4. Ctrl+wheel zooms; middle-drag pans. Show annotation is immediately available.
+   Display and orientation adds transparent fill and window/level.
+5. Save draft, close normally and relaunch to check restoration. Review and
+   approval are separate actions; all preview outputs remain software practice.
 
-- Historical synthetic-preview module and interface hashes are recorded in
-  [mac-preview-startup.json](evidence/mac-preview-startup.json).
-- **182 actual native Slicer workflow assertions passed** with
-  the preview-specific settings constructor enabled: acquired-plane slider and
-  numbering, first/last-slice edits, Paint/Draw/Erase, Undo/Redo, review invalidation,
-  save/reopen, practice approval/export and unchanged source files.
-- The redesigned legacy-folder regression also passed 182 assertions.
-- **Seven fresh-process resume assertions passed**, including restored case,
-  slice, notes and masks plus persistent tool/scope while panels are collapsed.
-- **Five direct-startup assertions passed** through the real bootstrap without
-  the test selecting a module. Welcome/module selector/Python/unrelated bars are
-  absent from the focused workspace.
-- Exact 1280×800 and 1440×900 logical captures were inspected. Preview.png is an
-  actual Qt window capture, not a mock-up.
+The header shows **Unsaved contour** while a contour is incomplete. Such points
+are not saved checkpoints. Saving and autosave wait until the contour is finished
+or discarded; prior verified checkpoints remain intact.
 
-The new slider tests exposed and fixed an existing first-slice/reset mismatch:
-view fitting had recentred the volume after the requested plane was set. The
-requested acquired-plane translation is now restored after fitting and verified
-on both axis-aligned and oblique fixtures.
+## Verification scope
 
-Desktop computer-control access to Slicer was denied, so verification used the
-application's native test harness, process checks, startup report and real window
-captures. Launcher execution via Terminal was verified separately. The report's
-window_visible flag and process identity are checked before claiming it is open.
-An already-open window keeps its loaded code: save, close normally and relaunch
-to pick up changes. A subsequent manual launch of the current code was confirmed
-ready, its upright image was visually inspected, and saved practice state was
-restored. This does not mean an older window updates itself automatically.
+See [VALIDATION.md](VALIDATION.md) for dated checks, exact source identity and
+platform gaps. Synthetic fixtures cover left/right knees, both physical stack
+directions and regular/oblique grids. Actual native controls, saved arrays and
+physical coordinates are checked separately from visual inspection. Real-case
+checks use isolated copies and retain private evidence. No technical check is an
+anatomical assessment or a reader's research approval.
 
-Windows 10's baseline Slicer synthetic geometry/OpenGL probe passed and the user
-confirmed image visibility. Scrolling/full redesigned-application acceptance is
-not yet complete. Windows 11 remains untested, not declared incompatible.
-
-
-## Current controls and permitted software-practice checks
-
-**Draw** closes a point-to-point contour into a filled polygon on the current
-acquired slice: left-click points, then right-click to apply. Paint/Erase provide
-left-drag touch-ups. For brightness/contrast choose **Display and orientation →
-Window/level**, then left-drag. Right-drag zooms; middle-drag pans. Choosing a
-drawing tool returns from window/level mode to annotation.
-
-Two permitted complete MRI scans were exercised in the actual Mac application.
-The initial practice workflow passed **318 checks**, followed by **36 restore
-checks**. After the superior-up display correction, targeted verification passed
-**203 checks**, followed by **36 restore checks**. A final status check passed
-**27/27**, covering both permitted scans. These are distinct runs with overlapping
-coverage, not counts to add into a single test total. The correction changes the
-display orientation while preserving the acquired planes and stored source grid.
-
-These runs use explicit non-Jeff software-practice actors. All validity voxels
-remain zero, even after software review/approval. They are not accepted research
-annotations or anatomical validation. Actual images, identities, private reports
-and logs remain outside Git; committed screenshots use synthetic inputs only.
-
-This runtime is **Intel Slicer 5.12.4 under Rosetta**, not a native ARM build.
-
-## Existing-mask correction checks
-
-After the explicit correction adapter was added, both permitted real cases passed
-**337 actual-module checks**, followed by **45 fresh-process restore checks** on
-the oblique case and **65 cold-restore checks** on the baseline in another process.
-Existing medial/lateral voxels were erased natively, Undo/Redo
-restored exact arrays, and Paint/Draw, review invalidation, save/switch/reopen,
-guarded software-practice approval and export passed. The original starting-mask
-bytes and source/version/hash provenance were preserved in work and export.
-
-The maintained read-only application input check found 250 explicit correction
-rules, 249 verified masks and one unresolved case in the updated package. That
-case is blocked; this is not a complete 250-case correction set. The original 750
-MRI/metadata/review files and index matched their earlier immutable receipt.
-All 1,252 files in the newly frozen correction package remained unchanged during
-application testing. Detailed real-data evidence remains private.
+The revised Windows installer is built as a separate review candidate. It does
+not replace the shared Dropbox installer. Hosted Windows checks and Mac Qt scale
+simulations do not substitute for human review or new native Windows display
+scaling acceptance. No further Horizon session is requested.

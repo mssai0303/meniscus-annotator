@@ -8,6 +8,60 @@ research annotations or readiness for the full annotation batch.
 
 ## Executed checks and their scope
 
+### Draw-first revision — 8 November 2026
+
+Tested application file SHA-256:
+`ce91cebdecb7e2a412815b673159534cff5b1b47f5cf2a3d9b127c1b0e24dbfc`.
+The storage/validation core and saved-file schema were not changed.
+
+| Route | Actual result | Scope |
+| --- | --- | --- |
+| Pure application/adapter/packaging checks | 268 passed | Synthetic source/job/checkpoint and installer assembly logic |
+| Actual Mac native Draw matrix | 983 passed | Left/right × both physical acquisition directions × regular/oblique; actual Draw, Erase, Undo/Redo, Save and Export controls |
+| Fresh-process synthetic restoration | 172 passed | All eight cases, exact arrays/NRRD and physical grid/frame basis |
+| Actual isolated real-case workflow | 274 passed | Same two authorized practice scans; actual Export menu/modal and all acquired slices |
+| Real-case cold restoration | 91 passed | Both cases, arrays, notes/review, source identity, displayed slice and geometry |
+| Focused real oblique point continuation | 22 passed | Four points with zoom/pan; existing RAS points and voxels unchanged |
+| Existing saved-work compatibility | 124 passed | One previous blank-practice case and all four immutable checkpoints; original/copied work bytes unchanged |
+| Clean real default capture | 20 passed | Original prediction only, Draw default, no test marks/review/approval/checkpoint |
+| Mac Qt DPR layout simulations | 90 per DPR passed | Actual DPR 1, 1.25, 1.5 and 2; controls, ancestor viewports and pending footer |
+
+Native Draw allowed an unfinished contour to survive a target change. The focused
+workspace now blocks slice, label, tool, case, save, review and normal-close
+transitions until the contour is finished or explicitly discarded. Right-drag
+retains the contour. A transformed source is blocked before native fill. Separate
+display-only point glyphs do not enter the native contour rasterization data.
+
+The real oblique scan exposed an additional floating-point issue: redundant
+same-plane reprojection changed the offset by roughly 7e-15 mm, and native Draw
+uses exact offset equality when accepting another point. The fix avoids redundant
+reprojection on an already verified acquired plane. It does not move existing
+RAS points, change native Draw metadata, resample images or alter label geometry.
+The subsequent synthetic matrix includes Modified/zoom/pan/point-continuation
+regressions on every oblique case.
+
+Real tests use fresh automated software-practice work. The old work compatibility
+test copies existing work and preserves its historical actor rather than
+performing automated drawing under that identity. All practice validity remains
+zero and approvals are explicitly software-only. Scoped original/copy hashes
+matched; no broad cohort or dataset audit was repeated. These are automated
+native Qt/VTK interactions plus visual inspection, not expert anatomical review.
+
+Actual laptop-size layout checks include default and expanded secondary panels,
+ancestor-viewport clipping, pending-contour controls and all Save/review actions.
+Exact 1280×800 and 1366×768 client sizes were achieved. Fractional scales can
+round a dimension by one pixel; the receipts record actual sizes, screen limits
+and device pixel ratios. A separate settled normal-window trace confirmed no
+contour-induced window growth. Initial native Slicer fullscreen preferences were
+isolated from the Mac preview. The four-page Word guide was rendered and every
+page visually inspected. A generic [summary receipt](evidence/draw-workflow-review-20261108.json)
+records these scopes; detailed real-data evidence remains private.
+Calibrated Mac Qt device-pixel-ratio checks are recorded separately from native
+Windows operating-system scaling or human interaction acceptance. Revised Windows
+build/runtime/workflow results require their own dated receipt; earlier Windows
+success does not establish this revision's acceptance. The shared installer is
+not replaced by this review build.
+
 ### Correction pilot repairs — 7 November 2026
 
 The Export dialog previously had no usable buttons despite direct-function

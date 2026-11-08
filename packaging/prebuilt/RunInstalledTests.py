@@ -17,7 +17,8 @@ KIT = INSTALL / 'TestKit'
 ROOT = Path(qt.QStandardPaths.writableLocation(qt.QStandardPaths.GenericDataLocation)) / 'Meniscus Annotator synthetic tests'
 STATE = ROOT / 'last-workflow.json'
 CORRECTION_STATE = ROOT / 'last-correction-workflow.json'
-ACTIONS = {'workflow', 'resume', 'create', 'correction', 'correction-resume'}
+DRAW_STATE = ROOT / 'last-draw-workflow.json'
+ACTIONS = {'workflow', 'resume', 'create', 'correction', 'correction-resume', 'draw', 'draw-resume', 'draw-layout'}
 
 
 def text_file(path, value):
@@ -94,6 +95,43 @@ def start():
         for key in ('MENISCUS_TEST_OUTPUT', 'MENISCUS_RESUME_FROM', 'MENISCUS_TEST_KEEP_OPEN', 'MENISCUS_TEST_CLOSE_WINDOW', 'MENISCUS_TEST_LAYOUT'):
             os.environ.pop(key, None)
         make_synthetic = source_helpers()
+        if action in ('draw', 'draw-resume', 'draw-layout'):
+            original = output
+            if action != 'draw':
+                previous = json.loads(DRAW_STATE.read_text(encoding='utf-8'))
+                previous_id = checked_run_id(previous['run_id'])
+                original = ROOT / previous_id
+                marker = json.loads((original / 'installed-tests.json').read_text(encoding='utf-8'))
+                if marker.get('action') != 'draw' or not marker.get('passed') or marker.get('run_id') != previous_id:
+                    raise ValueError('No completed synthetic Draw workflow is available for this check.')
+                if marker.get('application_source_sha256') != receipt['application_source_sha256']:
+                    raise ValueError('Draw restart/layout checks require the same installed application build.')
+            phase = {'draw': 'workflow', 'draw-resume': 'resume', 'draw-layout': 'layout'}[action]
+            draw_root = original / 'Draw workflow'
+            os.environ['MENISCUS_DRAW_OUTPUT'] = str(draw_root)
+            os.environ['MENISCUS_DRAW_PHASE'] = phase
+            scale = os.environ.get('MENISCUS_DRAW_SCALE_NAME', '100')
+            if action == 'draw-layout' and scale not in ('100', '125', '150', '200'):
+                raise ValueError('Unknown simulated Draw layout scaling.')
+            report_name = 'draw-layout-' + scale + '.json' if phase == 'layout' else 'draw-' + phase + '.json'
+            qt.QApplication.setQuitOnLastWindowClosed(False)
+            runpy.run_path(str(INSTALL / 'WorkflowShell.py'))['focus_workflow_shell']()
+            namespace = runpy.run_path(str(KIT / 'tests' / 'slicer_draw_workflow.py'))
+            report = namespace['run_phase'](exit_application=False)
+            if original != output:
+                import shutil
+                shutil.copy2(draw_root / report_name, output / report_name)
+                for screenshot in draw_root.glob('*.png'):
+                    shutil.copy2(screenshot, output / screenshot.name)
+            receipt.update(passed=bool(report.get('passed')), checks=len(report.get('checks', [])),
+                           report=str((draw_root / report_name).relative_to(output)) if original == output else report_name,
+                           draw_phase=phase, scale_name=scale if phase == 'layout' else None)
+            text_file(output / 'installed-tests.json', receipt)
+            if receipt['passed'] and action == 'draw':
+                text_file(DRAW_STATE, {'run_id': run_id})
+            finish(('Passed ' if receipt['passed'] else 'Failed during ') + str(receipt['checks']) +
+                   ' synthetic Draw checks.', output, receipt['passed'])
+            return
         if action == 'create':
             package = output / 'Synthetic practice dataset'
             from make_correction_synthetic import make_correction_synthetic

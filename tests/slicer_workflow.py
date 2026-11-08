@@ -146,9 +146,7 @@ def run():
         events()
         red = slicer.app.layoutManager().sliceWidget('Red')
         red.sliceView().forceRender()
-        annotation = red.sliceView().cornerAnnotation()
-        active_overlay = annotation.GetText(vtk.vtkCornerAnnotation.UpperRight)
-        check('collapsed tools retain active label and editing scope on canvas', 'Medial meniscus' in active_overlay and 'Paint' in active_overlay and 'This slice only' in active_overlay)
+        check('collapsed tools retain active label and Draw guidance', 'Medial meniscus' in str(widget.identityLabel.text) and 'Draw' in str(widget.instruction.text) and 'Right-click to close and fill' in str(widget.instruction.text))
         check('collapsed panels retain acquired-slice readout and slider', widget.sliceReadout.isVisible() and widget.sliceSlider.isVisible() and str(widget.currentSlice+1) in plain_label(widget.sliceReadout))
         matrix = red.mrmlSliceNode().GetSliceToRAS()
         point = np.array([matrix.GetElement(axis,3) for axis in range(3)]+[1])
@@ -287,6 +285,7 @@ def run():
         events()
         # Letters used as canvas shortcuts must remain ordinary text in notes.
         old_label, old_tool, old_slice = widget.activeLabel, widget.editor.activeEffect().name, widget.currentSlice
+        widget.notesPanel.collapsed = False
         widget.notes.setFocus()
         for text in 'pderuf123':
             press = qt.QKeyEvent(qt.QEvent.KeyPress, ord(text.upper()), qt.Qt.NoModifier, text)

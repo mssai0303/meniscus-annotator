@@ -28,10 +28,16 @@ class CloseGuard(qt.QObject):
         self.workflow = workflow
 
     def eventFilter(self, watched, event):
-        if event.type() == qt.QEvent.Close and self.workflow.dataset:
+        if event.type() == qt.QEvent.Quit and self.workflow._pendingDraw():
+            self.workflow._guardContour('closing the application')
+            event.ignore()
+            return True
+        if event.type() == qt.QEvent.Close and watched == slicer.util.mainWindow() and self.workflow.dataset:
             try:
                 # Complete storage while native modules still exist, before Qt teardown.
-                self.workflow.closeCase()
+                if self.workflow.closeCase() is False:
+                    event.ignore()
+                    return True
             except Exception as exc:
                 self.workflow._diagnostic = traceback.format_exc()
                 slicer.util.errorDisplay('The case could not be saved. Check available disk space and work-folder permissions, then retry Save draft. The application will stay open.\n\n' + str(exc), windowTitle='Save required before closing')
@@ -68,6 +74,14 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self._lastArrays = None
         self._editQueued = False
         self._windowLevelActive = False
+        self._drawContext = None
+        self._drawHint = ''
+        self._drawState = None
+        self._drawMarkers = None
+        self._drawObserverTags = {}
+        self._rightDrawStart = None
+        self._rightDrawDragged = False
+        self._startingMaskSlices = None
         self._lastExport = None
         self._diagnostic = ''
         config_path = os.environ.get('MENISCUS_SOFTWARE_PRACTICE_CONFIG') or os.environ.get('MENISCUS_REAL_PRACTICE_CONFIG')
@@ -82,8 +96,13 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.autosave.setInterval(60000)
         self.autosave.connect('timeout()', self._autosave)
         self.autosave.start()
+        self.drawFeedback = qt.QTimer()
+        self.drawFeedback.setInterval(120)
+        self.drawFeedback.connect('timeout()', self._pollDrawState)
+        self.drawFeedback.start()
         self.closeGuard = CloseGuard(self)
         slicer.util.mainWindow().installEventFilter(self.closeGuard)
+        slicer.app.installEventFilter(self.closeGuard)
         slicer.app.connect('aboutToQuit()', self._quit)
         self._enable(False)
         qt.QTimer.singleShot(0, self._finishLayout)
@@ -106,11 +125,12 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         QDockWidget { background:#f3f5f7; border:0; }
         QLabel { background:transparent; }
         QLabel#appTitle { font-size:13pt; font-weight:600; color:#233743; }
-        QLabel#identity { font-size:11pt; color:#405461; }
+        QLabel#identity { font-size:11pt; color:#263642; }
         QLabel#panelTitle { font-size:11pt; font-weight:600; margin-top:3px; }
         QLabel#support { color:#60717e; }
-        QLabel#sliceReadout { font-size:14pt; font-weight:600; color:#233743; }
+        QLabel#sliceReadout { font-size:12pt; font-weight:600; color:#233743; }
         QLabel#saveState { font-weight:600; padding:0 8px; }
+        QLabel#MeniscusInstruction { color:#405461; }
         QPushButton, QToolButton { background:#ffffff; border:1px solid #c4ced7; border-radius:4px; min-height:28px; padding:3px 9px; }
         QPushButton:hover, QToolButton:hover { background:#edf3f7; border-color:#8fa4b4; }
         QPushButton:checked, QToolButton:checked { background:#e4f0f8; border:1px solid #2874a0; color:#174f70; }
@@ -165,8 +185,8 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         panel.setAttribute(qt.Qt.WA_StyledBackground, True)
         panel.setStyleSheet(self.style)
         layout = qt.QVBoxLayout(panel)
-        layout.setContentsMargins(14, 12, 14, 12)
-        layout.setSpacing(10)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(8)
         return panel, layout
 
     def _buildCases(self):
@@ -194,12 +214,13 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         palette.setColor(qt.QPalette.HighlightedText,qt.QColor('#203340'))
         self.caseTable.palette = palette
         self.caseTable.horizontalHeader().palette = palette
-        self.caseTable.setHorizontalHeaderLabels(['Participant / visit', 'Progress'])
+        self.caseTable.setHorizontalHeaderLabels(['Case', 'Progress'])
         self.caseTable.verticalHeader().hide()
         self.caseTable.verticalHeader().setDefaultSectionSize(56)
         self.caseTable.horizontalHeader().setStretchLastSection(True)
         self.caseTable.horizontalHeader().minimumSectionSize = 60
-        self.caseTable.setColumnWidth(0,130)
+        self.caseTable.horizontalHeader().setSectionResizeMode(qt.QHeaderView.Stretch)
+        self.caseTable.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarAlwaysOff)
         self.caseTable.setShowGrid(False)
         self.caseTable.setAlternatingRowColors(False)
         self.caseTable.setSelectionBehavior(qt.QAbstractItemView.SelectRows)
@@ -222,7 +243,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.message.setMaximumHeight(72)
         lay.addWidget(self.message)
         self.caseListDock.setWidget(panel)
-        self.caseListDock.setMinimumWidth(250)
+        self.caseListDock.setMinimumWidth(220)
         slicer.util.mainWindow().addDockWidget(qt.Qt.LeftDockWidgetArea,self.caseListDock)
 
     def _buildEditor(self):
@@ -252,14 +273,14 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.labelCombo.hide()
         tools = qt.QHBoxLayout()
         self.toolButtons = {}
-        for name in ['Paint','Draw','Erase']:
+        for name in ['Draw','Erase','Paint']:
             b = qt.QToolButton()
             b.setText(name)
             b.setIcon(self._icon(name.lower()))
             b.setIconSize(qt.QSize(20,20))
             b.setToolButtonStyle(qt.Qt.ToolButtonTextUnderIcon)
-            b.setSizePolicy(qt.QSizePolicy.Expanding,qt.QSizePolicy.Fixed)
-            b.setMinimumHeight(48)
+            b.setSizePolicy(qt.QSizePolicy.Ignored,qt.QSizePolicy.Fixed)
+            b.setMinimumHeight(44)
             b.setCheckable(True)
             b.connect('clicked()',lambda n=name:self.setTool(n))
             tools.addWidget(b)
@@ -267,9 +288,11 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         lay.addLayout(tools)
         self.toolText = qt.QLabel('Choose a case to annotate')
         self.toolText.wordWrap = True
-        self.toolText.setMinimumHeight(38)
+        self.toolText.setMinimumHeight(24)
         lay.addWidget(self.toolText)
-        brush = qt.QHBoxLayout()
+        self.brushRow = qt.QWidget()
+        brush = qt.QHBoxLayout(self.brushRow)
+        brush.setContentsMargins(0,0,0,0)
         brush.addWidget(qt.QLabel('Brush size'))
         self.brushSize = qt.QDoubleSpinBox()
         self.brushSize.setRange(.3,30)
@@ -279,30 +302,30 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.brushSize.setValue(float(self.settings.value('Meniscus/brush',3)))
         self.brushSize.connect('valueChanged(double)',self._brush)
         brush.addWidget(self.brushSize,1)
-        lay.addLayout(brush)
+        lay.addWidget(self.brushRow)
         history = qt.QHBoxLayout()
-        self._button('Undo',self._undo,history,icon='undo')
-        self._button('Redo',self._redo,history,icon='redo')
+        self.undoButton = self._button('Undo',self._undo,history,icon='undo')
+        self.redoButton = self._button('Redo',self._redo,history,icon='redo')
         lay.addLayout(history)
+        self.visible = qt.QCheckBox('Show annotation')
+        self.visible.setChecked(True)
+        self.visible.connect('toggled(bool)',self._display)
+        lay.addWidget(self.visible)
         display = ctk.ctkCollapsibleButton()
         display.text = 'Display and orientation'
         display.collapsed = True
         inner = qt.QVBoxLayout(display)
         inner.setContentsMargins(0,8,0,8)
         row = qt.QHBoxLayout()
-        self.visible = qt.QCheckBox('Show annotation')
-        self.visible.setChecked(True)
-        self.visible.connect('toggled(bool)',self._display)
-        row.addWidget(self.visible)
-        self.fill = qt.QCheckBox('Fill')
-        self.fill.setChecked(True)
+        self.fill = qt.QCheckBox('Transparent fill')
+        self.fill.setChecked(str(self.settings.value('Meniscus/fill','false')).lower()=='true')
         self.fill.connect('toggled(bool)',self._display)
         row.addWidget(self.fill)
         inner.addLayout(row)
         inner.addWidget(qt.QLabel('Fill opacity'))
         self.opacity = qt.QSlider(qt.Qt.Horizontal)
         self.opacity.setRange(0,100)
-        self.opacity.setValue(25)
+        self.opacity.setValue(int(self.settings.value('Meniscus/opacity',20)))
         self.opacity.connect('valueChanged(int)',self._display)
         inner.addWidget(self.opacity)
         self.windowLevelButton = self._button('Window/level',self._windowLevel,inner)
@@ -314,23 +337,35 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.reformats.connect('toggled(bool)',self._layoutViews)
         inner.addWidget(self.reformats)
         lay.addWidget(display)
-        self._title('Slice review',lay)
+        self.notesPanel = ctk.ctkCollapsibleButton()
+        self.notesPanel.text = 'Slice notes and flags'
+        self.notesPanel.collapsed = True
+        notesLay = qt.QVBoxLayout(self.notesPanel)
+        notesLay.setContentsMargins(0,6,0,6)
         self.attention = qt.QCheckBox('Flag this slice')
         self.attention.connect('toggled(bool)',self._flag)
-        lay.addWidget(self.attention)
+        notesLay.addWidget(self.attention)
         self.notes = qt.QTextEdit()
+        self.notes.setSizePolicy(qt.QSizePolicy.Ignored,qt.QSizePolicy.Fixed)
         self.notes.setPlaceholderText('Notes for this case or uncertain findings')
         self.notes.setFixedHeight(78)
         self.notes.connect('textChanged()',self._notesChanged)
-        lay.addWidget(self.notes)
+        notesLay.addWidget(self.notes)
+        lay.addWidget(self.notesPanel)
         review = ctk.ctkCollapsibleButton()
-        review.text = 'Case review and protocol'
+        review.text = 'Case details and review'
         review.collapsed = True
         self.caseReviewPanel = review
         reviewLay = qt.QVBoxLayout(review)
         reviewLay.setContentsMargins(0,8,0,8)
-        self.medialConsidered = qt.QCheckBox('Medial compartment considered')
-        self.lateralConsidered = qt.QCheckBox('Lateral compartment considered')
+        self.initializationLabel = qt.QLabel('')
+        self.initializationLabel.wordWrap = True
+        self.initializationLabel.objectName = 'support'
+        reviewLay.addWidget(self.initializationLabel)
+        self.medialConsidered = qt.QCheckBox('Medial considered')
+        self.lateralConsidered = qt.QCheckBox('Lateral considered')
+        self.medialConsidered.setToolTip('Confirm that you considered the medial meniscus throughout the acquired stack.')
+        self.lateralConsidered.setToolTip('Confirm that you considered the lateral meniscus throughout the acquired stack.')
         for checkbox in [self.medialConsidered,self.lateralConsidered]:
             checkbox.connect('toggled(bool)',self._compartments)
             reviewLay.addWidget(checkbox)
@@ -344,7 +379,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.editor.setMRMLScene(slicer.mrmlScene)
         self.editor.setMaximumNumberOfUndoStates(30)
         self.editor.setUndoEnabled(True)
-        self.editor.setEffectNameOrder(['Draw','Paint','Erase'])
+        self.editor.setEffectNameOrder(['Draw','Erase','Paint'])
         self.editor.unorderedEffectsVisible = False
         self.editor.autoShowSourceVolumeNode = False
         for method in ['setSourceVolumeNodeSelectorVisible','setSegmentationNodeSelectorVisible','setSwitchToSegmentationsButtonVisible','setShow3DButtonVisible']:
@@ -353,10 +388,11 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         scroll = qt.QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(qt.QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarAlwaysOff)
         scroll.setWidget(panel)
         scroll.setStyleSheet(self.style)
         self.rightDock.setWidget(scroll)
-        self.rightDock.setMinimumWidth(270)
+        self.rightDock.setMinimumWidth(250)
         slicer.util.mainWindow().addDockWidget(qt.Qt.RightDockWidgetArea,self.rightDock)
 
     def _menu(self, button, actions):
@@ -400,15 +436,14 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.identityLabel = qt.QLabel('No case open')
         self.identityLabel.objectName = 'identity'
         self.topBar.addWidget(self.identityLabel)
-        self.initializationLabel = qt.QLabel('')
-        self.initializationLabel.objectName = 'initializationMode'
-        self.initializationLabel.wordWrap = True
-        self.topBar.addWidget(self.initializationLabel)
         spacer = qt.QWidget()
         spacer.setSizePolicy(qt.QSizePolicy.Expanding,qt.QSizePolicy.Preferred)
         self.topBar.addWidget(spacer)
         self.saveStatus = qt.QLabel('No case open')
         self.saveStatus.objectName = 'saveState'
+        self.saveStatus.wordWrap = True
+        self.saveStatus.setMinimumWidth(150)
+        self.saveStatus.setMaximumWidth(190)
         self.topBar.addWidget(self.saveStatus)
         dataset = self._headerButton('Dataset','folder')
         self._menu(dataset,[('Open dataset…',self._chooseDataset,'folder'),('Resume work',self._resume,'resume'),(None,None,None),('Show dataset folder',self._showDataset,'folder'),('Show saved work',self._showWork,'folder'),('Export results…',self._exportDialog,'export')])
@@ -430,13 +465,19 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         footer.setSizePolicy(qt.QSizePolicy.Expanding,qt.QSizePolicy.Preferred)
         footerLayout = qt.QVBoxLayout(footer)
         footerLayout.setContentsMargins(2,2,2,2)
-        footerLayout.setSpacing(10)
+        footerLayout.setSpacing(6)
         nav = qt.QHBoxLayout()
         nav.setSpacing(12)
         self.sliceReadout = qt.QLabel('Slice — of —')
         self.sliceReadout.objectName = 'sliceReadout'
-        self.sliceReadout.setMinimumWidth(148)
-        nav.addWidget(self.sliceReadout)
+        self.sliceReadout.setMinimumWidth(132)
+        caption = qt.QVBoxLayout()
+        caption.setSpacing(0)
+        caption.addWidget(self.sliceReadout)
+        self.sliceState = qt.QLabel('No case open')
+        self.sliceState.objectName = 'support'
+        caption.addWidget(self.sliceState)
+        nav.addLayout(caption)
         self.previousButton = self._button('Previous',lambda:self.goSlice(self.currentSlice-1),nav,icon='previous')
         self.sliceSlider = qt.QSlider(qt.Qt.Horizontal)
         self.sliceSlider.setRange(1,1)
@@ -456,6 +497,19 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.sliceSpin.connect('valueChanged(int)',lambda value:self.goSlice(value-1))
         nav.addWidget(self.sliceSpin)
         footerLayout.addLayout(nav)
+        guidance = qt.QHBoxLayout()
+        guidance.setSpacing(8)
+        self.instruction = qt.QLabel('Open a dataset, then choose a case.')
+        self.instruction.objectName = 'MeniscusInstruction'
+        self.instruction.wordWrap = True
+        self.instruction.setMinimumHeight(32)
+        guidance.addWidget(self.instruction,1)
+        self.finishContourButton = self._button('Finish contour',self._finishContour,guidance,True,icon='check')
+        self.discardContourButton = self._button('Discard',self._discardContour,guidance)
+        self.discardContourButton.setToolTip('Discard only the unfinished contour. Committed annotations are unchanged.')
+        self.finishContourButton.hide()
+        self.discardContourButton.hide()
+        footerLayout.addLayout(guidance)
         self.actionBar = qt.QWidget()
         actions = qt.QHBoxLayout(self.actionBar)
         actions.setContentsMargins(0,0,0,0)
@@ -502,7 +556,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         for action in main.findChildren(qt.QAction):
             if not any(word in str(action.objectName) for word in ['Exit','Quit']): action.setShortcut(qt.QKeySequence())
         self._installShortcuts()
-        main.resizeDocks([self.caseListDock,self.rightDock],[int(self.settings.value('Meniscus/casesWidth',270)),int(self.settings.value('Meniscus/toolsWidth',290))],qt.Qt.Horizontal)
+        main.resizeDocks([self.caseListDock,self.rightDock],[int(self.settings.value('Meniscus/casesWidth',230)),int(self.settings.value('Meniscus/toolsWidth',260))],qt.Qt.Horizontal)
         self._lockControllers()
         from MeniscusAnnotatorLib.interface import EmptyCanvas
         self.emptyCanvas = EmptyCanvas(slicer.app.layoutManager().sliceWidget('Red').sliceView(),self)
@@ -551,7 +605,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
     def _installShortcuts(self):
         self.shortcuts = []
         view = slicer.app.layoutManager().sliceWidget('Red').sliceView()
-        for key, cb in [('Left', lambda: self.goSlice(self.currentSlice-1)), ('Right', lambda: self.goSlice(self.currentSlice+1)), ('R', self._reviewNext), ('U', self._nextUnreviewed), ('F', self._nextFlagged), ('Ctrl+S', lambda: self._safe(self.save)), ('Ctrl+Z', self._undo), ('Ctrl+Y', self._redo), ('1', lambda: self.setLabel('medial')), ('2', lambda: self.setLabel('lateral')), ('3', lambda: self.setLabel('uncertain')), ('P', lambda: self.setTool('Paint')), ('D', lambda: self.setTool('Draw')), ('E', lambda: self.setTool('Erase')), ('Escape', lambda: self.setTool(''))]:
+        for key, cb in [('Left', lambda: self.goSlice(self.currentSlice-1)), ('Right', lambda: self.goSlice(self.currentSlice+1)), ('R', self._reviewNext), ('U', self._nextUnreviewed), ('F', self._nextFlagged), ('Ctrl+S', lambda: self._safe(self.save)), ('Ctrl+Z', self._undo), ('Ctrl+Y', self._redo), ('1', lambda: self.setLabel('medial')), ('2', lambda: self.setLabel('lateral')), ('3', lambda: self.setLabel('uncertain')), ('P', lambda: self.setTool('Paint')), ('D', lambda: self.setTool('Draw')), ('E', lambda: self.setTool('Erase')), ('Escape', self._escape)]:
             shortcut = qt.QShortcut(qt.QKeySequence(key), view)
             shortcut.setContext(qt.Qt.WidgetWithChildrenShortcut)
             shortcut.connect('activated()', cb)
@@ -569,7 +623,8 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             self._diagnostic = traceback.format_exc()
             reason = str(exc) if isinstance(exc, (ValidationError, OSError)) else 'The operation could not be completed.'
             self.message.setText('Action failed. Previous saved versions are intact.')
-            self.saveStatus.setText('Action failed · check details')
+            if 'Save failed' not in str(self.saveStatus.text):
+                self.saveStatus.setText('Save failed · Unsaved changes' if getattr(func,'__name__','')=='save' else 'Action failed · check details')
             advice = ('\n\nContact the dataset coordinator if the input or saved-work configuration needs correction. Diagnostic details are available in Help.'
                       if isinstance(exc, ValidationError) else
                       '\n\nCheck the work location, available disk space and permissions, then retry. Diagnostic details are available in Help.')
@@ -640,11 +695,15 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         return confirmed
 
     def _chooseDataset(self):
+        if self.session and not self._guardContour('opening another dataset'):
+            return
         root = qt.QFileDialog.getExistingDirectory(slicer.util.mainWindow(), 'Open dataset', str(self.settings.value('Meniscus/dataset', '')))
         if root:
             self._safe(lambda: self.openDataset(root))
 
     def openDataset(self, root, work_root=None):
+        if getattr(self,'session',None) and not self._guardContour('opening another dataset'):
+            return
         if self._practiceConfig and Path(root).resolve()!=Path(self._practiceConfig['input_root']).resolve():
             raise ValidationError('This software-practice launcher is restricted to its two permitted cases. Other datasets cannot be opened here.')
         self.message.setText('Validating dataset…')
@@ -703,7 +762,8 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
                     return
                 location = str(Path(chosen) / workspace['relative_folder'])
         store = WorkStore(location, ds, job=job, reader=reader)
-        self.closeCase()
+        if self.closeCase() is False:
+            return
         self.dataset, self.store = ds, store
         self._lastCaseSettingsKey = workspace['settings_key'] + '/lastCase' if workspace['uses_local_reader_assignment'] else 'Meniscus/lastCase'
         self._updatePracticeContext()
@@ -718,9 +778,12 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             self.caseTable.selectRow(0)
         self.message.setText('Dataset ready. Select a case to begin.')
         if getattr(self,'emptyCanvas',None): self.emptyCanvas.ready(True)
+        self._updateGuidance()
         return ds
 
     def _loadJob(self):
+        if self.session and not self._guardContour('changing annotation setup'):
+            return
         if self._practiceConfig:
             slicer.util.infoDisplay('This launcher uses a fixed SOFTWARE PRACTICE protocol and separate work folder. Research jobs cannot be loaded here.',windowTitle='Software practice only')
             return
@@ -735,7 +798,8 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             job = load_job_config(path, self.dataset, require_full_correction=require_full, allow_unresolved=True)
             if not self._confirmDatasetStart(job, self.store.annotator):
                 return
-            self.closeCase()
+            if self.closeCase() is False:
+                return
             self.store = WorkStore(self.store.root, self.dataset, job=job, reader=self._confirmedReader)
             self.settings.setValue('Meniscus/job/' + self.dataset.identity, str(path))
             self.message.setText('Explicit job loaded. Open a case; only permitted starting masks will be loaded.')
@@ -791,12 +855,15 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
 
     def closeCase(self):
         if not self.session:
-            return
+            return True
+        if not self._loading and not self._guardContour('closing or changing cases'):
+            return False
         if not self._loading:
             self._segmentChanged()  # Commit a queued native stroke before switching/closing.
         if self.dirty:
             self.save()
         self._loading = True
+        self._removeDrawMarkers()
         for node, tag in self._observers:
             node.RemoveObserver(tag)
         self._observers.clear()
@@ -813,26 +880,40 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
                     if helper:
                         slicer.mrmlScene.RemoveNode(helper)
         self.volume = self.anatomy = self.uncertainty = None
+        self._drawContext = self._drawState = None
+        self._startingMaskSlices = None
+        self._drawHint = ''
         self._loading = False
         self._enable(False)
         self.sliceReadout.setText('Slice — of —')
+        self.sliceState.setText('No case open')
         self.identityLabel.setText('No case open')
         self.initializationLabel.setText('')
         self.saveStatus.setText('No case open')
+        self._updateGuidance()
         if getattr(self,'emptyCanvas',None): self.emptyCanvas.ready(bool(self.dataset))
+        return True
 
     def openCase(self, key):
         if self.session and self.session.case.key == key:
             return
         from MeniscusAnnotatorLib.core import require_case_prediction_available
         require_case_prediction_available(self.store.job, key)
-        self.closeCase()
+        if self.closeCase() is False:
+            return
         case = next(c for c in self.dataset.cases if c.key == key)
         self.session = self.store.open_case(case)
         if getattr(self,'emptyCanvas',None): self.emptyCanvas.hide()
         self._loading = True
         try:
             labels, uncertain, seg_path = self.session.load()
+            self._startingMaskSlices = None
+            if self.session.state['initialization']['method'] == 'correction':
+                import nibabel as nib
+                start = self.session.state['initialization']['starting_mask']
+                preserved = self.session.folder / ('starting-mask-' + start['sha256'] + '.nii.gz')
+                initial = np.asarray(nib.load(str(preserved)).dataobj)
+                self._startingMaskSlices = np.any(initial != 0, axis=(0,1))
             self.volume = slicer.util.loadVolume(str(case.image_path), {'name':'Source MRI', 'singleFile':True})
             if not self.volume:
                 raise ValidationError('The source MRI could not be loaded.')
@@ -858,7 +939,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             self.editor.setSegmentationNode(self.anatomy)
             self.editor.setSourceVolumeNode(self.volume)
             self.editor.setCurrentSegmentID('medial')
-            self.editor.setActiveEffectByName('Paint')
+            self.editor.setActiveEffectByName('Draw')
             self._configureEffects()
             self._lastArrays = self.collectArrays()
             for node in [self.anatomy]:
@@ -875,7 +956,8 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             self.currentSlice = int(self.settings.value(resume_key, self.session.state.get('last_slice', 0)))
             self._nativePlane(self.currentSlice, reset=True)
             sliceNode = slicer.app.layoutManager().sliceWidget('Red').mrmlSliceNode()
-            self._observers.append((sliceNode, sliceNode.AddObserver(vtk.vtkCommand.ModifiedEvent, self._sliceMoved)))
+            self._observers.append((sliceNode, sliceNode.AddObserver(vtk.vtkCommand.ModifiedEvent, self._sliceMoved, 2.0)))
+            self._installDrawGuards()
             self.sliceSpin.setMaximum(case.n_slices)
             self.sliceSlider.setMaximum(case.n_slices)
             self.notes.setPlainText(self.session.state.get('notes', ''))
@@ -885,7 +967,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             self.dirty = False
             self._enable(True)
             self.setLabel('medial')
-            self.setTool('Paint')
+            self.setTool('Draw')
             self.settings.setValue(getattr(self, '_lastCaseSettingsKey', 'Meniscus/lastCase'), key)
         except Exception:
             self.dirty = False
@@ -904,11 +986,238 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         node.SetSaveWithScene(False)
         node.CreateDefaultDisplayNodes()
         node.GetDisplayNode().SetSaveWithScene(False)
+        node.GetDisplayNode().SetSliceIntersectionThickness(1)
         node.SetReferenceImageGeometryParameterFromVolumeNode(self.volume)
         for key in ids:
             name, color = LABELS[key]
             node.GetSegmentation().AddEmptySegment(key, name, color)
         return node
+
+    def _pendingDraw(self):
+        """Inspect the pinned native Draw effect; never rasterize our own contour."""
+        if not self.session or not hasattr(self,'editor'):
+            return None
+        effect = self.editor.effectByName('Draw')
+        native = effect.self() if effect else None
+        widget = slicer.app.layoutManager().sliceWidget('Red')
+        pipeline = native.drawPipelines.get(widget) if native else None
+        return pipeline if pipeline and pipeline.rasPoints.GetNumberOfPoints() else None
+
+    def _guardContour(self, action):
+        if not self._pendingDraw():
+            return True
+        self._drawHint = 'Finish or discard the contour before ' + action + '.'
+        self._updateGuidance()
+        return False
+
+    def _refreshIdentity(self):
+        if self.session:
+            m = self.session.case.metadata
+            side = 'Left knee' if m['knee_side']=='L' else 'Right knee'
+            self.identityLabel.setText(f"OAI {m['participant_id']} · M{int(m['visit_month']):03d}\n{side} · {LABELS[self.activeLabel][0]}")
+
+    def _updateGuidance(self):
+        if not hasattr(self,'instruction'):
+            return
+        pending = self._pendingDraw()
+        count = pending.rasPoints.GetNumberOfPoints() if pending else 0
+        self.finishContourButton.setVisible(bool(count))
+        self.discardContourButton.setVisible(bool(count))
+        self.finishContourButton.setEnabled(count >= 3)
+        if not self.session:
+            self.instruction.setText('Choose a case to begin.' if self.dataset else 'Open a dataset, then choose a case.')
+            self.brushRow.hide()
+            return
+        tool = self.editor.activeEffect().name if self.editor.activeEffect() else 'Navigate'
+        if self._windowLevelActive:
+            text = 'Window/level: Left-drag to adjust brightness and contrast. Choose a drawing tool to return.'
+        elif tool == 'Draw':
+            text = 'Draw: Click around the boundary. Right-click to close and fill.'
+            if count:
+                text += f' Unfinished contour: {count} points; not saved.'
+                if self._drawHint:
+                    text += ' ' + self._drawHint
+            else:
+                text += ' Ctrl+wheel zooms.'
+        elif tool == 'Erase':
+            text = 'Erase: Drag to remove pixels from the selected label on this acquired slice.'
+        elif tool == 'Paint':
+            text = 'Paint: Drag to add a small correction to the selected label on this acquired slice.'
+        else:
+            text = 'Navigate: Scroll for slices. Ctrl+wheel zooms; middle-drag pans.'
+        if not count and (self._startingMaskSlices is None or not self._startingMaskSlices[self.currentSlice]):
+            text += ' No starting mask on this slice.'
+        self.instruction.setText(text)
+        self.undoButton.setEnabled(not count)
+        self.redoButton.setEnabled(not count)
+        if count:
+            self.saveStatus.setText(('Practice · ' if self.session.state.get('practice_context') else '') + 'Unsaved contour')
+
+    def _validDrawContext(self, pipeline):
+        if self._drawContext != (self.session.case.identity, self.currentSlice, self.activeLabel):
+            self._drawHint = 'The target changed. Discard this contour and return to the correct case and slice.'
+            return False
+        try:
+            self._assertGrid()
+        except ValidationError:
+            self._diagnostic = traceback.format_exc()
+            self._drawHint = 'Image alignment changed. Discard this contour and use Help → Controls and shortcuts → Restore last saved case before drawing.'
+            qt.QTimer.singleShot(0,lambda message=self._drawHint: slicer.util.errorDisplay(message,windowTitle='Editing blocked'))
+            return False
+        points = np.asarray([pipeline.rasPoints.GetPoint(i) for i in range(pipeline.rasPoints.GetNumberOfPoints())])
+        if len(points) < 3:
+            self._drawHint = 'Add at least three boundary points, or discard the contour.'
+            return False
+        ijk = (np.linalg.inv(self.session.case.affine_ras) @ np.column_stack((points,np.ones(len(points)))).T).T[:,:3]
+        if not np.allclose(ijk[:,2],self.currentSlice,atol=.001,rtol=0):
+            self._drawHint = 'The contour is not on this acquired slice. Discard it and reopen the correct slice.'
+            return False
+        area = abs(np.dot(ijk[:,0],np.roll(ijk[:,1],1))-np.dot(ijk[:,1],np.roll(ijk[:,0],1))) / 2
+        if area < 1e-8:
+            self._drawHint = 'Place boundary points around an area before closing the contour.'
+            return False
+        return True
+
+    def _finishContour(self):
+        pipeline = self._pendingDraw()
+        if not pipeline:
+            return
+        if not self._validDrawContext(pipeline):
+            self._updateGuidance()
+            return
+        pipeline.apply()  # Native Slicer Draw, including its undo transaction.
+        pipeline.actionState = ''
+        pipeline.positionActors()
+        self._drawContext = None
+        self._drawHint = ''
+        self._segmentChanged()
+        self._pollDrawState()
+
+    def _discardContour(self):
+        pipeline = self._pendingDraw()
+        if not pipeline:
+            return
+        dialog = qt.QMessageBox(slicer.util.mainWindow())
+        dialog.objectName = 'MeniscusDiscardContourDialog'
+        dialog.setWindowTitle('Discard unfinished contour?')
+        dialog.setText('Discard the unfinished contour? Committed annotations will stay unchanged.')
+        discard = dialog.addButton('Discard contour',qt.QMessageBox.DestructiveRole)
+        keep = dialog.addButton('Keep drawing',qt.QMessageBox.RejectRole)
+        dialog.setDefaultButton(keep)
+        dialog.setEscapeButton(keep)
+        dialog.exec_()
+        if dialog.clickedButton() != discard:
+            return
+        pipeline.resetPolyData()
+        pipeline.actionState = ''
+        pipeline.positionActors()
+        self._drawContext = None
+        self._drawHint = ''
+        self._pollDrawState()
+
+    def _escape(self):
+        self._discardContour() if self._pendingDraw() else self.setTool('')
+
+    def _installDrawGuards(self):
+        interactor = slicer.app.layoutManager().sliceWidget('Red').sliceView().interactorStyle().GetInteractor()
+        self._drawObserverTags = {}
+        for event in ['LeftButtonPressEvent','LeftButtonReleaseEvent','LeftButtonDoubleClickEvent',
+                      'RightButtonPressEvent','RightButtonReleaseEvent','MouseMoveEvent','KeyPressEvent',
+                      'MouseWheelForwardEvent','MouseWheelBackwardEvent']:
+            tag = interactor.AddObserver(event,self._drawInteraction,2.0)
+            self._drawObserverTags[event] = tag
+            self._observers.append((interactor,tag))
+
+    def _drawInteraction(self, caller, event):
+        command = caller.GetCommand(self._drawObserverTags[event])
+        command.SetAbortFlag(0)
+        if self._loading or not self.session:
+            return
+        if event in ('MouseWheelForwardEvent','MouseWheelBackwardEvent') and not caller.GetControlKey() and not caller.GetAltKey():
+            command.SetAbortFlag(1)
+            self.goSlice(self.currentSlice + (1 if event=='MouseWheelForwardEvent' else -1))
+            return
+        active = self.editor.activeEffect()
+        if not active or active.name != 'Draw':
+            return
+        pipeline = self._pendingDraw()
+        if event == 'LeftButtonPressEvent' and not (caller.GetControlKey() or caller.GetShiftKey() or caller.GetAltKey()):
+            if not pipeline:
+                self._drawContext = (self.session.case.identity,self.currentSlice,self.activeLabel)
+            self._drawHint = ''
+        if event == 'RightButtonPressEvent':
+            self._rightDrawStart = tuple(caller.GetEventPosition())
+            self._rightDrawDragged = False
+        elif event == 'MouseMoveEvent' and self._rightDrawStart is not None:
+            xy = caller.GetEventPosition()
+            if np.linalg.norm(np.asarray(xy)-self._rightDrawStart) > 6:
+                self._rightDrawDragged = True
+        finishing = event in ('RightButtonReleaseEvent','LeftButtonDoubleClickEvent') or (event=='KeyPressEvent' and caller.GetKeySym() in ('a','Return'))
+        if finishing and pipeline:
+            # Fail closed even if native grid validation raises inside a VTK callback.
+            command.SetAbortFlag(1)
+            if (event=='RightButtonReleaseEvent' and self._rightDrawDragged) or not self._validDrawContext(pipeline):
+                pipeline.actionState = 'moving'
+                if event=='RightButtonReleaseEvent' and self._rightDrawDragged:
+                    self._drawHint = 'Contour kept. Use Ctrl+wheel to zoom; right-click without dragging to finish.'
+                self._updateGuidance()
+            else:
+                command.SetAbortFlag(0)
+        if event == 'RightButtonReleaseEvent':
+            self._rightDrawStart = None
+            self._rightDrawDragged = False
+        # Run after the native effect has handled this event, for immediate feedback.
+        qt.QTimer.singleShot(0,self._pollDrawState)
+
+    def _removeDrawMarkers(self):
+        if self._drawMarkers:
+            self._drawMarkers[0].RemoveActor2D(self._drawMarkers[1])
+            self._drawMarkers = None
+
+    def _updateDrawMarkers(self, pipeline):
+        if not pipeline:
+            self._removeDrawMarkers()
+            return
+        if not self._drawMarkers or self._drawMarkers[-1] is not pipeline:
+            self._removeDrawMarkers()
+            # Display-only glyphs share native XY points; native rasterization data
+            # and RAS coordinates are never changed by this feedback actor.
+            data = vtk.vtkPolyData()
+            data.SetPoints(pipeline.xyPoints)
+            glyph = vtk.vtkVertexGlyphFilter()
+            glyph.SetInputData(data)
+            mapper = vtk.vtkPolyDataMapper2D()
+            mapper.SetInputConnection(glyph.GetOutputPort())
+            actor = vtk.vtkActor2D()
+            actor.SetMapper(mapper)
+            actor.GetProperty().SetColor(1.,.95,.45)
+            actor.GetProperty().SetPointSize(5)
+            renderer = slicer.app.layoutManager().sliceWidget('Red').sliceView().renderWindow().GetRenderers().GetFirstRenderer()
+            renderer.AddActor2D(actor)
+            self._drawMarkers = (renderer,actor,data,glyph,mapper,pipeline)
+            pipeline.actor.GetProperty().SetColor(1.,.95,.45)
+        self._drawMarkers[2].Modified()
+
+    def _pollDrawState(self):
+        if self._loading:
+            return
+        pipeline = self._pendingDraw()
+        count = pipeline.rasPoints.GetNumberOfPoints() if pipeline else 0
+        active = self.editor.activeEffect() if self.session else None
+        view = slicer.app.layoutManager().sliceWidget('Red')
+        state = (id(pipeline),count,active.name if active else '',view.mrmlSliceNode().GetMTime())
+        if state == self._drawState:
+            return
+        self._drawState = state
+        self._updateDrawMarkers(pipeline)
+        if not count:
+            self._drawContext = None
+            self._drawHint = ''
+        if self.session:
+            self.refreshReview()
+        else:
+            self._updateGuidance()
+        view.sliceView().scheduleRender()
 
     def _configureEffects(self):
         for name in ['Paint', 'Erase']:
@@ -967,12 +1276,39 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         node = slicer.app.layoutManager().sliceWidget('Red').mrmlSliceNode()
         p = np.array([node.GetSliceToRAS().GetElement(i,3) for i in range(3)]+[1])
         k = int(np.clip(round((np.linalg.inv(self.session.case.affine_ras) @ p)[2]),0,self.session.case.n_slices-1))
+        if k == self.currentSlice and self._onAcquiredPlane():
+            # Pan/zoom/focus can modify the slice node without leaving its plane.
+            # Reprojecting the same plane introduces roundoff that native Draw's
+            # exact activeSliceOffset comparison mistakes for a different slice.
+            return
+        if k != self.currentSlice and self._pendingDraw():
+            self._nativePlane(self.currentSlice)
+            self._guardContour('changing slices')
+            return
         self.goSlice(k)
+
+    def _onAcquiredPlane(self):
+        a = self.session.case.affine_ras
+        normal = a[:3,2]/np.linalg.norm(a[:3,2])
+        up = a[:3,1]/np.linalg.norm(a[:3,1])
+        if up[2] < 0:
+            up = -up
+        frame = np.column_stack((np.cross(up,normal),up,normal))
+        matrix = slicer.app.layoutManager().sliceWidget('Red').mrmlSliceNode().GetSliceToRAS()
+        actual = np.array([[matrix.GetElement(i,j) for j in range(4)] for i in range(4)])
+        k = (np.linalg.inv(a) @ actual[:,3])[2]
+        return np.allclose(actual[:3,:3],frame,atol=1e-7,rtol=0) and abs(k-self.currentSlice) < 1e-6
 
     def goSlice(self, k):
         if not self.session:
             return
         k = int(np.clip(k,0,self.session.case.n_slices-1))
+        if k == self.currentSlice and self._pendingDraw() and self._onAcquiredPlane():
+            self.refreshReview()
+            return True
+        if k != self.currentSlice and not self._guardContour('changing slices'):
+            self.refreshReview()
+            return False
         self.currentSlice = k
         self.session.state['last_slice'] = k
         self._nativePlane(k)
@@ -980,6 +1316,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         if not self._loading:
             self.settings.setValue('Meniscus/slice/' + self.session.case.identity, k)
             self.settings.sync()  # Resume position does not alter an approved annotation.
+        return True
 
     def _assertGrid(self):
         if self.volume.GetParentTransformNode():
@@ -1039,11 +1376,17 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
     def setLabel(self, key):
         if not self.session:
             return
+        if key != self.activeLabel and not self._guardContour('changing compartments'):
+            self._toolStatus()
+            return False
+        if key == self.activeLabel and self._pendingDraw():
+            self._toolStatus()
+            return True
         self._segmentChanged()
         if self._windowLevelActive:
-            self.setTool('Paint')
+            self.setTool('Draw')
         self.activeLabel = key
-        previousTool = self.editor.activeEffect().name if self.editor.activeEffect() else 'Paint'
+        previousTool = self.editor.activeEffect().name if self.editor.activeEffect() else 'Draw'
         if self.editor.segmentationNode() != self.anatomy:
             self.editor.setSegmentationNode(self.anatomy)
         self.editor.setCurrentSegmentID(key)
@@ -1059,6 +1402,13 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
     def setTool(self, name):
         if not self.session:
             return
+        current = self.editor.activeEffect().name if self.editor.activeEffect() else ''
+        if name != current and not self._guardContour('changing tools'):
+            self._toolStatus()
+            return False
+        if name == current and self._pendingDraw():
+            self._toolStatus()
+            return True
         self._segmentChanged()
         self._windowLevelActive = False
         self.windowLevelButton.setChecked(False)
@@ -1072,6 +1422,9 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
     def _windowLevel(self):
         if not self.session:
             return
+        if not self._guardContour('adjusting window/level'):
+            self.windowLevelButton.setChecked(False)
+            return False
         if self._windowLevelActive:
             self.setTool('')
             return
@@ -1084,16 +1437,24 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self._toolStatus()
 
     def _toolStatus(self):
-        if self._windowLevelActive:
-            self.toolText.setText('Window/level · Display only\nLeft-drag to adjust brightness and contrast')
-            annotation = slicer.app.layoutManager().sliceWidget('Red').sliceView().cornerAnnotation()
-            annotation.SetText(vtk.vtkCornerAnnotation.UpperRight,'Window/level · Display only\nLeft-drag · No drawing')
-            slicer.app.layoutManager().sliceWidget('Red').sliceView().forceRender()
+        if not self.session:
+            self._updateGuidance()
             return
-        tool = self.editor.activeEffect().name if self.editor.activeEffect() else 'Navigate'
-        self.toolText.setText(f'{LABELS[self.activeLabel][0]} · {tool}\nEditing: this acquired slice only')
+        if self._windowLevelActive:
+            tool = 'Window/level'
+            self.toolText.setText('Window/level · Display only')
+        else:
+            tool = self.editor.activeEffect().name if self.editor.activeEffect() else 'Navigate'
+            self.toolText.setText(f'{tool} · This acquired slice only' if tool != 'Navigate' else 'Navigate · No drawing')
+        for name, button in self.toolButtons.items():
+            button.setChecked(name == tool)
+        for key, button in self.labelButtons.items():
+            button.setChecked(key == self.activeLabel)
+        self.brushRow.setVisible(tool in ('Paint','Erase'))
+        self._refreshIdentity()
+        self._updateGuidance()
         annotation = slicer.app.layoutManager().sliceWidget('Red').sliceView().cornerAnnotation()
-        annotation.SetText(vtk.vtkCornerAnnotation.UpperRight,f'{LABELS[self.activeLabel][0]} · {tool}\n{self.brushSize.value:g} mm · This slice only')
+        annotation.SetText(vtk.vtkCornerAnnotation.UpperRight,'')
         slicer.app.layoutManager().sliceWidget('Red').sliceView().forceRender()
 
     def _brush(self, *args):
@@ -1103,16 +1464,19 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             self._toolStatus()
 
     def _undo(self):
-        if self.session:
+        if self.session and self._guardContour('undoing a committed edit'):
             self.editor.undo()
             self._segmentChanged()
 
     def _redo(self):
-        if self.session:
+        if self.session and self._guardContour('redoing a committed edit'):
             self.editor.redo()
             self._segmentChanged()
 
     def _display(self, *args):
+        self.opacity.setEnabled(self.fill.checked)
+        self.settings.setValue('Meniscus/fill',bool(self.fill.checked))
+        self.settings.setValue('Meniscus/opacity',self.opacity.value)
         if not self.anatomy:
             return
         for node in [self.anatomy]:
@@ -1122,6 +1486,11 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             d.SetOpacity2DOutline(1)
 
     def _layoutViews(self, *args):
+        if self.session and not self._guardContour('changing the view layout'):
+            self.reformats.blockSignals(True)
+            self.reformats.setChecked(slicer.app.layoutManager().layout == 703)
+            self.reformats.blockSignals(False)
+            return False
         lm = slicer.app.layoutManager()
         # Keep the acquired plane dominant; orientation reformats occupy a narrow column.
         layout_id = 703
@@ -1145,7 +1514,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             self._display()
 
     def _resetView(self):
-        if self.session:
+        if self.session and self._guardContour('resetting the view'):
             self._nativePlane(self.currentSlice, reset=True)
             self.volume.GetDisplayNode().AutoWindowLevelOn()
 
@@ -1173,7 +1542,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             self._changed()
 
     def _reviewNext(self):
-        if self.session:
+        if self.session and self._guardContour('marking the slice reviewed'):
             self._segmentChanged()
             self.session.state['review'][self.currentSlice]['reviewed'] = True
             self._changed()
@@ -1200,9 +1569,9 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         if not self.session:
             return
         m = self.session.case.metadata
-        self.identityLabel.setText(f"OAI {m['participant_id']}   ·   M{int(m['visit_month']):03d}   ·   {'Left' if m['knee_side']=='L' else 'Right'} knee")
+        self._refreshIdentity()
         correction = self.session.state['initialization']['method'] == 'correction'
-        self.initializationLabel.setText('Correction · Existing automated mask' if correction else 'Blank annotation · No starting mask')
+        self.initializationLabel.setText('Correction · Unreviewed starting mask' if correction else 'Blank annotation · No starting mask')
         self.initializationLabel.setToolTip('Starting masks are unreviewed model predictions. Check both compartments throughout the acquired stack.' if correction else 'This case was intentionally initialized with empty labels.')
         review = self.session.state['review']
         count = sum(bool(r['reviewed']) for r in review)
@@ -1221,13 +1590,15 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.attention.setChecked(review[self.currentSlice]['flag'])
         self.attention.blockSignals(False)
         state = 'Reviewed' if review[self.currentSlice]['reviewed'] else 'Not reviewed'
+        self.sliceState.setText(state + (' · Flagged' if review[self.currentSlice]['flag'] else ''))
         context = self._updatePracticeContext()
-        save_text = 'Unsaved changes' if self.dirty else ('Saved' if self.session.current_checkpoint else 'New draft')
-        self.saveStatus.setText(('SOFTWARE PRACTICE · ' if context else '') + save_text)
+        save_text = 'Unsaved contour' if self._pendingDraw() else ('Unsaved changes' if self.dirty else ('Saved' if self.session.current_checkpoint else 'New draft'))
+        self.saveStatus.setText(('Practice · ' if context else '') + save_text)
         if not context:
             self.message.setText('Practice work · Draft protocol' if self.session.state['protocol']['status']=='draft' else 'Protocol ' + self.session.state['protocol']['version'])
         annotation = slicer.app.layoutManager().sliceWidget('Red').sliceView().cornerAnnotation()
-        annotation.SetText(vtk.vtkCornerAnnotation.UpperLeft,f'Slice {self.currentSlice+1} of {len(review)}\n{state}')
+        annotation.SetText(vtk.vtkCornerAnnotation.UpperLeft,'')
+        self._updateGuidance()
 
     def _segWriter(self, path):
         # One editable segmentation contains all fixed IDs. Separate layers preserve uncertainty overlap.
@@ -1267,25 +1638,34 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
     def save(self, approve=False, practice=False):
         if not self.session:
             return
+        if not self._guardContour('saving'):
+            return
         self._segmentChanged()
         self._assertGrid()
         import hashlib
         if hashlib.sha256(slicer.util.arrayFromVolume(self.volume).tobytes()).hexdigest() != self._volumeDigest:
             self.editor.setActiveEffectByName('')
             raise ValidationError('The loaded source image pixels changed. Reopen the case before saving.')
-        self.saveStatus.setText(('SOFTWARE PRACTICE · ' if self.session.state.get('practice_context') else '') + 'Saving…')
+        self.saveStatus.setText(('Practice · ' if self.session.state.get('practice_context') else '') + 'Saving…')
         self.saveStatus.repaint()
         labels, uncertain = self.collectArrays()
         self.session.state['runtime'] = {'slicer_version':slicer.app.applicationVersion, 'slicer_revision':slicer.app.repositoryRevision, 'application_version':VERSION, 'interface_revision':'workspace-2', **SOURCE_IDENTITY}
-        path = self.session.save(labels, uncertain, self._segWriter, approve=approve, practice=practice)
+        try:
+            path = self.session.save(labels, uncertain, self._segWriter, approve=approve, practice=practice)
+        except Exception:
+            self.dirty = True
+            self.saveStatus.setText('Save failed · Unsaved changes')
+            raise
         self.dirty = False
         self.refreshReview()
         self._populate()
-        self.saveStatus.setText(('SOFTWARE PRACTICE · ' if self.session.state.get('practice_context') else '') + (('Practice approved · Saved' if practice else 'Approved · Saved') if approve else 'Saved'))
+        self.saveStatus.setText(('Practice · ' if self.session.state.get('practice_context') else '') + (('Practice approved · Saved' if practice else 'Approved · Saved') if approve else 'Saved'))
         return path
 
     def _approve(self):
         if not self.session:
+            return
+        if not self._guardContour('approving the case'):
             return
         practice = self.session.state['protocol']['status'] == 'draft'
         labels, uncertain = self.collectArrays()
@@ -1315,6 +1695,8 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             self.message.setText('No available case. All starting masks are blocked.')
 
     def _autosave(self):
+        if self._pendingDraw():
+            return  # An unfinished contour is visibly unsaved; never dismiss it for autosave.
         if self.session and self.dirty:
             try:
                 self.save()
@@ -1329,6 +1711,8 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
 
     def _exportDialog(self):
         if not self.store:
+            return
+        if not self._guardContour('exporting'):
             return
         chosen_rows = sorted({index.row() for index in self.caseTable.selectedIndexes()})
         chosen_keys = [self.caseTable.item(row,0).data(qt.Qt.UserRole) for row in chosen_rows]
@@ -1390,7 +1774,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
                 qt.QDesktopServices.openUrl(qt.QUrl.fromLocalFile(str(Path(result).parent)))
 
     def _help(self):
-        text = 'Meniscus Annotator ' + VERSION + '\n\nOpen dataset → Open case → Draw → Review every slice → Save draft → Approve → Export.\n\nMRI view shortcuts (inactive while typing notes):\nLeft / Right: acquired slice · R: reviewed and next\nU: next unreviewed · F: next flagged\n1 / 2 / 3: medial / lateral / uncertain\nP / D / E: paint / draw / erase · Esc: navigate\nCtrl+S: save · Ctrl+Z / Ctrl+Y: undo / redo\n\nNative Slicer mouse controls:\nCtrl+wheel: zoom · middle drag: pan\nRight drag: zoom · wheel: slice\nWindow/level: choose it in Display and orientation, then left-drag\nDraw: left-click contour points, right-click to apply.\n\nEvery changed slice requires review again. Uncertainty is a separate overlapping mask and blocks approval until resolved. Draft protocols allow practice approval only. Saved versions recover work after restart; in-memory undo history does not survive restart.\n\nHelp → Diagnostics includes details of the last error.'
+        text = 'Meniscus Annotator ' + VERSION + '\n\nOpen dataset → Open case → Draw → Review every slice → Save draft → Approve → Export.\n\nMRI view shortcuts (inactive while typing notes):\nLeft / Right: acquired slice · R: reviewed and next\nU: next unreviewed · F: next flagged\n1 / 2 / 3: medial / lateral / uncertain\nD / E / P: draw / erase / paint · Esc: discard contour or navigate\nCtrl+S: save · Ctrl+Z / Ctrl+Y: undo / redo\n\nNative Slicer mouse controls:\nCtrl+wheel: zoom · middle drag: pan\nWheel: one acquired slice · Draw reserves right-click for finishing\nWindow/level: choose it in Display and orientation, then left-drag\nDraw: Click around the boundary. Right-click to close and fill.\nCtrl+wheel zooms while drawing. Right-drag keeps the unfinished contour.\nFinish or explicitly discard a contour before changing slices, labels or tools, saving or closing. X removes the last point.\n\nEvery changed slice requires review again. Uncertainty is a separate overlapping mask and blocks approval until resolved. Draft protocols allow practice approval only. Saved versions recover work after restart; in-memory undo history does not survive restart.\n\nHelp → Diagnostics includes details of the last error.'
         dialog = qt.QMessageBox(slicer.util.mainWindow())
         dialog.setWindowTitle('Setup and shortcut help')
         dialog.setText(text)
@@ -1424,6 +1808,8 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.dirty = False  # aboutToQuit/close guard saves while native modules are still alive.
         if hasattr(self, 'autosave'):
             self.autosave.stop()
+        if hasattr(self, 'drawFeedback'):
+            self.drawFeedback.stop()
         self.closeCase()
         for name in ['caseListDock','rightDock','topBar','bottomBar']:
             widget = getattr(self, name, None)

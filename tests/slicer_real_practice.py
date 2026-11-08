@@ -13,6 +13,7 @@ from pathlib import Path
 import platform
 import re
 import sys
+import time
 import traceback
 import zipfile
 
@@ -574,7 +575,7 @@ def run_workflow():
     finish_workflow(widget, keys, approved_arrays, copied_hashes, count)
 
 
-def finish_workflow(widget, keys, approved_arrays, copied_hashes, count):
+def finish_workflow(widget, keys, approved_arrays, copied_hashes, count, archive_path=None):
     widget.closeCase()
     rejected = False
     try:
@@ -582,7 +583,8 @@ def finish_workflow(widget, keys, approved_arrays, copied_hashes, count):
     except ValidationError:
         rejected = True
     check('ordinary research export excludes software practice', rejected)
-    archive_path = export_approved(widget.store, RESULTS, include_practice=True)
+    if archive_path is None:
+        archive_path = export_approved(widget.store, RESULTS, include_practice=True)
     with zipfile.ZipFile(archive_path) as archive:
         manifest = json.loads(archive.read('results.json'))
         check('practice export is clearly segregated', manifest['practice_only'] is True and manifest.get('software_practice') is True and archive_path.name.startswith('SOFTWARE_PRACTICE_ONLY-'))
@@ -945,6 +947,431 @@ def run_status_recheck():
     check('overlay isolated QA window closes normally', widget.session is None)
 
 
+def ui_open_case(widget, key, prefix):
+    rows = [row for row in range(widget.caseTable.rowCount)
+            if widget.caseTable.item(row, 0).data(qt.Qt.UserRole) == key]
+    check(prefix + ' case appears in actual case list', len(rows) == 1)
+    widget.caseTable.setCurrentCell(rows[0], 0)
+    widget.caseTable.selectRow(rows[0])
+    widget.openCaseButton.click()
+    events()
+    check(prefix + ' Open selected case control opens intended source', widget.session is not None and widget.session.case.key == key)
+
+
+def ui_draw_points(widget, vertices, label):
+    widget.labelButtons[label].click()
+    widget.toolButtons['Draw'].click()
+    events()
+    for point in vertices:
+        native, _, _ = interactor_at(widget, point)
+        for event in ('EnterEvent', 'MouseMoveEvent', 'LeftButtonPressEvent', 'LeftButtonReleaseEvent'):
+            native.InvokeEvent(event)
+        events()
+
+
+def ui_close_contour(widget, point):
+    native, _, _ = interactor_at(widget, point)
+    native.InvokeEvent('RightButtonPressEvent')
+    native.InvokeEvent('RightButtonReleaseEvent')
+    events()
+
+
+def ui_stroke(widget, point, label, tool='Erase', diameter=2.):
+    widget.labelButtons[label].click()
+    widget.toolButtons[tool].click()
+    widget.brushSize.setValue(diameter)
+    events()
+    native, _, _ = interactor_at(widget, point)
+    for event in ('EnterEvent', 'MouseMoveEvent', 'LeftButtonPressEvent', 'LeftButtonReleaseEvent'):
+        native.InvokeEvent(event)
+    events()
+
+
+def export_through_actual_ui(widget):
+    """Use the application QAction, modal Export button and completion notice."""
+    check('real UI export uses isolated fixed practice results path', Path(widget._practiceConfig['results_root']).resolve() == RESULTS)
+    before = set(RESULTS.glob('*.zip')) if RESULTS.exists() else set()
+    state = {'seen': False, 'completed': False, 'error': None}
+    timer = qt.QTimer()
+    timer.setInterval(25)
+    started = time.monotonic()
+
+    def tick():
+        modal = qt.QApplication.activeModalWidget()
+        try:
+            if time.monotonic() - started > 60:
+                raise AssertionError('Actual Export dialog timed out.')
+            if modal is None:
+                return
+            if str(modal.objectName) == 'MeniscusExportDialog' and not state['seen']:
+                state['seen'] = True
+                selected = modal.findChild(qt.QCheckBox, 'MeniscusExportSelectedOnly')
+                selected.setChecked(False)
+                practice = modal.findChild(qt.QCheckBox, 'MeniscusExportPractice')
+                check('real Export modal enforces software-practice scope', practice.checked and not practice.isEnabled())
+                box = modal.findChild(qt.QDialogButtonBox, 'MeniscusExportButtons')
+                button = box.button(qt.QDialogButtonBox.Ok)
+                check('real Export and Cancel modal buttons are visible', button.isVisible() and str(button.text) == 'Export' and box.button(qt.QDialogButtonBox.Cancel).isVisible())
+                screenshot = REPORT_DIR / 'private-real-export-dialog.png'
+                modal.grab().save(str(screenshot))
+                screenshot.chmod(0o600)
+                button.click()
+            elif str(modal.windowTitle) == 'Export complete':
+                state['completed'] = True
+                modal.button(qt.QMessageBox.Close).click()
+            elif str(modal.objectName) != 'MeniscusExportDialog':
+                raise AssertionError('Unexpected modal during real Export UI test.')
+        except Exception:
+            state['error'] = traceback.format_exc()
+            if modal is not None:
+                modal.reject()
+            timer.stop()
+
+    actions = [action for menu in slicer.util.mainWindow().findChildren(qt.QMenu)
+               for action in menu.actions() if str(action.text).startswith('Export results')]
+    check('real workspace has one actual Export results menu action', len(actions) == 1)
+    timer.connect('timeout()', tick)
+    timer.start()
+    try:
+        actions[0].trigger()
+    finally:
+        timer.stop()
+    check('real Export menu modal and completion notice succeeded', state['seen'] and state['completed'] and state['error'] is None, state['error'])
+    events()
+    created = set(RESULTS.glob('*.zip')) - before
+    check('real Export UI created one versioned software-practice archive', len(created) == 1 and next(iter(created)).name.startswith('SOFTWARE_PRACTICE_ONLY-'))
+    REPORT['export_ui_scope'] = 'Actual QAction, modal Export button and completion notice; injected Qt events and fixed isolated practice destination. Native folder picker and human input are not claimed.'
+    return next(iter(created))
+
+
+def run_zhang_workflow():
+    REPORT['ui_source_sha256'] = sha256(REPO / 'MeniscusAnnotator.py')
+    REPORT['core_source_sha256'] = sha256(REPO / 'MeniscusAnnotatorLib' / 'core.py')
+    REPORT['source_hash_scope'] = CONFIG.get('source_hash_scope')
+    count = verify_original()
+    check('draw-first scoped original hashes verified before workflow', count > 0)
+    copied_hashes = {str(path.relative_to(INPUTS)): sha256(path) for path in INPUTS.rglob('*') if path.is_file()}
+    widget, keys = open_widget()
+    widget.casesToggle.setChecked(True)
+    widget.toolsToggle.setChecked(True)
+    approved_arrays = {}
+    expectations = {}
+    for ordinal, key in enumerate(keys, 1):
+        prefix = 'draw-first real case ' + str(ordinal)
+        ui_open_case(widget, key, prefix)
+        initial = correction_start(widget, prefix + ' initial')
+        labels, uncertainty = widget.collectArrays()
+        check(prefix + ' exact permitted prediction loaded unchanged', np.array_equal(labels, initial) and not uncertainty.any())
+        check(prefix + ' Draw is selected by default with brush controls hidden', widget.editor.activeEffect().name == 'Draw' and widget.toolButtons['Draw'].checked and not widget.brushRow.isVisible())
+        display = widget.anatomy.GetDisplayNode()
+        check(prefix + ' thin outline default with no fill', not widget.fill.checked and display.GetOpacity2DFill() == 0 and display.GetOpacity2DOutline() == 1 and display.GetSliceIntersectionThickness() == 1)
+        check(prefix + ' one bottom Draw instruction and empty canvas text corners', str(widget.instruction.objectName) == 'MeniscusInstruction' and 'Right-click' in str(widget.instruction.text) and not str(red().sliceView().cornerAnnotation().GetText(vtk.vtkCornerAnnotation.UpperRight) or '') and not str(red().sliceView().cornerAnnotation().GetText(vtk.vtkCornerAnnotation.UpperLeft) or ''))
+        for name, colour in [('medial', (.30, .78, .92)), ('lateral', (.95, .64, .31)), ('uncertain', (.76, .56, .88))]:
+            check(prefix + ' fixed named colour ' + name, np.allclose(widget.anatomy.GetSegmentation().GetSegment(name).GetColor(), colour))
+        k = widget.session.case.n_slices // 2
+        i, j = empty_patch(labels, k)
+        widget.goSlice(k)
+        widget._resetView()
+        widget.reviewButton.click()
+        widget.goSlice(k)
+        events()
+        check(prefix + ' explicit software review before drawing', widget.session.state['review'][k]['reviewed'])
+        vertices = [(i-22, j-8, k), (i-6, j-8, k), (i-6, j+8, k), (i-22, j+8, k)]
+        before = widget.collectArrays()[0].copy()
+        before_checkpoint = widget.session.current_checkpoint
+        ui_draw_points(widget, vertices, 'medial')
+        pending = widget._pendingDraw()
+        check(prefix + ' native unfinished contour and bottom guidance visible', pending is not None and pending.rasPoints.GetNumberOfPoints() == 4 and 'not saved' in str(widget.instruction.text) and 'Unsaved contour' in str(widget.saveStatus.text) and widget.finishContourButton.isVisible() and widget.discardContourButton.isVisible())
+        check(prefix + ' pending contour has not changed voxels', np.array_equal(widget.collectArrays()[0], before))
+        widget.saveButton.click()
+        events()
+        check(prefix + ' actual Save protects unfinished contour without writing', widget._pendingDraw() is not None and widget.session.current_checkpoint == before_checkpoint and 'Finish or discard' in str(widget.instruction.text))
+        export_actions = [action for menu in slicer.util.mainWindow().findChildren(qt.QMenu)
+                          for action in menu.actions() if str(action.text).startswith('Export results')]
+        check(prefix + ' actual Export action present while drawing', len(export_actions) == 1)
+        export_actions[0].trigger()
+        events()
+        check(prefix + ' actual Export protects unfinished contour without opening a modal', widget._pendingDraw() is not None and qt.QApplication.activeModalWidget() is None and not list(RESULTS.glob('*.zip')))
+        ui_close_contour(widget, vertices[-1])
+        medial = widget.collectArrays()[0].copy()
+        changed = np.argwhere(before != medial)
+        check(prefix + ' native right-click commits medial contour only intended acquired slice', widget._pendingDraw() is None and medial[k,j,i-14] == 1 and len(changed) > 0 and set(changed[:,0]) == {k})
+        check(prefix + ' committed contour invalidates slice review', not widget.session.state['review'][k]['reviewed'])
+        widget.undoButton.click()
+        events()
+        check(prefix + ' actual Undo restores exact pre-contour prediction', np.array_equal(widget.collectArrays()[0], before))
+        widget.redoButton.click()
+        events()
+        check(prefix + ' actual Redo restores exact medial contour', np.array_equal(widget.collectArrays()[0], medial))
+        vertices = [(i+6,j-8,k), (i+22,j-8,k), (i+22,j+8,k), (i+6,j+8,k)]
+        ui_draw_points(widget, vertices, 'lateral')
+        ui_close_contour(widget, vertices[-1])
+        both = widget.collectArrays()[0].copy()
+        check(prefix + ' native lateral contour preserves fixed mapping and medial label', both[k,j,i+14] == 2 and both[k,j,i-14] == 1 and set(np.argwhere(both != medial)[:,0]) == {k})
+        # Existing predicted voxels, rather than the new fixture contours, are
+        # selected for Erase; the original prediction remains immutable.
+        for label, value in [('medial',1), ('lateral',2)]:
+            positions = np.argwhere(initial == value)
+            ek, ej, ei = [int(v) for v in positions[len(positions)//2]]
+            widget.goSlice(ek)
+            widget._resetView()
+            previous = widget.collectArrays()[0].copy()
+            ui_stroke(widget, (ei,ej,ek), label)
+            erased = widget.collectArrays()[0].copy()
+            changed = np.argwhere(previous != erased)
+            check(prefix + ' actual Erase control shows brush and removes existing ' + label + ' only intended slice', widget.toolButtons['Erase'].checked and widget.brushRow.isVisible() and erased[ek,ej,ei] == 0 and len(changed) > 0 and set(changed[:,0]) == {ek} and np.all(previous[previous != erased] == value) and np.all(erased[previous != erased] == 0))
+            widget.undoButton.click()
+            events()
+            check(prefix + ' actual Erase Undo exact ' + label, np.array_equal(widget.collectArrays()[0], previous))
+            widget.redoButton.click()
+            events()
+            check(prefix + ' actual Erase Redo exact ' + label, np.array_equal(widget.collectArrays()[0], erased))
+        widget.goSlice(k)
+        widget._resetView()
+        anatomical_before_uncertainty = widget.collectArrays()[0].copy()
+        vertices = [(i-18,j-4,k), (i-10,j-4,k), (i-14,j+4,k)]
+        ui_draw_points(widget, vertices, 'uncertain')
+        ui_close_contour(widget, vertices[-1])
+        labels, uncertainty = widget.collectArrays()
+        check(prefix + ' native uncertainty contour independent and overlapping', np.array_equal(labels, anatomical_before_uncertainty) and uncertainty[k,j,i-14] == 1 and labels[k,j,i-14] == 1 and set(np.unique(labels)) == {0,1,2})
+        check(prefix + ' outstanding uncertainty prevents practice approval', bool(widget.session.approval_errors(labels, uncertainty, practice=True)))
+        ui_stroke(widget, (i-14,j,k), 'uncertain', diameter=6.)
+        check(prefix + ' actual Erase resolves only uncertainty', not widget.collectArrays()[1].any() and np.array_equal(widget.collectArrays()[0], anatomical_before_uncertainty))
+        widget.toolButtons['Draw'].click()
+        events()
+        check(prefix + ' returning to Draw hides brush and restores guidance', not widget.brushRow.isVisible() and widget.toolButtons['Draw'].checked and str(widget.instruction.text).startswith('Draw:'))
+        widget.notesPanel.collapsed = False
+        widget.notes.setPlainText('AUTOMATED SOFTWARE QA: Draw-first interface regression. Arbitrary control probes on a permitted prediction; not anatomical assessment, not reader work or research approval.')
+        widget.notes.moveCursor(qt.QTextCursor.End)
+        widget.notes.setFocus()
+        for event_type in (qt.QEvent.KeyPress,qt.QEvent.KeyRelease):
+            qt.QApplication.sendEvent(widget.notes,qt.QKeyEvent(event_type,qt.Qt.Key_E,qt.Qt.NoModifier,'e'))
+        events()
+        check(prefix + ' typing a tool shortcut in notes enters text without changing Draw', str(widget.notes.toPlainText()).endswith('e') and widget.editor.activeEffect().name == 'Draw')
+        widget.saveButton.click()
+        events()
+        saved_labels, saved_uncertainty = widget.collectArrays()
+        check(prefix + ' actual Save gives saved feedback', not widget.dirty and 'Saved' in str(widget.saveStatus.text) and widget.session.current_checkpoint is not None)
+        verify_saved_case(widget, widget.session.current_checkpoint, saved_labels, saved_uncertainty, prefix + ' saved')
+        ui_open_case(widget, keys[ordinal % len(keys)], prefix + ' switch away')
+        ui_open_case(widget, key, prefix + ' reopen')
+        labels, uncertainty = widget.collectArrays()
+        check(prefix + ' case-list switching restores exact annotations and notes', np.array_equal(labels,saved_labels) and np.array_equal(uncertainty,saved_uncertainty) and 'AUTOMATED SOFTWARE QA' in widget.session.state['notes'])
+        check(prefix + ' reopened workflow still starts Draw with thin outline', widget.editor.activeEffect().name == 'Draw' and not widget.brushRow.isVisible() and widget.anatomy.GetDisplayNode().GetOpacity2DFill() == 0)
+        for acquired in range(widget.session.case.n_slices):
+            widget.sliceSlider.setValue(acquired+1)
+            events()
+            check(prefix + ' complete acquired slice ' + str(acquired+1), widget.currentSlice == acquired and abs(plane_index(widget)-acquired) < .001)
+            widget.reviewButton.click()
+            events()
+        widget.caseReviewPanel.collapsed = False
+        widget.medialConsidered.setChecked(True)
+        widget.lateralConsidered.setChecked(True)
+        labels, uncertainty = widget.collectArrays()
+        check(prefix + ' review requirements satisfied for software practice only', not widget.session.approval_errors(labels,uncertainty,practice=True) and bool(widget.session.approval_errors(labels,uncertainty,practice=False)))
+        confirm_practice_approval(widget)
+        check(prefix + ' approval remains automated and unaccepted research work', widget.session.state['status'] == 'practice_approved' and widget.session.state['approval']['accepted_research_annotation'] is False and widget.session.state['approver'] == 'Software QA (automated)')
+        approved_arrays[key] = (labels.copy(), uncertainty.copy())
+        expected_file = REPORT_DIR / ('private-zhang-expected-' + str(ordinal) + '.npz')
+        np.savez_compressed(expected_file, labels=labels, uncertainty=uncertainty)
+        expected_file.chmod(0o600)
+        expectations[key] = {'arrays_path':str(expected_file),'notes':widget.session.state['notes'],'review':widget.session.state['review'],'source_identity':widget.session.case.identity}
+        widget.goSlice(k)
+        widget._resetView()
+        slicer.util.mainWindow().resize(1440,900)
+        events()
+        image = REPORT_DIR / ('private-zhang-real-case-' + str(ordinal) + '.png')
+        slicer.util.mainWindow().grab().save(str(image))
+        image.chmod(0o600)
+    write_private(REPORT_DIR / 'private-zhang-expectations.json', expectations)
+    archive_path = export_through_actual_ui(widget)
+    check('draw-first UI and core remained fixed during actual workflow', sha256(REPO/'MeniscusAnnotator.py') == REPORT['ui_source_sha256'] and sha256(REPO/'MeniscusAnnotatorLib/core.py') == REPORT['core_source_sha256'])
+    finish_workflow(widget, keys, approved_arrays, copied_hashes, count, archive_path=archive_path)
+
+
+def run_zhang_cold():
+    widget, keys = open_widget()
+    previous = json.loads((REPORT_DIR/'private-workflow-zhang_workflow.json').read_text())
+    check('draw-first cold process follows passed current-source workflow', previous.get('passed') is True and previous['ui_source_sha256'] == sha256(REPO/'MeniscusAnnotator.py') and previous['core_source_sha256'] == sha256(REPO/'MeniscusAnnotatorLib/core.py'))
+    REPORT['ui_source_sha256'] = previous['ui_source_sha256']
+    REPORT['core_source_sha256'] = previous['core_source_sha256']
+    expectations = json.loads((REPORT_DIR/'private-zhang-expectations.json').read_text())
+    close_expected = json.loads((REPORT_DIR/'private-resume-expectation.json').read_text())
+    input_hashes = {str(path.relative_to(INPUTS)):sha256(path) for path in INPUTS.rglob('*') if path.is_file()}
+    for ordinal,key in enumerate(keys,1):
+        prefix = 'draw-first cold case ' + str(ordinal)
+        ui_open_case(widget,key,prefix)
+        expected = expectations[key]
+        arrays = np.load(expected['arrays_path'])
+        labels,uncertainty = widget.collectArrays()
+        check(prefix + ' exact annotations restored after actual process restart', np.array_equal(labels,arrays['labels']) and np.array_equal(uncertainty,arrays['uncertainty']))
+        notes = close_expected['notes'] if key == close_expected['case_key'] else expected['notes']
+        check(prefix + ' saved notes review and source restored', widget.session.state['notes'] == notes and widget.session.state['review'] == expected['review'] and widget.session.case.identity == expected['source_identity'])
+        expected_slice = close_expected['slice_index'] if key == close_expected['case_key'] else widget.session.case.n_slices//2
+        check(prefix + ' last displayed acquired slice restored',widget.currentSlice == expected_slice and abs(plane_index(widget)-expected_slice)<.001)
+        check(prefix + ' Draw and thin outline defaults restored without contour residue', widget.editor.activeEffect().name == 'Draw' and not widget.brushRow.isVisible() and not widget._pendingDraw() and widget.anatomy.GetDisplayNode().GetOpacity2DFill() == 0)
+        correction_start(widget,prefix+' provenance')
+        verify_saved_case(widget,widget.session.current_checkpoint,labels,uncertainty,prefix)
+    check('draw-first cold scoped originals remain unchanged',verify_original()>0)
+    check('draw-first cold input-copy bytes remain unchanged',input_hashes == {str(path.relative_to(INPUTS)):sha256(path) for path in INPUTS.rglob('*') if path.is_file()})
+    check('draw-first cold UI and core stayed fixed',previous['ui_source_sha256'] == sha256(REPO/'MeniscusAnnotator.py') and previous['core_source_sha256'] == sha256(REPO/'MeniscusAnnotatorLib/core.py'))
+    slicer.util.mainWindow().close()
+    events()
+    check('draw-first cold process closes normally',widget.session is None)
+
+
+def run_zhang_default_capture():
+    """Private visual receipt of untouched starting labels, never QA drawings."""
+    REPORT['ui_source_sha256'] = sha256(REPO/'MeniscusAnnotator.py')
+    REPORT['core_source_sha256'] = sha256(REPO/'MeniscusAnnotatorLib/core.py')
+    widget,keys = open_widget()
+    widget.casesToggle.setChecked(True)
+    widget.toolsToggle.setChecked(True)
+    ui_open_case(widget,keys[-1],'default real capture')
+    initial = correction_start(widget,'default real capture')
+    widget.sliceSlider.setValue(widget.session.case.n_slices//2+1)
+    widget._resetView()
+    events()
+    labels,uncertainty = widget.collectArrays()
+    check('default real capture contains only untouched permitted prediction',np.array_equal(labels,initial) and not uncertainty.any() and widget.session.current_checkpoint is None and not widget.dirty and not any(row['reviewed'] for row in widget.session.state['review']) and not widget.session.state['notes'])
+    check('default real capture displays Draw thin outlines and hidden brush',widget.editor.activeEffect().name == 'Draw' and not widget.brushRow.isVisible() and not widget.fill.checked and widget.anatomy.GetDisplayNode().GetOpacity2DFill() == 0 and widget.anatomy.GetDisplayNode().GetSliceIntersectionThickness() == 1)
+    slicer.util.mainWindow().resize(1440,900)
+    events()
+    red().sliceView().forceRender()
+    image = REPORT_DIR/'private-zhang-default-real.png'
+    slicer.util.mainWindow().grab().save(str(image))
+    image.chmod(0o600)
+    check('default real capture private image saved',image.is_file() and image.stat().st_size>0)
+    folder = widget.session.folder
+    slicer.util.mainWindow().close()
+    events()
+    check('default real capture creates no annotation checkpoints',widget.session is None and not widget.store._checkpoints(folder))
+    check('default real capture UI source unchanged',sha256(REPO/'MeniscusAnnotator.py') == REPORT['ui_source_sha256'])
+
+
+def run_zhang_contour_probe():
+    """Record exact native per-click offsets for a reproducible private defect."""
+    REPORT['ui_source_sha256'] = sha256(REPO/'MeniscusAnnotator.py')
+    widget,keys = open_widget()
+    widget.notesPanel.collapsed = False
+    widget.caseReviewPanel.collapsed = False
+    slicer.util.mainWindow().resize(1440,900)
+    ui_open_case(widget,keys[-1],'contour probe')
+    k = widget.session.case.n_slices//2
+    i,j = empty_patch(widget.collectArrays()[0],k)
+    widget.goSlice(k)
+    widget._resetView()
+    widget.reviewButton.click()
+    widget.goSlice(k)
+    widget.labelButtons['medial'].click()
+    widget.toolButtons['Draw'].click()
+    events()
+    REPORT['native_probe'] = []
+    vertices = [(i-22,j-8,k),(i-6,j-8,k),(i-6,j+8,k),(i-22,j+8,k)]
+    native_draw = widget.editor.effectByName('Draw').self()
+    require_working = PHASE == 'zhang_contour_recheck'
+    initial_arrays = tuple(array.copy() for array in widget.collectArrays())
+    for ordinal,point in enumerate(vertices,1):
+        native,_,_ = interactor_at(widget,point)
+        before = float(red().sliceLogic().GetSliceOffset())
+        translation_before = array_matrix(red().mrmlSliceNode().GetSliceToRAS())[:3,3].copy()
+        per_event = []
+        for event in ('EnterEvent','MouseMoveEvent','LeftButtonPressEvent','LeftButtonReleaseEvent'):
+            event_translation = array_matrix(red().mrmlSliceNode().GetSliceToRAS())[:3,3].copy()
+            native.InvokeEvent(event)
+            per_event.append({'event':event,'translation_before':event_translation.tolist(),'translation_after':array_matrix(red().mrmlSliceNode().GetSliceToRAS())[:3,3].tolist(),'offset_after':float(red().sliceLogic().GetSliceOffset())})
+        events()
+        pipeline = native_draw.drawPipelines.get(red())
+        REPORT['native_probe'].append({'slice_offset_before':before,'slice_offset_after':float(red().sliceLogic().GetSliceOffset()),'active_slice_offset':float(pipeline.activeSliceOffset) if pipeline and pipeline.activeSliceOffset is not None else None,'point_count':pipeline.rasPoints.GetNumberOfPoints() if pipeline else 0,'slice_node_mtime':red().mrmlSliceNode().GetMTime(),'displayed_k':widget.currentSlice,'native_plane_k':plane_index(widget),'translation_before':translation_before.tolist(),'translation_after':array_matrix(red().mrmlSliceNode().GetSliceToRAS())[:3,3].tolist(),'events':per_event})
+        if require_working:
+            check('real oblique native contour point '+str(ordinal),pipeline is not None and pipeline.rasPoints.GetNumberOfPoints() == ordinal and widget.currentSlice == k and abs(plane_index(widget)-k)<.001)
+            ras_before = np.array([pipeline.rasPoints.GetPoint(index) for index in range(ordinal)])
+            if ordinal == 1:
+                fov = np.array(red().mrmlSliceNode().GetFieldOfView())
+                wheel(widget,point,control=1)
+                check('real oblique pending contour supports actual Ctrl wheel zoom',not np.allclose(fov[:2],np.array(red().mrmlSliceNode().GetFieldOfView())[:2]) and widget.currentSlice == k)
+            elif ordinal == 2:
+                position = array_matrix(red().mrmlSliceNode().GetXYToRAS())[:3,3].copy()
+                drag(widget,point,'Middle',30,20)
+                check('real oblique pending contour supports actual middle drag pan',not np.allclose(position,array_matrix(red().mrmlSliceNode().GetXYToRAS())[:3,3]) and widget.currentSlice == k)
+            ras_after = np.array([pipeline.rasPoints.GetPoint(index) for index in range(pipeline.rasPoints.GetNumberOfPoints())])
+            check('real oblique native RAS points unchanged by navigation '+str(ordinal),np.array_equal(ras_before,ras_after))
+            check('real oblique source annotations unchanged before contour commit '+str(ordinal),all(np.array_equal(a,b) for a,b in zip(initial_arrays,widget.collectArrays())))
+    check('contour probe recorded every actual click',len(REPORT['native_probe']) == 4)
+    if widget._pendingDraw():
+        def discard():
+            modal = qt.QApplication.activeModalWidget()
+            if modal and str(modal.objectName) == 'MeniscusDiscardContourDialog':
+                next(button for button in modal.buttons() if str(button.text) == 'Discard contour').click()
+            else:
+                qt.QTimer.singleShot(25,discard)
+        qt.QTimer.singleShot(0,discard)
+        widget.discardContourButton.click()
+        events()
+    check('contour probe discards uncommitted fixture via actual confirmation',not widget._pendingDraw())
+    slicer.util.mainWindow().close()
+    events()
+
+
+def hash_work_tree(root):
+    return {str(path.relative_to(root)):sha256(path) for path in Path(root).rglob('*')
+            if path.is_file() and path.name != 'case.lock'
+            and not any(part.startswith('.pending-') for part in path.parts)}
+
+
+def run_blank_compatibility():
+    REPORT['scope'] = 'READ-ONLY SOFTWARE COMPATIBILITY CHECK on copied human-unverified blank practice work. No drawing, notes, review or approval added; original actor attribution retained.'
+    REPORT['ui_source_sha256'] = sha256(REPO/'MeniscusAnnotator.py')
+    REPORT['core_source_sha256'] = sha256(REPO/'MeniscusAnnotatorLib/core.py')
+    expected = json.loads(Path(CONFIG['compat_expectations']).read_text())
+    original_work = Path(expected['original_work_root'])
+    check('blank compatibility preserves four existing checkpoints', expected['checkpoint_count'] == 4 and len(expected['checkpoints']) == 4)
+    check('blank original work matches its private immutable copy manifest',hash_work_tree(original_work) == expected['original_work_files_sha256'])
+    check('blank isolated work initially matches exact copied bytes',hash_work_tree(WORK) == expected['copied_work_files_sha256'])
+    input_hashes = {str(p.relative_to(INPUTS)):sha256(p) for p in INPUTS.rglob('*') if p.is_file()}
+    dataset = Dataset(INPUTS)
+    job = json.loads(JOB_PATH.read_text())
+    check('blank compatibility keeps human-unverified actor and explicit blank job',job['practice_context'] == {'purpose':'software_practice','actor':'Preview user (identity unverified)','actor_type':'human_unverified'} and all(rule['annotation_mode']=='blank' for rule in job['cases'].values()))
+    slicer.util.selectModule('MeniscusAnnotator')
+    widget = slicer.modules.meniscusannotator.widgetRepresentation().self()
+    widget.settings = qt.QSettings(str(SETTINGS),qt.QSettings.IniFormat)
+    widget.openDataset(str(INPUTS),work_root=str(WORK))
+    widget.casesToggle.setChecked(True)
+    events()
+    groups = {}
+    for item in expected['checkpoints']:
+        groups.setdefault(item['case_key'],[]).append(item)
+    REPORT['saved_cases_reopened'] = len(groups)
+    REPORT['saved_checkpoint_count_checked'] = len(expected['checkpoints'])
+    for ordinal,(key,items) in enumerate(groups.items(),1):
+        prefix = 'blank saved case ' + str(ordinal)
+        latest = max(items,key=lambda item:item['checkpoint_relative'])
+        state = latest['state']
+        ui_open_case(widget,key,prefix)
+        expected_path = WORK/latest['checkpoint_relative']
+        expected_labels = sitk.GetArrayFromImage(sitk.ReadImage(str(expected_path/'labels.nii.gz')))
+        expected_uncertainty = sitk.GetArrayFromImage(sitk.ReadImage(str(expected_path/'uncertainty.nii.gz')))
+        labels,uncertainty = widget.collectArrays()
+        check(prefix + ' actual new app restores exact latest saved arrays',np.array_equal(labels,expected_labels) and np.array_equal(uncertainty,expected_uncertainty) and widget.session.current_checkpoint == expected_path)
+        check(prefix + ' actual new app restores notes review and source identity',str(widget.notes.toPlainText()) == state['notes'] and widget.session.state['review'] == state['review'] and widget.session.state['source_identity'] == state['source_identity'] and widget.session.case.identity == state['source_identity'])
+        check(prefix + ' historical blank attribution and approval unchanged',widget.session.state['initialization'] == state['initialization'] and widget.session.state['practice_context'] == state['practice_context'] and widget.session.state['annotator'] == state['annotator'] and widget.session.state['approval'] == state['approval'] and not widget.dirty)
+        check(prefix + ' existing work displays with Draw and outline defaults',widget.editor.activeEffect().name == 'Draw' and not widget.fill.checked and widget.anatomy.GetDisplayNode().GetOpacity2DFill() == 0 and not widget.brushRow.isVisible())
+        for version,item in enumerate(items,1):
+            path = WORK/item['checkpoint_relative']
+            saved_state,saved_labels,saved_uncertainty = widget.store._validate_checkpoint(path,widget.session.case)
+            check(prefix+' original version metadata '+str(version),saved_state == item['state'])
+            verify_saved_case(widget,path,saved_labels,saved_uncertainty,prefix+' preserved version '+str(version))
+        widget.closeCase()
+    check('blank compatibility created or changed no copied annotation files',hash_work_tree(WORK) == expected['copied_work_files_sha256'])
+    check('blank compatibility left original work byte-identical',hash_work_tree(original_work) == expected['original_work_files_sha256'])
+    check('blank compatibility input copies unchanged',input_hashes == {str(p.relative_to(INPUTS)):sha256(p) for p in INPUTS.rglob('*') if p.is_file()})
+    check('blank compatibility scoped originals unchanged',verify_original()>0)
+    check('blank compatibility UI and core stayed fixed',sha256(REPO/'MeniscusAnnotator.py') == REPORT['ui_source_sha256'] and sha256(REPO/'MeniscusAnnotatorLib/core.py') == REPORT['core_source_sha256'])
+    slicer.util.mainWindow().close()
+    events()
+    check('blank compatibility isolated process closes normally',widget.session is None)
+
+
 try:
     if PHASE == 'workflow':
         run_workflow()
@@ -960,6 +1387,18 @@ try:
         run_orientation_recheck()
     elif PHASE == 'status_recheck':
         run_status_recheck()
+    elif PHASE == 'zhang_workflow':
+        run_zhang_workflow()
+    elif PHASE == 'zhang_cold':
+        run_zhang_cold()
+    elif PHASE == 'zhang_default_capture':
+        run_zhang_default_capture()
+    elif PHASE == 'zhang_contour_probe':
+        run_zhang_contour_probe()
+    elif PHASE == 'zhang_contour_recheck':
+        run_zhang_contour_probe()
+    elif PHASE == 'blank_compatibility':
+        run_blank_compatibility()
     else:
         raise ValueError('Unknown private practice-test phase.')
     REPORT['passed'] = all(result['passed'] for result in REPORT['checks'])

@@ -1,5 +1,23 @@
 # Changelog
 
+## Draw workflow review — 8 November 2026
+
+- Draw is the case-opening default; Draw/Erase lead the compact tools, and brush
+  size appears only for Paint/Erase. One contextual instruction replaces canvas
+  text, while knee side, active label, slice review and save state remain visible.
+- Native unfinished contours have visible points and explicit Finish/Discard;
+  changing targets, saving, review and normal close are blocked until resolved.
+  Right-drag no longer accidentally fills a contour.
+- Removed redundant same-plane reprojection that made native Draw reject later
+  points on a real oblique scan. No image, contour RAS point or label geometry is
+  moved or resampled by this fix.
+- Thin outline display, accessible visibility control and collapsible notes and
+  details; existing masks, protocols, saved-file schema and attribution retained.
+- Eight-way synthetic geometry/UI tests, isolated two-scan checks and preserved
+  checkpoint compatibility are distinguished from Windows automation/human review.
+- Windows review packaging adds bounded, recorded test-only rendering attempts;
+  the shared installer remains unchanged pending review.
+
 ## 0.1.0 — development
 
 ### Correction pilot repairs — 7 November 2026

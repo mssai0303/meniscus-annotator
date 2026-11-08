@@ -14,6 +14,12 @@ input package has passed two-case Mac software-practice checks; the complete
 250-case production batch has not been accepted. A released anatomical protocol has not been supplied. Do not
 use this version as an accepted production release for 250 cases.
 
+The 8 November Draw-workflow revision opens cases in Draw, keeps unfinished
+contours on their original target until Finish/Discard, and uses thin outlines
+with one contextual instruction. The prepared dataset, starting masks, research
+protocol and saved-file schema are unchanged. Mac review and Windows automated
+candidate evidence are recorded separately in [VALIDATION.md](docs/VALIDATION.md).
+
 - [Open the checked Mac preview](docs/MAC_PREVIEW.md)
 - [Reader quick start](docs/QUICK_START.html) and [detailed annotation guide](docs/USER_GUIDE.md)
 - [Input/output and job contract](docs/CONTRACT.md)
@@ -69,7 +75,7 @@ anatomical drawing instructions. The source package has the actual proposed
 python -m venv .venv
 # Activate this environment, then:
 python -m pip install -r requirements-dev.txt
-python -m pytest tests/test_core.py tests/test_practice_context.py tests/test_layout_migration.py tests/test_layouts.py tests/test_layout_apply.py -q
+python -m pytest tests packaging/prebuilt/tests --ignore=tests/preparation -q
 ```
 
 Run the actual editor test inside installed Slicer (with nibabel available):
@@ -83,13 +89,14 @@ only synthetic data and writes its results/screenshots there. It drives the
 native Paint, Erase and Draw tools through view events, checks oblique planes,
 reopens saved files, approves practice versions and exports/reopens ZIP results.
 It cannot establish anatomical correctness or replace Windows acceptance.
-The scoped app/adapter suite currently passes 151 tests. Practice-specific run
+The scoped app/adapter/packaging suite currently passes 268 tests. Practice-specific run
 counts and remaining limits are recorded in [VALIDATION.md](docs/VALIDATION.md);
 private MRI evidence is not committed.
 
 In the workspace, Draw closes point-to-point clicks into a filled polygon on the
 current acquired slice; Paint/Erase provide touch-ups. For contrast choose
-**Window/level** in Display and orientation, then left-drag. Right-drag zooms.
+**Window/level** in Display and orientation, then left-drag. Ctrl+wheel zooms;
+right-drag while Draw is active retains the unfinished contour.
 
 The existing-mask correction route passed 337 actual-module checks on two permitted
 practice scans, 45 oblique fresh-process restore checks and 65 baseline cold-restore

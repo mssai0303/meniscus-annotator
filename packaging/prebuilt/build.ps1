@@ -82,9 +82,13 @@ $receipt = [ordered]@{
   installer_filename=(Split-Path -Leaf $Output); installer_bytes=(Get-Item $Output).Length
   installer_sha256=(Get-FileHash $Output -Algorithm SHA256).Hash.ToLower()
   nsis='3.13'; sevenzip='26.05'; install_test='NOT RUN'; runtime_import_test='NOT RUN'
-  synthetic_desktop_test='NOT RUN'; synthetic_correction_test='NOT RUN'; synthetic_correction_resume_test='NOT RUN'
+  synthetic_desktop_test='NOT RUN'; synthetic_resume_test='NOT RUN'; synthetic_correction_test='NOT RUN'; synthetic_correction_resume_test='NOT RUN'
+  synthetic_draw_test='NOT RUN'; synthetic_draw_resume_test='NOT RUN'; synthetic_draw_layout_tests='NOT RUN'
+  installed_graphics_probe='NOT RUN'; installed_graphics_mode='system'
+  offline_runtime_import_test='NOT RUN'; process_network_block='NOT RUN'
   Windows11_interactive_acceptance='NOT RUN'; Horizon_Windows10_19045_acceptance='NOT RUN'
 }
+$NetworkRules = @()
 try {
 if ($TestInstall) {
   # Private ephemeral build host only. No MRI data enter this workflow.
@@ -98,6 +102,29 @@ if ($TestInstall) {
   if (Test-Path (Join-Path $SecondInstalled 'MeniscusAnnotator.exe')) { throw 'A duplicate fixed-version installation was incorrectly accepted.' }
   Checked $Python @((Join-Path $PSScriptRoot 'verify-installed.py'),$Installed)
   $receipt['duplicate_install_test']='PASSED: second registered installation rejected; original installed files retained'
+  if ($env:GITHUB_ACTIONS -eq 'true') {
+    # Ephemeral hosted CI only, never a reader installation prerequisite. Deny
+    # egress for the two native runtimes without affecting the runner/build tools.
+    try {
+      if ((Get-Service -Name MpsSvc -ErrorAction Stop).Status -ne 'Running' -or
+          @(Get-NetFirewallProfile -ErrorAction Stop | Where-Object { [string]$_.Enabled -ne 'True' }).Count -gt 0) {
+        throw 'Host firewall is not active for every profile; process isolation cannot be claimed.'
+      }
+      foreach ($NativeName in @('MeniscusAnnotatorApp-real.exe','MeniscusAnnotatorTestApp-real.exe')) {
+        $RuleName = 'MeniscusSynthetic-' + [Guid]::NewGuid().ToString('N')
+        New-NetFirewallRule -Name $RuleName -DisplayName $RuleName -Direction Outbound -Action Block `
+          -Program (Join-Path $Installed ('bin\' + $NativeName)) -Profile Any -ErrorAction Stop | Out-Null
+        $NetworkRules += $RuleName
+        $ActiveRule = Get-NetFirewallRule -Name $RuleName -PolicyStore ActiveStore -ErrorAction Stop
+        if ([string]$ActiveRule.EnforcementStatus -ne 'Full') { throw 'Host policy does not fully enforce the temporary outbound rule.' }
+      }
+      $receipt['process_network_block']='APPLIED: temporary outbound deny for normal/test native runtime executables; build and artifact tools are unaffected'
+    } catch {
+      $receipt['process_network_block']='NOT AVAILABLE: ' + $_.Exception.Message
+      foreach ($RuleName in $NetworkRules) { Remove-NetFirewallRule -Name $RuleName -ErrorAction SilentlyContinue }
+      $NetworkRules = @()
+    }
+  }
   $env:MENISCUS_PACKAGE_CHECK = Join-Path $BuildRoot 'installed-runtime-check.json'
   $env:PYTHONDONTWRITEBYTECODE = '1'
   $app = Start-Process -FilePath (Join-Path $Installed 'MeniscusAnnotator.exe') -ArgumentList @('--no-main-window') -PassThru
@@ -106,6 +133,7 @@ if ($TestInstall) {
   $health = Get-Content -Raw $env:MENISCUS_PACKAGE_CHECK | ConvertFrom-Json
   if (-not $health.passed) { throw 'Installed runtime import/identity check failed.' }
   $receipt['runtime_import_test']=$health
+  if ($NetworkRules.Count -eq 2) { $receipt['offline_runtime_import_test']='PASSED: installed normal runtime imports/identity completed while its native process had outbound network denied' }
   Remove-Item Env:\MENISCUS_PACKAGE_CHECK
   $TestBase = Join-Path $env:LOCALAPPDATA 'Meniscus Annotator synthetic tests'
   $env:MENISCUS_TEST_AUTOCLOSE = '1'
@@ -121,7 +149,57 @@ if ($TestInstall) {
   if (-not $created.passed -or $created.folder_layout -ne 'flat' -or $created.annotation_mode -ne 'correction') { throw 'Installed synthetic correction package validation failed.' }
   $receipt['installed_synthetic_generation_test']=$created
   if ($RunIntegration) {
-    # Run the actual packaged correction route first, including visible Export
+    # Hosted runners may have no usable WGL pixel format. Probe the actual
+    # capabilities first, including a bounded test-only route through the
+    # software renderer already supplied by the verified official runtime.
+    # No renderer alias or environment override enters the installer payload.
+    . (Join-Path $PSScriptRoot 'InstalledGraphics.ps1')
+    $Graphics = Test-InstalledGraphics -Installed $Installed -Evidence (Join-Path $BuildRoot 'graphics-probe')
+    $receipt['installed_graphics_probe']=$Graphics
+    if ($Graphics.passed) {
+    $receipt['installed_graphics_mode']=$Graphics.selected_mode
+    $GraphicsContext = Enter-InstalledGraphicsMode -Installed $Installed -Mode $Graphics.selected_mode
+    try {
+    # New Draw/Erase interaction and the eight known-geometry combinations.
+    # Layout passes simulate Qt scale factors; they are not physical display-DPI
+    # or human interaction acceptance on Windows 10/11.
+    $SavedQtScale = $env:QT_SCALE_FACTOR
+    $SavedDrawScale = $env:MENISCUS_DRAW_SCALE_NAME
+    $LayoutReports = @()
+    try {
+      foreach ($DrawAction in @(
+        @{name='draw';entry='MeniscusAnnotatorDrawChecks.exe';scale=$null;factor=$null},
+        @{name='draw-resume';entry='MeniscusAnnotatorDrawResumeCheck.exe';scale=$null;factor=$null},
+        @{name='draw-layout-100';entry='MeniscusAnnotatorDrawLayoutChecks.exe';scale='100';factor='1'},
+        @{name='draw-layout-125';entry='MeniscusAnnotatorDrawLayoutChecks.exe';scale='125';factor='1.25'},
+        @{name='draw-layout-150';entry='MeniscusAnnotatorDrawLayoutChecks.exe';scale='150';factor='1.5'},
+        @{name='draw-layout-200';entry='MeniscusAnnotatorDrawLayoutChecks.exe';scale='200';factor='2'})) {
+        [Environment]::SetEnvironmentVariable('QT_SCALE_FACTOR',$DrawAction.factor,'Process')
+        [Environment]::SetEnvironmentVariable('MENISCUS_DRAW_SCALE_NAME',$DrawAction.scale,'Process')
+        $env:MENISCUS_TEST_RUN_ID = [Guid]::NewGuid().ToString('N')
+        $DrawRoot = Join-Path $TestBase $env:MENISCUS_TEST_RUN_ID
+        $DrawEvidence = Join-Path $BuildRoot ('synthetic-' + $DrawAction.name)
+        New-Item -ItemType Directory -Force $DrawEvidence | Out-Null
+        $DrawProcess = Start-Process -FilePath (Join-Path $Installed $DrawAction.entry) `
+          -RedirectStandardOutput (Join-Path $DrawEvidence 'stdout.txt') `
+          -RedirectStandardError (Join-Path $DrawEvidence 'stderr.txt') -PassThru
+        if (-not $DrawProcess.WaitForExit(300000)) { $DrawProcess.Kill($true); throw "Installed $($DrawAction.name) checks exceeded five minutes." }
+        if (Test-Path -LiteralPath $DrawRoot) {
+          Get-ChildItem -LiteralPath $DrawRoot -Recurse -File | Where-Object { $_.Extension -in @('.json','.png') } | Copy-Item -Destination $DrawEvidence
+        }
+        if ($DrawProcess.ExitCode -ne 0) { throw "Installed $($DrawAction.name) failed; inspect its reports." }
+        $DrawReport = Get-Content -Raw (Join-Path $DrawRoot 'installed-tests.json') | ConvertFrom-Json
+        if (-not $DrawReport.passed -or $DrawReport.application_source_sha256 -ne $Distribution.application_source_sha256) { throw "Installed $($DrawAction.name) result or source identity failed." }
+        if ($DrawAction.name -eq 'draw') { $receipt['synthetic_draw_test']=$DrawReport }
+        elseif ($DrawAction.name -eq 'draw-resume') { $receipt['synthetic_draw_resume_test']=$DrawReport }
+        else { $LayoutReports += $DrawReport }
+      }
+      $receipt['synthetic_draw_layout_tests']=$LayoutReports
+    } finally {
+      [Environment]::SetEnvironmentVariable('QT_SCALE_FACTOR',$SavedQtScale,'Process')
+      [Environment]::SetEnvironmentVariable('MENISCUS_DRAW_SCALE_NAME',$SavedDrawScale,'Process')
+    }
+    # Also run the packaged correction route, including visible Export
     # OK/Cancel buttons and a separate-process restore. Synthetic inputs only.
     foreach ($action in @('correction','correction-resume')) {
       $env:MENISCUS_TEST_RUN_ID = [Guid]::NewGuid().ToString('N')
@@ -163,6 +241,24 @@ if ($TestInstall) {
     $resumeReport = Get-Content -Raw (Join-Path $resumeRoot 'installed-tests.json') | ConvertFrom-Json
     if (-not $resumeReport.passed) { throw 'Installed synthetic resume reported failure.' }
     $receipt['synthetic_resume_test']=$resumeReport
+    } finally {
+      Exit-InstalledGraphicsMode -Context $GraphicsContext
+      Checked $Python @((Join-Path $PSScriptRoot 'verify-installed.py'),$Installed)
+      $receipt['graphics_probe_cleanup']='PASSED: ephemeral renderer alias removed and original installed payload hashes retained'
+    }
+    } else {
+      $Blocked = 'BLOCKED: hosted runner could not render synthetic pixels with actual OpenGL 3.2; inspect graphics-probe evidence. This is not a workflow pass.'
+      $receipt['synthetic_desktop_test']=$Blocked
+      $receipt['synthetic_resume_test']=$Blocked
+      $receipt['synthetic_correction_test']=$Blocked
+      $receipt['synthetic_correction_resume_test']=$Blocked
+      $receipt['synthetic_draw_test']=$Blocked
+      $receipt['synthetic_draw_resume_test']=$Blocked
+      $receipt['synthetic_draw_layout_tests']=$Blocked
+      $receipt['installed_graphics_mode']=$null
+      Checked $Python @((Join-Path $PSScriptRoot 'verify-installed.py'),$Installed)
+      $receipt['graphics_probe_cleanup']='PASSED: all probe aliases removed; original installed payload hashes retained'
+    }
   }
   Remove-Item Env:\MENISCUS_TEST_AUTOCLOSE
   Remove-Item Env:\MENISCUS_TEST_RUN_ID
@@ -188,6 +284,8 @@ if ($TestInstall) {
   $receipt['failure'] = $_.Exception.Message
   throw
 } finally {
+  foreach ($RuleName in $NetworkRules) { Remove-NetFirewallRule -Name $RuleName -ErrorAction SilentlyContinue }
+  if ($NetworkRules.Count -gt 0) { $receipt['process_network_block_cleanup']='Temporary CI-only firewall rules removed' }
   $receipt | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $BuildRoot 'installer-build.json')
 }
 Write-Output "Windows installer: $Output"

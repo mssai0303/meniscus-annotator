@@ -30,9 +30,17 @@ jobs:
       - name: Check correction contract before packaging
         shell: pwsh
         run: |
+          $parseErrors = @()
+          Get-ChildItem .\packaging\prebuilt\*.ps1 | ForEach-Object {
+            $tokens = $null
+            $errorsForFile = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errorsForFile) | Out-Null
+            $parseErrors += $errorsForFile
+          }
+          if ($parseErrors.Count -gt 0) { $parseErrors | Format-List; throw 'Maintainer PowerShell syntax check failed.' }
           python -m pip install -r requirements-dev.txt
           if ($LASTEXITCODE -ne 0) { throw 'Test dependency installation failed.' }
-          python -m pytest tests/test_core.py tests/test_correction_jobs.py tests/test_practice_context.py tests/test_layouts.py tests/test_reader_identity.py tests/test_ui_guards.py tests/test_case_resolutions.py tests/test_reader_workspace.py packaging/prebuilt/tests -q
+          python -m pytest tests packaging/prebuilt/tests --ignore=tests/preparation -q
           if ($LASTEXITCODE -ne 0) { throw 'Correction contract tests failed.' }
       - name: Build and test installation with pinned prebuilt runtime
         shell: pwsh
@@ -56,6 +64,9 @@ jobs:
             C:\D\MP\installer-build.json
             C:\D\MP\download-receipts.jsonl
             C:\D\MP\installed-runtime-check.json
+            C:\D\MP\graphics-probe\*.json
+            C:\D\MP\graphics-probe\*.txt
+            C:\D\MP\graphics-probe\*.png
             C:\D\MP\synthetic-generation\*.json
             C:\D\MP\synthetic-generation\*.txt
             C:\D\MP\synthetic-integration\*.json
@@ -66,3 +77,6 @@ jobs:
             C:\D\MP\synthetic-correction\*.txt
             C:\D\MP\synthetic-correction-resume\*.json
             C:\D\MP\synthetic-correction-resume\*.txt
+            C:\D\MP\synthetic-draw*\*.json
+            C:\D\MP\synthetic-draw*\*.txt
+            C:\D\MP\synthetic-draw*\*.png

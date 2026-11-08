@@ -64,6 +64,11 @@ its actual installed runtime without a main window to check imports/identity.
 It also checks duplicate-install rejection, safe refusal while a runtime file is
 locked, and uninstall preservation using an unrelated synthetic text file. The
 headless runtime import check has a bounded two-minute timeout.
+On hosted CI, the maintainer also attempts temporary outbound-deny firewall rules
+for the normal/test native runtimes only. A successful import under those rules
+has its own offline-import receipt. Rules are removed afterward; if host policy
+prevents creating them, offline verification is explicitly not claimed. Reader
+installation never requires firewall changes or administrator access for tests.
 `-RunIntegration` additionally attempts the installed correction route and its
 fresh-process restoration, followed by the general native Slicer synthetic
 workflow. Correction checks drive the actual Export/Cancel dialog buttons; the
@@ -91,13 +96,20 @@ installer timestamps may differ, so bit-identical output is not promised.
 ## Installed synthetic test kit
 
 The payload whitelists `tests/slicer_workflow.py`, `tests/slicer_export_dialog.py`,
-`tools/make_synthetic.py`, and the procedural correction fixture/workflow from
+`tests/slicer_draw_workflow.py`, `tests/draw_fixture.py`, `tools/make_synthetic.py`, and the procedural correction fixture/workflow from
 `packaging/prebuilt/` under `TestKit/`, with a small installed runner. It contains no second copy of
 the application/core implementation: imports must resolve from the installed
 `qt-scripted-modules` directory. Native test launchers use a separate
 `MeniscusAnnotatorTest` Qt profile and fresh OS-resolved local test folders,
 outside installation and ordinary annotation work. No MRI input picker or
 source checkout is used. Generation explicitly uses the flat layout.
+
+The Draw route runs eight known synthetic geometries (left/right × both physical
+slice directions × regular/oblique), then a separate-process restore. Its layout
+route can simulate Qt scale factors 1, 1.25, 1.5 and 2 in separate processes and
+records the actual available window/screen geometry. Simulated Qt scaling is not
+human or physical Windows display-setting acceptance. These tools load the
+installed application implementation; TestKit does not contain a second copy.
 
 The reader's Start menu contains only **Meniscus Annotator**, **Reader guide**
 and **Uninstall**. The synthetic generators and test executables remain internal
@@ -118,6 +130,8 @@ $install = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Pro
 & (Join-Path $install 'MeniscusAnnotatorResumeCheck.exe')
 & (Join-Path $install 'MeniscusAnnotatorCorrectionChecks.exe')
 & (Join-Path $install 'MeniscusAnnotatorCorrectionResumeCheck.exe')
+& (Join-Path $install 'MeniscusAnnotatorDrawChecks.exe')
+& (Join-Path $install 'MeniscusAnnotatorDrawResumeCheck.exe')
 ```
 
 These commands use the bundled runtime, with no external Python or downloads.
@@ -153,6 +167,28 @@ GPU testing; installation, byte checks, normal-runtime imports, synthetic
 package generation and uninstall checks remain enabled. GUI test fields must
 remain `NOT RUN` for that build. Windows 10 human interaction, correction,
 restart and export acceptance remain pending; Windows 11 is untested.
+
+The current maintainer build now probes actual synthetic rendering before
+starting native workflow tests. It tries the system driver, Qt's software mode,
+and a temporary alias of the **already bundled, hash-verified** `opengl32sw.dll`
+beside the native executable. Qt documents both the
+[software selection](https://wiki.qt.io/MesaLlvmpipe) and
+[application-local Mesa route](https://wiki.qt.io/Cross-compiling-Mesa-for-Windows).
+No driver is downloaded, no OpenGL capability/version is overridden, and the
+alias never enters the installer. Each bounded attempt records actual reported
+OpenGL, rendered synthetic pixels, stdout/stderr and any screenshot. Aliases are
+removed and original installed payload hashes rechecked afterward.
+
+An attempt must report actual OpenGL 3.2 or newer and render varied pixels in the
+MRI canvas before it can enable native workflow checks. If every attempt fails,
+the installer lifecycle checks continue, while native workflow fields explicitly
+say **BLOCKED**, not passed. A successful installer job alone therefore remains
+insufficient evidence of working editing or Windows desktop interaction. A
+software-rendered hosted test, if successful, is also distinct from testing the
+reader's physical GPU, Windows display settings or mouse interaction.
+The generic VTK window's `SupportsOpenGL()` embedding callback is recorded only
+as a diagnostic: its [default status is zero until the host supplies it](https://github.com/Kitware/VTK/blob/v9.6.0/Rendering/OpenGL2/vtkGenericOpenGLRenderWindow.cxx).
+The probe gates on the actual context version and pixels, not that callback.
 
 That candidate is now published as
 [Windows test candidate 2](https://github.com/mssai0303/meniscus-annotator/releases/tag/v0.1.0-windows-correction-test.2)

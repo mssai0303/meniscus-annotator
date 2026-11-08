@@ -5,7 +5,7 @@ Windows build is a test candidate; complete Windows correction acceptance is
 still pending. Use the supplied practice package while testing. A released drawing
 protocol must be provided before research approval is enabled.
 
-![Actual Slicer application with a synthetic oblique scan](images/annotation-workflow.png)
+![Actual Meniscus Annotator with a synthetic practice volume](images/annotation-workflow.png)
 
 ## Open and resume
 
@@ -25,10 +25,11 @@ cancel and obtain the correction package. In **Reader identity**, enter your
 **Reader name or study ID** and choose **Continue**. Use the same spelling each
 time. If the assignment already names a reader, confirm it only if it is yours.
 
-The header always identifies **Correction · Existing automated mask** or
-**Blank annotation · No starting mask**. A slice outside the predicted meniscus
-can have no coloured overlay even when the mask is loaded; inspect the acquired
-stack rather than using a fixed slice number as a pass/fail rule.
+The header shows the case, knee side and active compartment. **Case details and
+review** identifies correction or blank annotation. A slice can have no starting
+mask even when a prediction is loaded for the case. The neutral message **No
+starting mask on this slice** does not mean the meniscus is absent or that one
+must be drawn. Inspect the complete acquired stack under the supplied protocol.
 
 For correction: inspect the MRI with the overlay both hidden and visible, check
 the medial/lateral assignments, erase extra predicted tissue and add missing
@@ -66,42 +67,71 @@ planes even on a tilted scan. Letters at its edges describe actual physical
 orientation; combinations such as `SLP` indicate an oblique direction. Secondary
 reformats are for orientation and cannot be edited.
 
-Choose the named label, then **Paint**, **Draw** or **Erase**. The active label,
-tool, brush diameter and current-slice scope appear together. Medial is cyan
+**Draw is selected when a case opens.** Choose the named label, then **Draw**,
+**Erase** or **Paint**. The selected compartment and tool are identified by text
+and selected controls. Brush diameter appears only for Paint and Erase. Medial is cyan
 (label 1); lateral is orange (label 2). Painting one replaces overlapping voxels
 of the other. **Uncertain area** is purple and may overlap either meniscus; it
 is saved separately and never converted silently to background or a third
 training class. Erase uncertainty using that label's Erase tool.
 
-Paint and Erase use left-button dragging. **Draw** is a point-to-point contour:
-left-click around the boundary, then right-click to close and apply a **filled
-polygon on the current acquired slice**. It is not a freehand line tool. Use
-Paint or Erase for edge touch-ups. Undo/Redo applies across labels during the
-current editing session.
+The compact instruction beneath the slice slider follows the active tool.
+For **Draw**: **Click around the boundary. Right-click to close and fill.**
+Place at least three boundary points. The light yellow line and points are an
+unfinished contour, distinct from the committed mask. Right-click without
+dragging, or choose **Finish contour**, to add the filled region to the selected
+label on this acquired slice. Use Erase to remove excess pixels; Paint adds small
+corrections by left-dragging. Undo/Redo restores committed edits across labels.
+
+While a contour is unfinished, the status says **Unsaved contour**. Slice,
+compartment, tool and case changes, saving, review and normal closing remain
+blocked until you finish or discard it. **Discard** asks for confirmation;
+**Keep drawing** is the default. **X** removes the last contour point. Escape
+opens the discard choice while drawing; without a contour it selects Navigate.
+Unfinished contours are not saved checkpoints and are not restored after a crash.
+
+![Actual unfinished contour with native points and Finish/Discard controls](images/draw-unfinished.png)
 On reopening, recover work from saved checkpoints; the previous session's
 in-memory undo history is not restored.
 
-Use **Display and orientation** to show/hide labels, switch between outlines
-and transparent fill, change fill opacity, reset the view or show reformats.
+Use **Show annotation** beside the editing tools to inspect the underlying MRI.
+Thin outlines are the default. **Display and orientation** provides adjustable
+transparent fill, window/level, Reset view and orientation reformats. These are
+display settings; they do not move, smooth or change the saved boundary.
 Use the slice slider, Previous/Next, mouse wheel or Go to for acquired-slice
-navigation. Ctrl+wheel or right-button dragging zooms; middle-button dragging
-pans. To adjust brightness and contrast, open **Display and orientation**,
+navigation. **Ctrl+wheel zooms; middle-button dragging pans.** Draw reserves the
+right button for finishing: a right-drag keeps the unfinished contour and does
+not zoom or apply it. To adjust brightness and contrast, open **Display and orientation**,
 choose **Window/level**, then **left-drag on the image**. Choose Paint, Draw or
 Erase to return to annotation. Zoom and window/level remain in effect while
 stepping through the case. **Cases** and **Tools** in the
 header collapse the side panels. Panel widths and brush diameter are remembered.
+
+## Compartments and anatomical regions
+
+Labels are the complete medial meniscus (1) and lateral meniscus (2), including
+the body, plus separate uncertainty. Knee side, screen mirroring and acquisition
+order never swap these identities. Orientation letters come from the verified
+physical image geometry, not screen-side assumptions.
+
+Separate anterior/posterior or horn annotations are not provided. They require
+expert-defined boundaries, a versioned label schema and downstream training-loader
+support. Geometric halves are not anatomical horns, and the existing
+post-processing does not establish validated anatomical horn separation.
 
 ## Review, save and approve
 
 Scrolling does **not** mark a slice reviewed. After inspecting each slice,
 including an empty one, use **Mark reviewed and next**. **Jump to → Next unreviewed slice** and
 **Next flagged slice** help finish review. A flag records attention separately from
-review. Any anatomical or uncertainty edit marks affected slices for rechecking.
-Use notes for explanations; keyboard drawing shortcuts do not act while typing.
+review. **Reviewed** or **Not reviewed** appears below the slice counter. Any
+anatomical or uncertainty edit marks affected slices for rechecking. Expand
+**Slice notes and flags** for notes or attention flags; keyboard drawing shortcuts
+do not act while typing.
 
 Use **Save draft** whenever needed. The application also saves every minute
-when work changes, after explicit slice review, before switching cases and on
-normal window close. The save indicator only reports success after saved files
+when committed work changes, after explicit slice review, before switching cases
+and on normal window close. Autosave waits while a contour is unfinished. The save indicator only reports success after saved files
 have been reopened and checked. A failure keeps previous checkpoints intact;
 check free space and permissions and retry before leaving the case. Do not run
 two instances on the same case. If the application crashes, reopen the dataset
@@ -154,8 +184,9 @@ protocol for existing work requires a separately coordinated work folder/batch.
 | R | Reviewed → next slice |
 | U / F | Next unreviewed / flagged slice |
 | 1 / 2 / 3 | Medial / lateral / uncertain |
-| P / D / E | Paint / Draw / Erase |
-| Escape | Navigate without an active drawing tool |
+| D / E / P | Draw / Erase / Paint |
+| X | Remove the last unfinished contour point |
+| Escape | Discard choice for an unfinished contour; otherwise Navigate |
 | Ctrl+S | Save draft |
 | Ctrl+Z / Ctrl+Y | Undo / Redo |
 

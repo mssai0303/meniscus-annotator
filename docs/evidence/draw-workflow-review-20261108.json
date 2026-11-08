@@ -1,0 +1,82 @@
+{
+  "schema_version": "meniscus_ui_verification/1",
+  "date": "2026-11-08",
+  "scope": "Draw-workflow technical review; not anatomical assessment or accepted research annotations",
+  "application_file_sha256": "ce91cebdecb7e2a412815b673159534cff5b1b47f5cf2a3d9b127c1b0e24dbfc",
+  "core_file_sha256": "727de7498f0549eef75e06b944d6dbc7720ed3a1f677c5ee478465b02b92db43",
+  "runtime": {
+    "version": "Slicer 5.12.4",
+    "revision": "34645 / 4e21c19",
+    "architecture": "Intel x86_64 through Rosetta on Apple Silicon; not native ARM"
+  },
+  "pure_application_adapter_packaging_tests": 268,
+  "synthetic_native_workflow": {
+    "passed": true,
+    "checks": 983,
+    "cases": 8,
+    "matrix": "left/right x both physical slice directions x regular/oblique",
+    "source_evidence": "/tmp/meniscus-zhang-draw-matrix-final-06/draw-workflow.json"
+  },
+  "synthetic_cold_restore": {
+    "passed": true,
+    "checks": 172,
+    "cases": 8,
+    "source_evidence": "/tmp/meniscus-zhang-draw-matrix-final-06/draw-resume.json"
+  },
+  "mac_qt_dpr_layout": {
+    "passed": true,
+    "checks_per_dpr": 90,
+    "actual_device_pixel_ratios": [
+      1,
+      1.25,
+      1.5,
+      2
+    ],
+    "qt_scale_factors_on_retina2": [
+      0.5,
+      0.625,
+      0.75,
+      1
+    ],
+    "scope": "Mac Qt rendering simulations, not Windows OS display-setting or human acceptance",
+    "source_evidence": "/tmp/meniscus-zhang-draw-layout-dpr-final-02/",
+    "exact_laptop_sizes_achieved": [
+      [
+        1280,
+        800
+      ],
+      [
+        1366,
+        768
+      ]
+    ],
+    "rounding_and_screen_limits": "Actual sizes/DPR recorded per receipt; some fractional scales round by 1 logical pixel; native Retina screen limits large requested heights.",
+    "pending_window_trace": "Settled normal-window1280x800 stayed unchanged after contour creation at0.2s and1s; initial restored fullscreen state caused earlier size discrepancy."
+  },
+  "isolated_real_practice": {
+    "cases": 2,
+    "native_workflow_passed": 274,
+    "cold_restore_passed": 91,
+    "scoped_source_files_unchanged": 13,
+    "oblique_continuation_regression_passed": 22,
+    "clean_default_capture_passed": 20,
+    "evidence": "Private local records outside source repository; no real images or identities included"
+  },
+  "saved_work_compatibility": {
+    "checks": 124,
+    "existing_cases": 1,
+    "existing_checkpoints": 4,
+    "original_and_copied_annotation_bytes_unchanged": true,
+    "historical_actor_preserved": true
+  },
+  "guide": {
+    "docx_pages_visually_checked": 4,
+    "screenshots": "Actual application using synthetic fixtures only"
+  },
+  "windows": {
+    "new_candidate_status": "Build/installed/native checks pending on this source commit",
+    "interactive_windows_10_new_revision": "Not verified; earlier user test is historical",
+    "windows_11": "Untested",
+    "shared_installer_replaced": false
+  }
+}

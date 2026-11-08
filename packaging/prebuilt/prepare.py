@@ -99,7 +99,8 @@ def prepare(runtime, installer, output, cache):
     # Whitelist procedural fixtures and the maintained native suite only. No
     # source checkout/application copy is placed in TestKit.
     kit = output / 'TestKit'
-    for relative in ('tests/slicer_workflow.py', 'tests/slicer_export_dialog.py', 'tools/make_synthetic.py'):
+    for relative in ('tests/slicer_workflow.py', 'tests/slicer_export_dialog.py',
+                     'tests/slicer_draw_workflow.py', 'tests/draw_fixture.py', 'tools/make_synthetic.py'):
         destination = kit / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO / relative, destination)
@@ -114,7 +115,7 @@ def prepare(runtime, installer, output, cache):
     # The real application derives this canonical settings filename from
     # MeniscusAnnotatorTestApp-real.exe, even when an action alias launched it.
     # Both the canonical pair and action aliases must exist.
-    for stem, action in (('MeniscusAnnotatorTest', 'workflow'), ('MeniscusAnnotatorChecks', 'workflow'), ('MeniscusAnnotatorResumeCheck', 'resume'), ('MeniscusAnnotatorExamples', 'create'), ('MeniscusAnnotatorCorrectionChecks', 'correction'), ('MeniscusAnnotatorCorrectionResumeCheck', 'correction-resume')):
+    for stem, action in (('MeniscusAnnotatorTest', 'workflow'), ('MeniscusAnnotatorChecks', 'workflow'), ('MeniscusAnnotatorResumeCheck', 'resume'), ('MeniscusAnnotatorExamples', 'create'), ('MeniscusAnnotatorCorrectionChecks', 'correction'), ('MeniscusAnnotatorCorrectionResumeCheck', 'correction-resume'), ('MeniscusAnnotatorDrawChecks', 'draw'), ('MeniscusAnnotatorDrawResumeCheck', 'draw-resume'), ('MeniscusAnnotatorDrawLayoutChecks', 'draw-layout')):
         shutil.copy2(output / 'Slicer.exe', output / (stem + '.exe'))
         test_config = config.replace('/bin/MeniscusAnnotatorApp-real.exe', '/bin/MeniscusAnnotatorTestApp-real.exe')
         test_config = test_config.replace('name=MeniscusAnnotator\n', 'name=MeniscusAnnotatorTest\n')

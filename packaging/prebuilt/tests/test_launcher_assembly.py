@@ -46,9 +46,15 @@ def test_every_real_test_application_has_its_canonical_launcher_settings(tmp_pat
 
     canonical = (output / 'bin/MeniscusAnnotatorTestLauncherSettings.ini').read_text(encoding='utf-8')
     assert 'MENISCUS_TEST_ACTION=' not in canonical
-    for alias, action in [('Examples', 'create'), ('CorrectionChecks', 'correction'), ('CorrectionResumeCheck', 'correction-resume')]:
+    for alias, action in [('Examples', 'create'), ('CorrectionChecks', 'correction'), ('CorrectionResumeCheck', 'correction-resume'),
+                          ('DrawChecks', 'draw'), ('DrawResumeCheck', 'draw-resume'), ('DrawLayoutChecks', 'draw-layout')]:
         config = (output / ('bin/MeniscusAnnotator' + alias + 'LauncherSettings.ini')).read_text(encoding='utf-8')
         assert 'MENISCUS_TEST_ACTION=' + action + '\n' in config
+    for relative in ('tests/slicer_draw_workflow.py', 'tests/draw_fixture.py'):
+        assert (output / 'TestKit' / relative).read_bytes() == (repo / relative).read_bytes()
+        assert 'TestKit/' + relative in manifest['files_sha256']
+    assert not (output / 'TestKit/MeniscusAnnotator.py').exists()
+    assert not (output / 'bin/opengl32.dll').exists()  # diagnostic alias is never shipped
     assert (output / 'ReaderGuide.html').read_bytes() == (repo / 'docs/QUICK_START.html').read_bytes()
     assert 'ReaderGuide.html' in manifest['files_sha256']
 
