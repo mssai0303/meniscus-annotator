@@ -8,6 +8,25 @@ research annotations or readiness for the full annotation batch.
 
 ## Executed checks and their scope
 
+### Dropbox review delivery — 8 November 2026
+
+At the user's request, the shared Windows software folder was updated with the
+review installer built from `b575000` and the five-page Word guide. The installer
+SHA-256 is `daf4845a3ec51e9ea3d824bc8e71aed0abaa4aaadc45ee992d2808da7845e617`.
+Both previous delivery files were backed up outside the shared folder. No dataset,
+starting-mask, protocol or annotation files were changed by this delivery.
+
+The Word guide now describes complete meniscal coverage as the intended target
+of the Whole meniscus task, not an established property of the unreviewed
+predictions. All five corrected pages were rendered and inspected. Its SHA-256
+is `8b54f606789624ebaf807cc75185087495a6b7a8119d4f93e53fddde93c4f210`.
+This wording-only DOCX change does not change the installer or application code.
+
+Delivery is for reviewer evaluation. The Windows installation/runtime checks
+below passed, while revised native Windows GUI, DPI and strict offline acceptance
+remain unverified. Regional research approval remains blocked pending an expert
+protocol. Distribution does not change those validation limits.
+
 ### Visual and regional review 1 — 8 November 2026
 
 Source/tag: `b5750000436b935d24993e2690ed0ad29ecd4882` /
