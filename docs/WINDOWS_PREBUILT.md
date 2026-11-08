@@ -203,6 +203,38 @@ The reader application, reader guide and uninstall shortcuts are present.
 
 ## Hosted CI resources, limits and cost
 
+### Zhang revision candidate — 8 November 2026
+
+[Run 42494734647](https://github.com/mssai0303/meniscus-annotator/actions/runs/42494734647)
+built immutable tag `v0.1.0-zhang-review.3`, source
+`c6c6faa3024e2f1f9e29d8119adaeeb21c7dba51`, on Windows Server 2025 x64
+build 26100 (runner image 20261103.298.1). All 268 portable checks passed.
+Installation and complete payload hashes, duplicate-install protection,
+installed runtime imports/source identity, synthetic correction-package generation,
+locked-runtime uninstall protection and unrelated-file preservation passed.
+
+The 362,144,201-byte installer has SHA-256
+`feb24464706c3387247e26e923e4815cffcf956f6fa085f87091261ead2db726`.
+Its application fingerprint matches the reviewed Mac Python source bytes.
+The separate local review copy is named
+`MeniscusAnnotator-0.1.0-Windows-x64-c6c6faa.exe`; no shared Dropbox installer or
+GitHub Release was replaced or published.
+
+Native workflow checks are **BLOCKED**. The system renderer failed; both trusted
+bundled software modes reported actual OpenGL 3.0 and black canvas pixels, below
+the required 3.2. No version override was used. Draw, correction, restart, export
+and simulated scaling checks were therefore not marked passed. Test aliases were
+removed and original installed hashes reverified. Host policy also prevented
+verified outbound isolation, so offline imports/workflow are not claimed.
+
+The user reports successful testing of an earlier Windows build; that history
+does not verify this revision. Current Windows 10 interactive/DPI verification
+and Windows 11 testing remain unclaimed. No additional manual Horizon session is
+requested. The generic [CI summary](../packaging/evidence/windows-zhang-review-ci.json)
+is committed; full synthetic receipts and logs remain in the separate maintainer
+QA folder. Graphics failure on this hosted server does not establish Windows
+incompatibility on a GPU-equipped desktop.
+
 The first Zhang-review attempt,
 [run 42494436850](https://github.com/mssai0303/meniscus-annotator/actions/runs/42494436850),
 stopped before packaging: 259 portable checks passed and nine maintenance-layout
