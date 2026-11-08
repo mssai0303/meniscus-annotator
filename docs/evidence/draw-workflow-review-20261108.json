@@ -74,9 +74,40 @@
     "screenshots": "Actual application using synthetic fixtures only"
   },
   "windows": {
-    "new_candidate_status": "Build/installed/native checks pending on this source commit",
+    "review_candidate_status": "Built and installed; graphical workflow not verified",
+    "source_commit": "ed3aa91fc75141b85ee6af3718c1fbc1a9f49e0c",
+    "tag": "v0.1.0-zhang-review.4",
+    "ci_run": 42496348555,
+    "host": "Windows Server2025 x64 build26100",
+    "portable_tests_passed": 268,
+    "installation_payload_imports_generation_uninstall": "PASSED",
+    "application_fingerprint_matches_reviewed_mac_bytes": true,
+    "application_source_sha256": "2ce6576c33bed50fb2ca208c3085d5344d1ef254d0233de68a9500086298733c",
+    "installer_filename": "MeniscusAnnotator-0.1.0-Windows-x64-ed3aa91.exe",
+    "installer_bytes": 362641975,
+    "installer_sha256": "5b6b917e4b1b80d443f1171bcd1ba1a8c76f60573059a28ce5f334907ed66bc2",
+    "guide_resources": "Both synthetic PNGs extracted from the actual installer; references and source/payload hashes verified",
+    "native_draw_restart_export_scaling": "BLOCKED; actual hosted software OpenGL3.0 with black canvas, below3.2 required",
+    "offline_runtime": "NOT VERIFIED; host policy did not fully enforce isolation",
     "interactive_windows_10_new_revision": "Not verified; earlier user test is historical",
     "windows_11": "Untested",
-    "shared_installer_replaced": false
+    "shared_installer_replaced": false,
+    "release_published": false,
+    "detailed_generic_evidence": "packaging/evidence/windows-zhang-review-ci.json"
+  },
+  "mac_preview": {
+    "verified_visible": true,
+    "client_size": [
+      1280,
+      800
+    ],
+    "active_tool": "Draw",
+    "brush_hidden": true,
+    "outline_only": true,
+    "fresh_human_practice_actor": "Preview user (identity unverified)",
+    "automated_qa_work_loaded": false,
+    "runtime_settings_isolated": true,
+    "work_location": "/Users/saim/Downloads/Meniscus_Annotator_Mac_Preview_20261108/Practice_work/",
+    "real_screenshot_and_ready_receipt": "Private local records, excluded from source repository"
   }
 }

@@ -62,6 +62,30 @@ build/runtime/workflow results require their own dated receipt; earlier Windows
 success does not establish this revision's acceptance. The shared installer is
 not replaced by this review build.
 
+The final Windows review candidate is built from `ed3aa91` / tag
+`v0.1.0-zhang-review.4` in [CI 42496348555](https://github.com/mssai0303/meniscus-annotator/actions/runs/42496348555).
+On **Windows Server 2025 x64 build 26100**, all 268 portable tests and fresh
+installation, payload hashes, native runtime imports, synthetic generation,
+duplicate-install, locked-uninstall and safe-uninstall checks passed. Installed
+application bytes match the reviewed Mac bytes. Both guide figures and their
+references were independently verified inside the actual installer.
+
+This is **not** a passing Windows graphical workflow: the system renderer failed;
+the two trusted bundled-software attempts supplied actual OpenGL 3.0 and a black
+canvas, below the required 3.2. Native Draw, restart, export and scaling remain
+blocked. No version/capability was spoofed, and test aliases were removed with
+original installed hashes retained. Strict offline verification is also pending
+because host policy could not fully enforce isolation. New-revision interactive
+Windows 10 and Windows 11 checks remain unverified; no further user-run Horizon
+session is requested. The prior successful Windows test retains its earlier
+build scope. See the [generic Windows receipt](../packaging/evidence/windows-zhang-review-ci.json).
+
+The first expanded Windows precheck found a portable-path inventory mismatch in
+the maintenance migration/apply tools. Four path serialization calls now use
+POSIX separators consistently with the schema; all 268 tests subsequently passed
+on Windows. No real dataset migration or case-file operation was performed.
+Python source uses LF on both platforms for stable build fingerprints.
+
 ### Correction pilot repairs — 7 November 2026
 
 The Export dialog previously had no usable buttons despite direct-function
