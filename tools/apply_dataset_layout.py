@@ -71,12 +71,12 @@ def apply(package, staging, mapping, journal_path):
             require(all(digest(root / folder / name) == expected for root, folder in ((package, old), (backup, old), (staging, new))), 'case_or_backup_or_stage_changed')
             expected_files.add(old + '/' + name)
         path = Path(old)
-        expected_dirs.update(str(p) for p in (path, *path.parents) if str(p) != '.')
+        expected_dirs.update(p.as_posix() for p in (path, *path.parents) if str(p) != '.')
         if (package / old / 'annotations').exists():
             expected_dirs.add(old + '/annotations')
     require(not any(p.is_symlink() for p in package.rglob('*')), 'reader_contains_symlink')
-    require({str(p.relative_to(package)) for p in package.rglob('*') if p.is_file()} == expected_files, 'unexpected_live_files_preserve_and_investigate')
-    require({str(p.relative_to(package)) for p in package.rglob('*') if p.is_dir()} == expected_dirs, 'unexpected_live_directories_preserve_and_investigate')
+    require({p.relative_to(package).as_posix() for p in package.rglob('*') if p.is_file()} == expected_files, 'unexpected_live_files_preserve_and_investigate')
+    require({p.relative_to(package).as_posix() for p in package.rglob('*') if p.is_dir()} == expected_dirs, 'unexpected_live_directories_preserve_and_investigate')
     journal_path.parent.mkdir(parents=True, exist_ok=True)
     journal = {'schema_version': 'meniscus_layout_apply/1', 'mapping_record': str(mapping), 'package': str(package), 'started_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'phase': 'moving_cases', 'completed_moves': [], 'next_move': None}
     atomic_json(journal_path, journal)

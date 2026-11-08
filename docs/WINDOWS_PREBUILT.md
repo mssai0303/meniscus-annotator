@@ -203,6 +203,15 @@ The reader application, reader guide and uninstall shortcuts are present.
 
 ## Hosted CI resources, limits and cost
 
+The first Zhang-review attempt,
+[run 42494436850](https://github.com/mssai0303/meniscus-annotator/actions/runs/42494436850),
+stopped before packaging: 259 portable checks passed and nine maintenance-layout
+tests failed because native Windows path separators were compared with portable
+`/` inventory names. The maintenance tools now serialize those comparisons with
+`as_posix()`; no real migration or dataset operation was performed. The existing
+268-test route passed locally after that narrow fix. That failed attempt produced
+no installer or native-workflow evidence and is not an acceptance result.
+
 The manual-only `Windows prebuilt installer` workflow uses `windows-latest`,
 a 20-minute job timeout and one concurrent packaging job. It runs installation,
 byte-integrity and runtime-import checks. The manual dispatch defaults to
@@ -211,26 +220,22 @@ runs the correction contract tests before packaging. Synthetic rendering can be
 disabled for diagnosis, but a build without it is not correction-accepted. A
 hosted Windows Server runner is not a Windows11 laptop and has no guaranteed
 medical-viewer-capable GPU. No Windows VM is installed on the development Mac.
-Private installer/evidence artifacts include the source commit in their artifact
+Installer/evidence artifacts include the source commit in their artifact
 name and expire after one day; no public release is
 created by this workflow.
 
 Current [GitHub runner specifications](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
-list private standard Windows x64 runners with 2 CPUs, 8 GB RAM and 14 GB storage.
-Budget about 5 GB free for this packaging route. Unlike the full-source
+list public standard Windows x64 runners with 4 CPUs, 16 GB RAM and 14 GB storage;
+private standard runners have 2 CPUs and 8 GB RAM. The repository is currently
+public. Budget about 5 GB free for this packaging route. Unlike the full-source
 superbuild, it fits the standard runner's disk allowance. Runner images change;
 the receipt records the actual image/OS. GitHub's [job limit](https://docs.github.com/en/actions/reference/limits)
 is six hours, while this workflow deliberately stops after 20 minutes.
 
-The current [Windows standard rate](https://docs.github.com/en/billing/reference/actions-runner-pricing)
-is $0.010 per rounded-up minute: at most $0.20 compute for one 20-minute run,
-before any included allowance. Actual account allowance, remaining credit and
-budgets were not inspected. [GitHub billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions)
-currently gives Free accounts $12 and Pro accounts $18 monthly included compute;
-artifact allowances are 500 MB and 1 GB respectively. These are shared resources,
-not a promise of a free run. A roughly 300 MB installer retained for one day uses
-artifact storage; repeated artifacts and other repositories also count. Keep
-retention short and use account spending controls. No larger runner is needed.
+[Standard hosted runner use in public repositories is free](https://docs.github.com/en/actions/concepts/billing-and-usage).
+This route uses that standard runner, not a larger runner or a paid Mac VM.
+Installer/evidence artifacts expire after one day rather than accumulating large
+build binaries. A move to private hosting has separate plan/usage allowances.
 
 ## Declared platform requirements and actual verification
 
