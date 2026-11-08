@@ -127,7 +127,7 @@ The UI resolves Documents through Qt/OS. Suggested root is `Documents/Meniscus_a
 
 Every save creates a new immutable checkpoint directory. Files are written into a hidden `.pending-*` directory, reopened and checked, fsynced, and atomically renamed on the same filesystem. `CURRENT.json` is an atomically replaced convenience pointer. Recovery scans complete version directories; `.pending-*` directories are never resumed. If the latest saved version is corrupt, the newest intact prior version is recovered and the UI reports recovery. If no intact version remains, editing is blocked and a backup must be restored. OS-held per-case locks prevent concurrent writers and release on process death; lock files persist safely. Undo/redo is an in-memory Slicer facility, not an across-restart history.
 
-`annotation.json` (`meniscus_annotation/1`) records source identity and metadata, app version, fixed mapping, initialization provenance, protocol, the reader's role, review rows, compartments considered, case/slice notes, position, state and approval. `slice_review.csv` has ordered fields `slice_index,displayed_slice,status,attention_flag,note`. Review and attention are separate. `manifest.json` (`meniscus_checkpoint/1`) records source hash, case identity and SHA-256 for all six payload files. `manifest.json` does not recursively hash itself; its hash is included in exported results metadata.
+`annotation.json` (`meniscus_annotation/1`) records source identity and metadata, app version, fixed mapping, initialization provenance, protocol, the reader's role, review rows, compartments considered, case/slice notes, position, state and approval. `slice_review.csv` has ordered fields `slice_index,displayed_slice,status,attention_flag,note`. Review and attention are separate. `manifest.json` (`meniscus_checkpoint/1`) records source hash, case identity and SHA-256 for all six base payload files, plus the five regional files when the optional versioned regional extension is present. `manifest.json` does not recursively hash itself; its hash is included in exported results metadata.
 
 Each NIfTI output is full native extent, uint8, mm units, with consistent active qform/sform. Outputs are reopened independently with nibabel and compared voxel-for-voxel with arrays supplied by Slicer. The editable segmentation writer is Slicer's own writer; actual segmentation reopening is exercised by the Slicer integration tests separately from the core tests.
 
@@ -217,3 +217,22 @@ roles retain their existing assignment rules.
 Legacy checkpoints are not relabelled. Reconnecting an older work folder requires
 the explicitly selected reader to match the recorded attribution and original
 job/dataset bindings. Unmatched or unverifiable work is preserved and refused.
+
+
+## Optional regional extension
+
+The whole-meniscus input/job, label mapping and historical checkpoints stay
+unchanged. New regional work uses [meniscus_regions/1](REGIONAL_CONTRACT.md) and
+`meniscus_regional_extension/1`: six named regions plus explicit unassigned
+medial/lateral tissue (7/8) on the same complete native grid. Regional metadata,
+review, uncertainty, validity and protocol provenance are separate. Merely opening
+a whole-only checkpoint creates no replacement file or new job identity.
+
+An extended checkpoint may preserve an unchanged whole approval alongside a
+clearly marked regional draft. This exception requires exact whole arrays and
+protected primary metadata matching the saved approval. Any primary change
+follows the existing new-draft rules. Export explicitly records the regional
+draft/pending status; it never represents that draft as regional approval. The
+regional protocol is pending, research approval is unavailable and regional
+validity is zero throughout. See [the loading example](REGIONAL_READER.md); no
+actual downstream training pipeline has been integrated.

@@ -643,6 +643,11 @@ class WorkStore:
         manifest = read_json(path / 'manifest.json')
         need(manifest.get('schema_version') == 'meniscus_checkpoint/1' and manifest.get('source_identity') == case.identity and manifest.get('source_image_sha256') == case.metadata['image_sha256'], 'Saved checkpoint source identity is mismatched.')
         expected = {'annotation.json', 'slice_review.csv', 'labels.nii.gz', 'uncertainty.nii.gz', 'validity.nii.gz', 'segmentation.seg.nrrd'}
+        if 'regional_extension' in manifest:
+            from . import regions as regional
+            need(manifest['regional_extension'] == {'schema_version': regional.EXTENSION_SCHEMA, 'protocol_status': 'pending_expert_protocol', 'research_approved': False},
+                 'Regional extension is unsupported or incorrectly claims research approval.')
+            expected |= regional.REGIONAL_FILES
         need(set(manifest.get('files_sha256', {})) == expected, 'Saved checkpoint is incomplete.')
         for name, digest in manifest['files_sha256'].items():
             need(sha256(path / name) == digest, 'Saved checkpoint is corrupt: ' + name)
@@ -662,6 +667,8 @@ class WorkStore:
         expected_review = [{'slice_index': str(r['slice_index']), 'displayed_slice': str(r['slice_index']+1), 'status': 'reviewed' if r['reviewed'] else 'not_reviewed', 'attention_flag': str(int(r['flag'])), 'note': r.get('note', '')} for r in state['review']]
         need(rows == expected_review, 'Saved review CSV disagrees with annotation metadata.')
         if not read_arrays:
+            if 'regional_extension' in manifest:
+                self._read_regions(path, case, state, read_arrays=False)
             return state, None, None
         arrays = []
         for name in ('labels.nii.gz', 'uncertainty.nii.gz', 'validity.nii.gz'):
@@ -673,7 +680,31 @@ class WorkStore:
             need(not uncertainty.any(), 'Approved work contains unresolved uncertain voxels.')
         expected_valid = validity_array(state, uncertainty)
         need(np.array_equal(validity, expected_valid), 'Training validity image disagrees with review or uncertainty records.')
+        if 'regional_extension' in manifest:
+            self._read_regions(path, case, state, labels, uncertainty)
         return state, labels, uncertainty
+
+    def _read_regions(self, path, case, primary_state, whole=None, whole_uncertainty=None, read_arrays=True):
+        """Read the optional extension using the same maintained checkpoint route."""
+        from . import regions as regional
+        state = read_json(path / 'regions.json')
+        regional.validate_state(state, case.n_slices, primary_state)
+        with (path / 'regional_review.csv').open(encoding='utf-8', newline='') as stream:
+            reader = csv.DictReader(stream)
+            need(reader.fieldnames == regional.REVIEW_FIELDS, 'Regional review CSV has unsupported columns.')
+            need(list(reader) == regional.review_rows(state), 'Regional review CSV disagrees with regional metadata.')
+        if not read_arrays:
+            return None, None, state
+        if whole is None or whole_uncertainty is None:
+            whole = np.asarray(check_nifti(path / 'labels.nii.gz', case.shape_xyz, case.affine_ras, True).dataobj).transpose(2, 1, 0).copy()
+            whole_uncertainty = np.asarray(check_nifti(path / 'uncertainty.nii.gz', case.shape_xyz, case.affine_ras, True).dataobj).transpose(2, 1, 0).copy()
+        arrays = [np.asarray(check_nifti(path / name, case.shape_xyz, case.affine_ras, True).dataobj).transpose(2, 1, 0).copy()
+                  for name in ('regions.nii.gz', 'regional_uncertainty.nii.gz', 'regional_validity.nii.gz')]
+        regions_array, regional_uncertainty, regional_validity = arrays
+        regional.validate(whole, regions_array, regional_uncertainty, state, primary_state)
+        expected_validity = regional.validity(whole, whole_uncertainty, regions_array, regional_uncertainty, state, primary_state)
+        need(np.array_equal(regional_validity, expected_validity), 'Regional validity disagrees with its pending protocol, uncertainty or review records.')
+        return regions_array, regional_uncertainty, state
 
     def _validate_state(self, state, case):
         need(state.get('app_version') == APP_VERSION, 'Saved work uses a different application version. Use the fixed batch version or an explicitly tested migration.')
@@ -751,6 +782,9 @@ class CaseSession:
             case.verify_source()
             self.state = self._new_state()
             self._loaded = None
+            self._regional_loaded = None
+            self.regional_state = None
+            self._primary_saved_state = None
             candidates = store._checkpoints(self.folder)
             for candidate in candidates:
                 try:
@@ -759,6 +793,7 @@ class CaseSession:
                     continue
                 need(state.get('job_identity') == self.state.get('job_identity') and state['initialization']['method'] == self.state['initialization']['method'], 'Saved initialization permissions differ from the current job configuration. Reopen with the original explicit job or use a separate work folder.')
                 self.state = state
+                self._primary_saved_state = copy.deepcopy(state)
                 self._loaded = (labels, uncertainty, candidate / 'segmentation.seg.nrrd')
                 self.current_checkpoint = candidate
                 self.recovered = candidate != candidates[0]
@@ -830,6 +865,38 @@ class CaseSession:
         self._loaded = (labels.copy(), uncertainty.copy(), None)
         return labels, uncertainty, None
 
+    def load_regions(self):
+        """Return separate regional draft arrays/state without changing legacy work."""
+        need(not self.closed, 'This case session is closed.')
+        self.store.case_resolution(self.case)
+        from . import regions as regional
+        if self._regional_loaded is None:
+            whole, whole_uncertainty, _ = self.load()
+            manifest = read_json(self.current_checkpoint / 'manifest.json') if self.current_checkpoint else {}
+            if 'regional_extension' in manifest:
+                self.store._validate_checkpoint(self.current_checkpoint, self.case)
+                region_array, uncertain, state = self.store._read_regions(self.current_checkpoint, self.case, self.state, whole, whole_uncertainty)
+            else:
+                region_array = regional.initialize(whole)
+                uncertain = np.zeros_like(whole, dtype=np.uint8)
+                state = regional.default_state(self.case.n_slices, self.state)
+            self._regional_loaded = (region_array.copy(), uncertain.copy())
+            self.regional_state = copy.deepcopy(state)
+        return self._regional_loaded[0].copy(), self._regional_loaded[1].copy(), copy.deepcopy(self.regional_state)
+
+    def _regional_primary_approval_unchanged(self, labels, uncertainty):
+        """A regional-only draft must not manufacture or erase whole approval."""
+        if self._primary_saved_state is None or self._loaded is None:
+            return False
+        if self._primary_saved_state.get('status') not in ('approved', 'practice_approved'):
+            return False
+        if not np.array_equal(labels, self._loaded[0]) or not np.array_equal(uncertainty, self._loaded[1]):
+            return False
+        incidental = {'last_slice', 'runtime', 'saved_utc'}
+        before = {key: value for key, value in self._primary_saved_state.items() if key not in incidental}
+        current = {key: value for key, value in self.state.items() if key not in incidental}
+        return before == current
+
     def mark_changed(self, indices):
         need(not self.closed, 'This case session is closed.')
         for index in indices:
@@ -860,13 +927,39 @@ class CaseSession:
             errors.append('The anatomical protocol is draft. Only clearly marked practice approval is permitted.')
         return errors
 
-    def save(self, labels, uncertainty, seg_writer, approve=False, practice=False):
+    def save(self, labels, uncertainty, seg_writer, approve=False, practice=False,
+             regions=None, regional_uncertainty=None, regional_state=None):
         need(not self.closed, 'This case session is closed.')
         self.store.case_resolution(self.case)
         self.case.verify_source()
         if self.state['initialization']['method'] == 'correction' and self.state['initialization']['starting_mask'] is None:
             self.load()
         array_check(labels, uncertainty, self.case)
+        from . import regions as regional
+        regional_args = (regions, regional_uncertainty, regional_state)
+        explicit_regional = any(value is not None for value in regional_args)
+        need(not explicit_regional or all(value is not None for value in regional_args), 'Save all three regional arrays/metadata together; partial regional payloads are not permitted.')
+        inherited_regional = False
+        if not explicit_regional and self.current_checkpoint is not None:
+            inherited_regional = 'regional_extension' in read_json(self.current_checkpoint / 'manifest.json')
+            if inherited_regional:
+                regions, regional_uncertainty, regional_state = self.load_regions()
+                regions, regional_uncertainty, regional_state = regional.reconcile(labels, regions, regional_uncertainty, regional_state,
+                                                                                   previous_whole=self._loaded[0])
+                # A legacy caller must not retain regional review after changing
+                # whole uncertainty while carrying an existing extension forward.
+                changed_uncertainty = uncertainty != self._loaded[1]
+                for parent, value in regional.PARENT_VALUES.items():
+                    affected = changed_uncertainty & ((labels == value) | (self._loaded[0] == value))
+                    indices = [int(k) for k in np.flatnonzero(np.any(affected, axis=(1, 2)))]
+                    regional_state = regional.invalidate_review(regional_state, indices, (parent,))
+        has_regional = explicit_regional or inherited_regional
+        if has_regional:
+            regional.validate(labels, regions, regional_uncertainty, regional_state, self.state)
+            regional_state = copy.deepcopy(regional_state)
+            regional_state['saved_utc'] = now()
+            regional_state['runtime'] = copy.deepcopy(self.state.get('runtime'))
+        preserve_primary_approval = has_regional and self._regional_primary_approval_unchanged(labels, uncertainty)
         if approve:
             errors = self.approval_errors(labels, uncertainty, practice)
             need(not errors, ' '.join(errors))
@@ -874,7 +967,7 @@ class CaseSession:
         state = copy.deepcopy(self.state)
         if self.store.reader_assignment is not None:
             state['reader_assignment'] = copy.deepcopy(self.store.reader_assignment)
-        if not approve and state['status'] in ('approved', 'practice_approved'):
+        if not approve and not preserve_primary_approval and state['status'] in ('approved', 'practice_approved'):
             state.update(status='needs_review', approval=None, approver=None)
         state['saved_utc'] = now()
         state['app_version'] = APP_VERSION
@@ -890,7 +983,7 @@ class CaseSession:
             else:
                 state.update(status='practice_approved' if practice else 'approved', approver=self.store.annotator,
                              approval={'approved_utc': now(), 'role': 'assigned annotator and approver; not an independent second reader', 'practice_only': bool(practice), 'deliberate_approval_required_by_ui': True})
-        elif state['status'] not in ('in_progress', 'needs_review'):
+        elif not preserve_primary_approval and state['status'] not in ('in_progress', 'needs_review'):
             state['status'] = 'in_progress'
         self.store._validate_state(state, self.case)
         configured_protocol = (self.store.job or {}).get('protocol', {'version': 'draft-practice-1', 'status': 'draft'})
@@ -902,11 +995,22 @@ class CaseSession:
         final = versions / checkpoint_id
         try:
             # Conservative minimum before streaming output; actual errors still caught.
-            need(shutil.disk_usage(versions).free >= max(16 * 1024 * 1024, labels.nbytes * 5), 'Insufficient free disk space. Free space or choose another local work folder.')
+            need(shutil.disk_usage(versions).free >= max(16 * 1024 * 1024, labels.nbytes * (9 if has_regional else 5)), 'Insufficient free disk space. Free space or choose another local work folder.')
             pending.mkdir()
             write_native(pending / 'labels.nii.gz', labels, self.case)
             write_native(pending / 'uncertainty.nii.gz', uncertainty, self.case)
             write_native(pending / 'validity.nii.gz', validity_array(state, uncertainty), self.case)
+            if has_regional:
+                write_native(pending / 'regions.nii.gz', regions, self.case)
+                write_native(pending / 'regional_uncertainty.nii.gz', regional_uncertainty, self.case)
+                write_native(pending / 'regional_validity.nii.gz', regional.validity(labels, uncertainty, regions, regional_uncertainty, regional_state, state), self.case)
+                write_json(pending / 'regions.json', regional_state)
+                with (pending / 'regional_review.csv').open('x', encoding='utf-8', newline='') as stream:
+                    writer = csv.DictWriter(stream, fieldnames=regional.REVIEW_FIELDS)
+                    writer.writeheader()
+                    writer.writerows(regional.review_rows(regional_state))
+                    stream.flush()
+                    os.fsync(stream.fileno())
             seg_path = pending / 'segmentation.seg.nrrd'
             need(seg_writer(seg_path) is not False and seg_path.is_file() and seg_path.stat().st_size > 0, 'Editable segmentation could not be saved. Retry Save before leaving this case.')
             write_json(pending / 'annotation.json', state)
@@ -917,9 +1021,13 @@ class CaseSession:
                 stream.flush()
                 os.fsync(stream.fileno())
             names = ['annotation.json', 'slice_review.csv', 'labels.nii.gz', 'uncertainty.nii.gz', 'validity.nii.gz', 'segmentation.seg.nrrd']
+            if has_regional:
+                names += sorted(regional.REGIONAL_FILES)
             manifest = {'schema_version': 'meniscus_checkpoint/1', 'checkpoint': checkpoint_id, 'source_identity': self.case.identity,
                         'source_image_sha256': self.case.metadata['image_sha256'], 'files_sha256': {n: sha256(pending / n) for n in names},
                         'technical_checks': 'All NIfTI outputs reopened with nibabel and compared voxel-for-voxel to in-memory KJI arrays; full grid and qform/sform checked.'}
+            if has_regional:
+                manifest['regional_extension'] = {'schema_version': regional.EXTENSION_SCHEMA, 'protocol_status': 'pending_expert_protocol', 'research_approved': False}
             if 'case_resolution' in state['initialization']:
                 manifest['base_job_identity'] = self.store.job_identity
                 manifest['case_resolution'] = copy.deepcopy(state['initialization']['case_resolution'])
@@ -936,8 +1044,12 @@ class CaseSession:
             # CURRENT is a convenience. Recovery scans complete immutable checkpoints.
             atomic_json(self.folder / 'CURRENT.json', {'checkpoint': checkpoint_id})
             self.state = state
+            self._primary_saved_state = copy.deepcopy(state)
             self.current_checkpoint = final
             self._loaded = (labels.copy(), uncertainty.copy(), final / 'segmentation.seg.nrrd')
+            if has_regional:
+                self._regional_loaded = (regions.copy(), regional_uncertainty.copy())
+                self.regional_state = copy.deepcopy(regional_state)
             return final
         except OSError as exc:
             raise ValidationError('Save failed (%s). Check free disk space and write permission. The previous saved version is intact; retry before switching cases.' % (exc.strerror or 'disk error')) from exc
@@ -1015,6 +1127,10 @@ def export_approved(store, destination, case_keys=None, include_practice=False):
                 receipt = {'case_key': case.key, 'folder': 'cases/' + export_key, 'checkpoint': checkpoint.name,
                                  'source_identity': case.identity, 'source_image_sha256': case.metadata['image_sha256'],
                                  'manifest_sha256': sha256(checkpoint / 'manifest.json'), 'status': state['status']}
+                checkpoint_metadata = read_json(checkpoint / 'manifest.json')
+                if 'regional_extension' in checkpoint_metadata:
+                    receipt['regional_extension'] = copy.deepcopy(checkpoint_metadata['regional_extension'])
+                    receipt['regional_annotation_status'] = 'draft; pending expert anatomical protocol; not research approved'
                 if 'case_resolution' in state['initialization']:
                     receipt['base_job_identity'] = store.job_identity
                     receipt['case_resolution'] = copy.deepcopy(state['initialization']['case_resolution'])
@@ -1024,11 +1140,13 @@ def export_approved(store, destination, case_keys=None, include_practice=False):
                         'practice_only': practice, 'software_practice': software_practice, 'cases': receipts,
                         'training_contract': 'labels 0/1/2 fixed background/medial/lateral; use validity.nii.gz to interpret background. Uncertainty is separate, never a third training class.',
                         'limits': 'Technical acceptance is not anatomical validation. Actor roles are recorded per case. Actual downstream training-loader integration must be checked separately.'}
+            if any('regional_extension' in receipt for receipt in receipts):
+                manifest['regional_annotation_contract'] = 'Optional regional files are drafts only. Values 1/2/3 medial anterior/body/posterior; 4/5/6 lateral anterior/body/posterior; 7 medial unassigned; 8 lateral unassigned; 0 outside whole menisci. Regional validity is zero everywhere while expert protocol is pending. Whole approval is independent and never implies regional approval.'
             if software_practice:
                 manifest.update(practice_context=copy.deepcopy(store.practice_context), accepted_research_annotation=False, human_anatomical_approval=False)
                 manifest['training_contract'] += ' SOFTWARE PRACTICE: validity is zero across the entire grid; no voxel is confirmed training anatomy or background.'
             archive.writestr('results.json', json.dumps(manifest, ensure_ascii=False, indent=2))
-            archive.writestr('README.txt', ('SOFTWARE PRACTICE — NOT ACCEPTED RESEARCH ANNOTATIONS; NOT HUMAN ANATOMICAL APPROVAL\nEvery validity voxel is zero. Review flags exercise software only; labels/background are not anatomically confirmed.\n' if software_practice else ('PRACTICE ONLY — NOT RESEARCH APPROVAL\n' if practice else '')) + 'Versioned approved annotations on the original full acquired grid. MRI images are omitted.\nlabels.nii.gz: 0 background, 1 medial, 2 lateral. uncertainty.nii.gz: binary uncertainty.\nOnly voxels with validity.nii.gz = 1 may be treated as reviewed known labels/background.\nTechnical validation does not establish anatomical correctness.\n')
+            archive.writestr('README.txt', ('SOFTWARE PRACTICE — NOT ACCEPTED RESEARCH ANNOTATIONS; NOT HUMAN ANATOMICAL APPROVAL\nEvery validity voxel is zero. Review flags exercise software only; labels/background are not anatomically confirmed.\n' if software_practice else ('PRACTICE ONLY — NOT RESEARCH APPROVAL\n' if practice else '')) + 'Versioned approved annotations on the original full acquired grid. MRI images are omitted.\nlabels.nii.gz: 0 background, 1 medial, 2 lateral. uncertainty.nii.gz: binary uncertainty.\nOnly voxels with validity.nii.gz = 1 may be treated as reviewed known labels/background.\nTechnical validation does not establish anatomical correctness.\nOptional regional files remain DRAFT / PENDING EXPERT PROTOCOL, never research approved. regions.nii.gz uses 1 medial anterior, 2 medial body, 3 medial posterior, 4 lateral anterior, 5 lateral body, 6 lateral posterior, 7 medial unassigned, 8 lateral unassigned, 0 outside whole menisci. Regional validity is zero everywhere; do not use these draft regional assignments as accepted training targets. Whole approval does not approve regions.\n')
         with zipfile.ZipFile(temporary) as archive:
             need(archive.testzip() is None, 'Export ZIP integrity check failed. Retry export.')
             for case, checkpoint, state in accepted:
