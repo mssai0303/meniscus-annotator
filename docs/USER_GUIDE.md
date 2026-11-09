@@ -1,5 +1,7 @@
 # Meniscus annotation guide
 
+This is a repaired review candidate for supervised software practice. Native Windows image editing, display scaling and strict offline acceptance remain pending.
+
 This guide covers Meniscus Annotator 0.2.0 for the reader named in an assigned
 annotation package. Use the supplied practice package while testing. Research
 approval requires a released drawing protocol. This application and its 3D Slicer

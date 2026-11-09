@@ -12,7 +12,7 @@ Full Terminal command:
 /bin/zsh /Users/saim/Downloads/Meniscus_Annotator_Repair_Preview_20261108/Open_Meniscus_Annotator.command
 ```
 
-This revision has a separate preview profile and work folder. The earlier
+The current frozen build is `60e5a33` / `v0.2.0-review-repair.3`. This revision has a separate preview profile and work folder. The earlier
 November 8 preview, its launcher and all saved work remain intact. The new
 preview uses read-only copies of the same two authorized development scans,
 including the oblique acquisition, with their unchanged explicit starting-mask
@@ -26,14 +26,14 @@ QA drawing, note, review or approval is loaded into this workspace.
 Your work and exports are separate:
 
 ```text
-/Users/saim/Downloads/Meniscus_Annotator_Repair_Preview_20261108/Practice_work/
-/Users/saim/Downloads/Meniscus_Annotator_Repair_Preview_20261108/Practice_exports/
+/Users/saim/Downloads/Meniscus_Annotator_Repair_Preview_20261108/Practice_work_final/
+/Users/saim/Downloads/Meniscus_Annotator_Repair_Preview_20261108/Practice_exports_final/
 ```
 
 Earlier synthetic, real blank-practice and correction work folders are preserved.
 Scripts, diagnostics, test evidence and real-image captures stay in the separate
 private review area, outside this reader-facing folder and Git. The launcher
-checks its own running PID and loaded source hash; it never force-closes another
+checks its own running PID and frozen application path; build receipts record the source hashes. It never force-closes another
 window. Keep the launching Terminal open until closing normally. If macOS removes
 `/tmp/meniscus-runtime/Slicer.app`, restore the pinned local runtime before launch;
 there are no automatic runtime downloads.
@@ -77,3 +77,5 @@ The revised Windows installer is built as a separate review candidate. It does
 not replace the shared Dropbox installer. Hosted Windows checks and Mac Qt scale
 simulations do not substitute for human review or new native Windows display
 scaling acceptance. No further Horizon session is requested.
+
+The launcher uses the existing pinned runtime at `/tmp/meniscus-runtime/Slicer.app` and checks that it exists. If that temporary runtime is removed, the maintainer must restore it. No runtime is downloaded or security setting changed by the launcher; a standalone Mac installer is not supplied. Earlier preview windows and their separate work folders are preserved.

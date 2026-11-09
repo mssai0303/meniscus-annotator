@@ -17,11 +17,46 @@ Slicer installation, SCC account or runtime download.
 
 ## Repaired review candidate — 0.2.0
 
-The current repair source is a distinct 0.2.0 candidate. Build it from its recorded
-clean source commit; the final build receipt supplies the exact commit, installer
-hash and CI run. Do not substitute a previous 0.1.0 installer or its Windows
-results. The candidate remains a review build until the current native Windows
-GUI, physical-DPI and offline annotation checks have actually passed.
+The repaired review candidate is tag `v0.2.0-review-repair.3`, source
+`60e5a33fb1b3a5cdd3076af78a86ab6ad71aafba`. Its identifiable review installer is
+`MeniscusAnnotator-0.2.0-Windows-x64-60e5a33.exe`, 363,254,300 bytes, SHA-256
+`e7f7f7e7a068ee7c0d213242e3767b58d500687d8994270067310daddf51549d`.
+[CI 42559454615](https://github.com/mssai0303/meniscus-annotator/actions/runs/42559454615)
+ran on Windows Server 2025 x64 build 26100, runner image 20261103.298.1. The
+installer uses fast zlib compression; payload and acceptance checks are unchanged.
+
+All **354 portable Windows tests** passed. Actual installation, all payload
+hashes, runtime imports/source identity, synthetic generation, the simulated
+legacy-registration guard, duplicate-install refusal, locked-runtime uninstall
+protection, uninstall and fresh reinstall/work preservation passed. The installed
+headless technical persistence route passed **55 checks**, including actual
+Slicer editable segmentation storage, independent SimpleITK geometry, practice
+markers/zero research eligibility and approved-version ZIP inspection. These
+headless checks do not establish GUI drawing or visible Export-dialog acceptance.
+
+The actual installer was independently extracted: all **9,603 payload hashes**,
+all nine application source files against the tag, all three actual synthetic
+guide PNGs, reader HTML, regional reader/TestKit and x64 native executables
+matched. The final matching Word guide is 43,966 bytes, SHA-256
+`cc5c80ae0d11026917bcb6f970a1da0e875d6ddab58377e8d6ce2e9f38615f2a`.
+After CI, a review-candidate/remaining-Windows-checks note was added to this
+separate guide. Its controls are unchanged, all six delivered pages were
+re-rendered and inspected, and the installer bytes remain unchanged. The receipt
+also retains the earlier source-tag guide hash.
+
+The one fresh hosted system-renderer probe failed to create an ANGLE/EGL context
+before rendering; no actual OpenGL version or MRI pixels were verified. Final
+stderr contains no destroyed-widget callback trace. Native GUI Draw/review,
+restart/export and scaling fields remain **BLOCKED**, not passed. Host policy
+also prevented verified outbound isolation, so offline annotation/import
+acceptance is not claimed. Current Windows 10 Enterprise 19045 interactive
+acceptance and Windows 11 compatibility remain untested; earlier user testing is
+evidence for its earlier revision. No further manual Horizon session is requested.
+
+This is a repaired review candidate, not a fully verified production release or
+acceptance of all 250 cases. See the committed
+[exact CI summary](../packaging/evidence/windows-review-repair-ci.json). Earlier
+0.1.0 and superseded 0.2.0 candidates are not substitutes for this installer.
 
 The launcher sets `QT_SCALE_FACTOR_ROUNDING_POLICY=PassThrough` before Qt starts;
 it does not force a reader scale factor. The installed runtime check records the

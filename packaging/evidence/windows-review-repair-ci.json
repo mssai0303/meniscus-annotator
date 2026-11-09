@@ -1,0 +1,122 @@
+{
+  "schema_version": "meniscus_windows_review_candidate/1",
+  "application_version": "0.2.0",
+  "tag": "v0.2.0-review-repair.3",
+  "source_commit": "60e5a33fb1b3a5cdd3076af78a86ab6ad71aafba",
+  "application_source_sha256": "f886293c7a8c8a0e4029f792ab6c8aa23c2d8cdaebf6bd50874602c86d398848",
+  "application_source_dirty": false,
+  "ci_run": 42559454615,
+  "ci_url": "https://github.com/mssai0303/meniscus-annotator/actions/runs/42559454615",
+  "build_route": "Wrapped official Slicer distribution; not a custom-compiled Slicer application",
+  "compression_mode": "zlib-development-fast",
+  "host": {
+    "os": "Windows Server 2025 x64",
+    "build": "26100",
+    "runner_image": "20261103.298.1"
+  },
+  "runtime": {
+    "passed": true,
+    "scope": "Installed Windows runtime imports/identity only; no rendering or anatomical acceptance.",
+    "qt_version": "5.15.2",
+    "qt_scale_rounding_policy": "PassThrough",
+    "qt_scale_rounding_policy_actual": 5,
+    "application_version": "0.2.0",
+    "runtime_version": "5.12.4",
+    "runtime_revision": "4e21c19",
+    "runtime_name": "MeniscusAnnotator",
+    "application_commit": "60e5a33fb1b3a5cdd3076af78a86ab6ad71aafba",
+    "application_source_sha256": "f886293c7a8c8a0e4029f792ab6c8aa23c2d8cdaebf6bd50874602c86d398848",
+    "application_source_dirty": false,
+    "packaged_source_matches": true,
+    "python": "3.12.10 (main, Sep  9 2026, 14:23:39) [MSC v.1944 64 bit (AMD64)]",
+    "numpy": "2.4.6",
+    "nibabel": "5.3.2",
+    "SimpleITK": "2.5.5",
+    "regional_extension_schema": "meniscus_regional_extension/1",
+    "regional_protocol_status": "pending_expert_protocol",
+    "regional_import_and_unassigned_initialization": "PASSED: synthetic memory arrays only; no regional assignment or acceptance",
+    "regional_research_approval": false
+  },
+  "installer": {
+    "review_filename": "MeniscusAnnotator-0.2.0-Windows-x64-60e5a33.exe",
+    "bytes": 363254300,
+    "sha256": "e7f7f7e7a068ee7c0d213242e3767b58d500687d8994270067310daddf51549d"
+  },
+  "matching_word_guide": {
+    "bytes": 43966,
+    "sha256": "cc5c80ae0d11026917bcb6f970a1da0e875d6ddab58377e8d6ce2e9f38615f2a",
+    "pages": 6,
+    "documentation_note": "After CI, added a clearly worded review-candidate/Windows-acceptance note; controls unchanged. All six delivered pages re-rendered and inspected. Windows installer bytes/source unchanged."
+  },
+  "portable_windows_tests": {
+    "passed": 354,
+    "failed": 0,
+    "seconds": 54.5,
+    "scope": "Core/contracts/compatibility/assembly tests; not GUI acceptance."
+  },
+  "installed_headless_technical_persistence": {
+    "passed": true,
+    "checks": 55,
+    "scope": "Installed bundled-runtime headless technical correction/persistence/export with procedural inputs and actual Slicer segmentation storage; no GUI, interactive drawing, anatomical, or offline workflow acceptance.",
+    "coverage": [
+      "Procedural regular/oblique correction inputs",
+      "Native Slicer editable segmentation write/reopen",
+      "Immutable checkpoint hashes",
+      "Review journal restoration",
+      "Ordinary draft-protocol practice approval/headers/zero research eligibility",
+      "Idempotent review/approval",
+      "Independent SimpleITK full geometry/extent check",
+      "Approved checkpoint ZIP contents and fixed labels",
+      "Newer unapproved work blocks silent older export",
+      "Original synthetic source hashes unchanged"
+    ]
+  },
+  "installation_checks": {
+    "install_test": "PASSED: installed bytes match the complete payload manifest",
+    "legacy_registration_guard": "PASSED: simulated 0.1 registration rejected; actual old-binary upgrade not claimed",
+    "duplicate_install_test": "PASSED: second registered installation rejected; original installed files retained",
+    "regional_reader_example_import_test": "PASSED: optional example loads installed application helpers via bundled Python; no annotation input read, edited or approved",
+    "locked_runtime_uninstall_test": "PASSED: locked runtime prevented all known-file deletion",
+    "uninstall_test": "PASSED: known executable removed; unrelated synthetic sentinel preserved",
+    "reinstall_work_preservation": "PASSED: fresh reinstall bytes verified; external synthetic work retained; application removed normally"
+  },
+  "independent_installer_extraction": {
+    "passed": true,
+    "payload_files": 9603,
+    "exact_source_application_files": 9,
+    "all_three_synthetic_guide_images_match": true,
+    "reader_html_matches": true,
+    "regional_reader_and_testkit_match": true,
+    "native_payload_architecture": "AMD64",
+    "scope": "Independent extraction/hash/architecture checks of the actual NSIS binary; not Windows execution or GUI acceptance."
+  },
+  "graphics": {
+    "status": "BLOCKED",
+    "attempts": 1,
+    "mode": "system",
+    "bounded_seconds": 45,
+    "stage": "before_render",
+    "reason": "Hosted ANGLE/EGL context creation failed; no actual OpenGL version or varied MRI canvas pixels could be verified.",
+    "version_overrides_used": false,
+    "destroyed_widget_trace_in_final_stderr": false
+  },
+  "native_windows_gui_workflows": {
+    "status": "BLOCKED",
+    "scope": "Visible ordinary reader dialogs, Draw/Erase, regional interaction, GUI restart/export and scaling were not executed past the failed rendering gate."
+  },
+  "offline_isolation": {
+    "status": "NOT AVAILABLE",
+    "reason": "Host policy did not fully enforce temporary outbound rules. No offline annotation or isolated import pass is claimed."
+  },
+  "Windows10_19045_current_revision_interactive": "NOT RUN; earlier user evidence is a different revision; no new manual Horizon session requested.",
+  "Windows11_compatibility": "UNTESTED; not declared incompatible.",
+  "physical_windows_display_scaling": "UNTESTED; Mac/Qt simulations are separate evidence.",
+  "regional_research_approval": false,
+  "regional_protocol": "pending_expert_protocol",
+  "release_status": "Repaired review candidate; not a fully verified production release or acceptance of all 250 cases.",
+  "privacy_scope": "Only generic source and procedural synthetic fixtures entered hosted CI. No participant data, real MRI, private logs or annotations are included in this committed summary.",
+  "word_guide_at_source_tag": {
+    "bytes": 43888,
+    "sha256": "406aa6785fbaf20c366cf1710baf913f39108daefe403ebee9fe13dc96397262"
+  }
+}

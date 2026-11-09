@@ -1,0 +1,90 @@
+{
+  "schema_version": "meniscus_review_repairs/1",
+  "application_version": "0.2.0",
+  "tag": "v0.2.0-review-repair.3",
+  "source_commit": "60e5a33fb1b3a5cdd3076af78a86ab6ad71aafba",
+  "application_source_sha256": "f886293c7a8c8a0e4029f792ab6c8aa23c2d8cdaebf6bd50874602c86d398848",
+  "final_main_sha256": "441ee2b58cd12a723014c05df62d93cddc44b679f92f7cb726e3a6afee3e7e30",
+  "scope": "Counts overlap. Automated actual Qt/VTK controls/effects and visual inspection, not human/anatomical or native Windows GUI acceptance. No participant identifiers, pixels, annotations or private logs are included.",
+  "portable_tests": {
+    "mac": 354,
+    "windows": 354
+  },
+  "mac": {
+    "host": "macOS 27.2 build26B123 Apple Silicon",
+    "runtime": "Intel Slicer5.12.4 revision4e21c19 through Rosetta; not native ARM",
+    "ordinary_visible_workflow": 224,
+    "ordinary_restart": 21,
+    "fault_injected_visible_save_review_recovery": 66,
+    "legacy_whole_only_gui": 38,
+    "legacy_regional_gui": 39,
+    "journal_crash_write": 44,
+    "journal_crash_recovery": 26,
+    "preapproval_empty_selection_export_gui": 36,
+    "synthetic_guide_capture": 40,
+    "geometry": {
+      "orientation": 130,
+      "draw_workflow": 1019,
+      "draw_restart": 172,
+      "main_sha256": "c51da7a7a7a1d8a4cf22194b81876ef13ac7929d49ea29f8497d578009fb9077",
+      "scope": "Includes longer-to-shorter slice-range repair. Final changes after this run only affect compact chrome, tool widths and shutdown callbacks; final ordinary/fault/layout routes ran on final441source."
+    },
+    "layout": {
+      "simulated_factors_percent_passed": [
+        100,
+        125,
+        150,
+        175
+      ],
+      "checks_per_factor": 297,
+      "actual_retina_dpr": [
+        2,
+        2.5,
+        3,
+        3.5
+      ],
+      "rounding_policy": "PassThrough5",
+      "logical_minimum": [
+        800,
+        480
+      ],
+      "small_height": "Panel tools reachable by normal vertical scrolling; footer actions fixed.",
+      "factor_200": "DPR4 verified; available756x439 below minimum, no desktop layout pass.",
+      "windows_dpi_acceptance": false
+    },
+    "real_practice": {
+      "case_count": 2,
+      "ordinary_draft_protocol_workflow": 367,
+      "cold_restart": 28,
+      "actor": "Software QA, never a doctor",
+      "source_scope": "Only the same two authorized isolated practice copies and relevant shared metadata; no cohort audit. Private evidence retained outside Git.",
+      "review_button_wall_time_seconds": [
+        0.13,
+        0.23
+      ],
+      "review_wall_time_scope": "Includes injected-driver waits and concurrent development load; no new full-volume checkpoints for unchanged review."
+    },
+    "existing_human_practice": "One existing0.1checkpoint technically read/validated read-only; immutable work/bindings unchanged, no edit session; the other case had no saved checkpoint."
+  },
+  "windows_receipt": "packaging/evidence/windows-review-repair-ci.json",
+  "word_guide": {
+    "bytes": 43966,
+    "sha256": "cc5c80ae0d11026917bcb6f970a1da0e875d6ddab58377e8d6ce2e9f38615f2a",
+    "pages": 6,
+    "documentation_note": "After CI, added a clearly worded review-candidate/Windows-acceptance note; controls unchanged. All six delivered pages re-rendered and inspected. Windows installer bytes/source unchanged."
+  },
+  "remaining": [
+    "Native Windows10/11 GUI/image editing/restart/export interaction and DPI acceptance",
+    "Strict offline isolation under a supported Windows environment",
+    "Mac200percent desktop-layout acceptance on a sufficiently large logical desktop",
+    "Native Apple Silicon runtime and standalone Mac installer not verified/provided",
+    "Expert regional protocol and genuine downstream training-loader integration"
+  ],
+  "readiness": "Repaired candidate for reviewer evaluation/supervised software practice, not routine research annotation.",
+  "delivery": {
+    "local_dropbox_files_verified": true,
+    "previous_files_backed_up_outside_dropbox": true,
+    "cloud_upload_completion": "unverified",
+    "recipient_access": "not tested; permissions unchanged"
+  }
+}

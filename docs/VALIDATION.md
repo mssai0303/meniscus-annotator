@@ -1,10 +1,59 @@
-# Validation record — development version 0.1.0
+# Validation record — 0.2.0 repaired review candidate
 
 The focused application runs in the actual pinned Slicer desktop runtime. Mac
 verification uses **Intel Slicer 5.12.4 under Rosetta on Apple Silicon**, not a
 native ARM runtime. Technical checks establish file integrity, native geometry
 and software behaviour; they do not establish anatomical correctness, accepted
 research annotations or readiness for the full annotation batch.
+
+## Current repaired review candidate
+
+Application source `60e5a33`, tag `v0.2.0-review-repair.3`, fingerprint
+`f886293c7a8c8a0e4029f792ab6c8aa23c2d8cdaebf6bd50874602c86d398848`.
+The [finding-by-finding record](REVIEW_REPAIRS.md) distinguishes repairs from
+conditional risks, alternative design handling and remaining platform gaps.
+
+The latest Mac interface passes 224 ordinary visible-workflow checks and 21
+fresh-process checks, plus 66 fault-injection checks for failed Save/review and
+retry. These use actual Qt controls/native VTK effects with injected events and
+Qt button activation, not human or OS-pointer acceptance. Geometry testing adds
+130 orientation, 1,019 eight-grid Draw and 172 restart checks. Legacy whole-only
+and regional reader fixtures pass 38/39 checks; crash-journal write/recovery
+passes 44/26. Two isolated authorized real practice copies pass 367/28 workflow
+and restart checks, independent ZIP/native-grid inspection and unchanged source
+hashes. Actual old human-practice work validates read-only with all checkpoint
+and binding bytes preserved. No new doctor or anatomical reference was created.
+
+Four Mac Qt simulations (100/125/150/175%) pass 297 overlapping checks each,
+including small-window scroll reachability, fixed footer actions and keyboard
+Undo. At 200% this Mac's 756×439 available logical desktop is below the 800×480
+minimum; desktop layout acceptance is not claimed. Larger requested windows
+sometimes hit OS limits. These are not native Windows DPI checks.
+
+Final [Windows CI 42559454615](https://github.com/mssai0303/meniscus-annotator/actions/runs/42559454615)
+on Server 2025 x64 build 26100 passes 354 portable tests, installation/imports,
+55 actual installed headless persistence/export checks, installation safeguards,
+uninstall/reinstall and independent extraction/hash verification of all 9,603
+payload files. Fresh ANGLE context creation fails before image rendering; strict
+offline isolation is unavailable under hosted policy. Revised Windows GUI/DPI,
+Windows 10 interactive acceptance and Windows 11 remain unverified. Earlier
+Horizon success applies to the earlier build. No repeat Horizon test is requested.
+See the [Windows receipt](../packaging/evidence/windows-review-repair-ci.json).
+
+Mac uses Intel Slicer 5.12.4 revision 4e21c19 through Rosetta on Apple Silicon
+(macOS 27.2 build 26B123), not native ARM. The new preview has a separate frozen
+application/profile/work folder and remains open with a real oblique practice
+scan. Earlier windows are preserved. Its launcher depends on the existing pinned
+runtime, checks its availability and does not download or change security settings;
+a standalone Mac installer is not supplied.
+
+The six-page Word guide was rendered and every page inspected. It identifies this
+as a repaired review candidate. Regional definitions/research approval/training
+validity remain pending/blocked/zero; reviewed-voxel validity never establishes
+practice eligibility for research. Technical checks do not establish anatomy or
+readiness for the complete 250-case batch.
+
+The following 0.1.0 records are historical and do not replace the current evidence.
 
 ## Executed checks and their scope
 
