@@ -50,7 +50,7 @@ def check(name,value,detail=None):
     if detail is not None:
         item['detail']=detail
     REPORT['checks'].append(item)
-    (OUTPUT/('repair-progress-'+PHASE+'.json')).write_text(json.dumps(item,indent=2)+'\n')
+    (OUTPUT/('repair-progress-'+PHASE+'.json')).write_text(json.dumps(item,indent=2)+'\n',encoding='utf-8')
     if not value:
         raise AssertionError(name)
 
@@ -68,6 +68,16 @@ def click(control):
     check('clicked control fully visible '+str(getattr(control,'objectName','')),
           control.visibleRegion().boundingRect().contains(control.rect))
     control.setFocus(qt.Qt.MouseFocusReason)
+    dialog_parent=control.parentWidget()
+    while dialog_parent is not None and not dialog_parent.inherits('QDialog'):
+        dialog_parent=dialog_parent.parentWidget()
+    if dialog_parent is not None and control.inherits('QAbstractButton'):
+        # Native macOS modal bookkeeping can discard a manually synthesized
+        # release event when another isolated QA app changes activation. Use
+        # Qt's actual button activation for modal buttons; never app helpers.
+        REPORT['modal_button_scope']='Visible QAbstractButton.click activation; nonmodal focus checks retain injected mouse events; not OS pointer acceptance.'
+        control.click()
+        return # unwind this timer callback before the next modal exec begins
     center=qt.QPointF(min(8.,control.width/2) if isinstance(control,(qt.QCheckBox,qt.QRadioButton)) else control.width/2,control.height/2)
     for kind,buttons in [(qt.QEvent.MouseButtonPress,qt.Qt.LeftButton),
                          (qt.QEvent.MouseButtonRelease,qt.Qt.NoButton)]:
@@ -168,13 +178,13 @@ def prepare():
     source=OUTPUT/'Synthetic ordinary reader inputs'
     _,truth=make_draw_matrix(source)
     # Ordinary draft protocol deliberately has no software-practice shortcut.
-    job=json.loads((source/'correction_job.json').read_text())
+    job=json.loads((source/'correction_job.json').read_text(encoding='utf-8'))
     job.pop('practice_context',None)
     job.pop('annotator',None)
     job['protocol']={'version':'SYNTHETIC-ORDINARY-DRAFT-REPAIR-1','status':'draft'}
-    (source/'correction_job.json').write_text(json.dumps(job,indent=2)+'\n')
+    (source/'correction_job.json').write_text(json.dumps(job,indent=2)+'\n',encoding='utf-8')
     (OUTPUT/'source-hashes.json').write_text(json.dumps({p.relative_to(source).as_posix():sha256(p)
-        for p in source.rglob('*') if p.is_file()},indent=2)+'\n')
+        for p in source.rglob('*') if p.is_file()},indent=2)+'\n',encoding='utf-8')
     return source,truth
 
 
@@ -542,11 +552,11 @@ def workflow():
     events()
     save(widget)
     (OUTPUT/'expected-workflow.json').write_text(json.dumps({'case_key':key_value,'work':str(widget.store.root),
-        'slice':widget.currentSlice,'review':widget.session.state['review'],'regional_review':widget.regionalState['review']},indent=2)+'\n')
+        'slice':widget.currentSlice,'review':widget.session.state['review'],'regional_review':widget.regionalState['review']},indent=2)+'\n',encoding='utf-8')
     np.savez_compressed(OUTPUT/'expected-arrays.npz',labels=whole(widget)[0],uncertainty=whole(widget)[1])
     slicer.util.mainWindow().grab().save(str(OUTPUT/'repair-workflow.png'))
     check('original synthetic package remains byte-for-byte unchanged',
-          json.loads((OUTPUT/'source-hashes.json').read_text())=={p.relative_to(source).as_posix():sha256(p)
+          json.loads((OUTPUT/'source-hashes.json').read_text(encoding='utf-8'))=={p.relative_to(source).as_posix():sha256(p)
             for p in source.rglob('*') if p.is_file()})
     widget.closeCase()
 
@@ -555,7 +565,7 @@ def resume():
     widget=attach()
     source=OUTPUT/'Synthetic ordinary reader inputs'
     open_dataset(widget,source,previous=True)
-    expected=json.loads((OUTPUT/'expected-workflow.json').read_text())
+    expected=json.loads((OUTPUT/'expected-workflow.json').read_text(encoding='utf-8'))
     open_case(widget,expected['case_key'])
     values=np.load(OUTPUT/'expected-arrays.npz')
     check('cold restart preserves whole annotation and review',
@@ -593,7 +603,7 @@ def journal_write():
     expected={'case_key':case_key,'review':widget.session.state['review'],
               'regional_review':widget.regionalState['review'],'checkpoint':str(checkpoint),
               'checkpoint_hashes':hashes,'slice':widget.currentSlice}
-    (OUTPUT/'expected-journal.json').write_text(json.dumps(expected,indent=2)+'\n')
+    (OUTPUT/'expected-journal.json').write_text(json.dumps(expected,indent=2)+'\n',encoding='utf-8')
     REPORT['simulated_crash']='Own synthetic process os._exit after durable journal; no close/save hook; no other PID touched.'
 
 
@@ -601,7 +611,7 @@ def journal_resume():
     widget=attach()
     source=OUTPUT/'Synthetic ordinary reader inputs'
     open_dataset(widget,source,previous=True)
-    expected=json.loads((OUTPUT/'expected-journal.json').read_text())
+    expected=json.loads((OUTPUT/'expected-journal.json').read_text(encoding='utf-8'))
     open_case(widget,expected['case_key'])
     check('abrupt-exit restart recovers exact whole and regional explicit reviews',
           widget.session.state['review']==expected['review']
@@ -654,29 +664,29 @@ def legacy():
             'regional_uncertainty':legacy_uncertain,'regional_state':regional_state} if regional_fixture else {}))
     # Construct the documented old six-payload schema; do not execute an old
     # hard-coded clinical reader or pretend a historical binary was tested.
-    state=json.loads((old/'annotation.json').read_text())
+    state=json.loads((old/'annotation.json').read_text(encoding='utf-8'))
     state['app_version']='0.1.0'
     state['annotation_purpose']='research_annotation'
     for field in ('reader_assignment','approval_purpose','research_eligible','accepted_research_annotation'):
         state.pop(field,None)
-    (old/'annotation.json').write_text(json.dumps(state,indent=2)+'\n')
+    (old/'annotation.json').write_text(json.dumps(state,indent=2)+'\n',encoding='utf-8')
     if regional_fixture:
-        previous_region_state=json.loads((old/'regions.json').read_text())
+        previous_region_state=json.loads((old/'regions.json').read_text(encoding='utf-8'))
         previous_region_state['app_version']='0.1.0'
         previous_region_state.pop('reader_assignment',None)
-        (old/'regions.json').write_text(json.dumps(previous_region_state,indent=2)+'\n')
+        (old/'regions.json').write_text(json.dumps(previous_region_state,indent=2)+'\n',encoding='utf-8')
     for name in (['labels.nii.gz','uncertainty.nii.gz','validity.nii.gz']+
                  (['regions.nii.gz','regional_uncertainty.nii.gz','regional_validity.nii.gz'] if regional_fixture else [])):
         image=nib.load(str(old/name))
         image.header['descrip']=b''
         image.header['intent_name']=b''
         nib.save(image,str(old/name))
-    manifest=json.loads((old/'manifest.json').read_text())
+    manifest=json.loads((old/'manifest.json').read_text(encoding='utf-8'))
     manifest.pop('research_eligibility',None)
     manifest['files_sha256'].pop('research_eligibility.nii.gz',None)
     (old/'research_eligibility.nii.gz').unlink()
     manifest['files_sha256']={name:sha256(old/name) for name in manifest['files_sha256']}
-    (old/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
+    (old/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
     store.reader_assignment_path.unlink()
     before={p.name:sha256(p) for p in old.iterdir() if p.is_file()}
     check('legacy P1 fixture is named-reader six-file schema without binding',
@@ -751,7 +761,7 @@ def orientation():
             check(case_key+' complete acquired endpoint '+str(index),
                   widget.currentSlice==index and abs(actual_k-index)<.001)
         check(case_key+' navigation and advisory leave labels unchanged',same(whole(widget),masks))
-    source_hashes=json.loads((OUTPUT/'source-hashes.json').read_text())
+    source_hashes=json.loads((OUTPUT/'source-hashes.json').read_text(encoding='utf-8'))
     check('orientation/advisory workflow leaves every source file unchanged',source_hashes=={
         p.relative_to(source).as_posix():sha256(p) for p in source.rglob('*') if p.is_file()})
     slicer.util.mainWindow().grab().save(str(OUTPUT/'repair-orientation.png'))
@@ -945,7 +955,7 @@ def run_phase(exit_application=True):
                 REPORT['cleanup_error']=traceback.format_exc()
     REPORT['completed_utc']=datetime.datetime.now(datetime.timezone.utc).isoformat()
     destination=OUTPUT/('repair-'+PHASE+'.json')
-    destination.write_text(json.dumps(REPORT,indent=2)+'\n')
+    destination.write_text(json.dumps(REPORT,indent=2)+'\n',encoding='utf-8')
     print('MENISCUS_REPAIR_RESULT',json.dumps({'passed':REPORT['passed'],'checks':len(REPORT['checks']),'report':str(destination)}),flush=True)
     if exit_application and PHASE=='journal-write' and REPORT['passed']:
         sys.stdout.flush()

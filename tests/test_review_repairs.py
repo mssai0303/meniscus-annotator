@@ -42,25 +42,40 @@ def approve(session, labels, uncertain):
 
 
 def rewrite_manifest(checkpoint, filename):
-    manifest = json.loads((checkpoint/'manifest.json').read_text())
+    manifest = json.loads((checkpoint/'manifest.json').read_text(encoding='utf-8'))
     manifest['files_sha256'][filename] = sha256(checkpoint/filename)
-    (checkpoint/'manifest.json').write_text(json.dumps(manifest))
+    (checkpoint/'manifest.json').write_text(json.dumps(manifest), encoding='utf-8')
 
 
-def test_p1_8530_shape_legacy_reader_binding_saves_without_rewriting_old(setup):
+@pytest.mark.parametrize('default_encoding', ['utf-8', 'cp1252'])
+def test_p1_8530_shape_legacy_reader_binding_saves_without_rewriting_old(setup, monkeypatch, default_encoding):
+    # Windows CP1252 must not corrupt the UTF-8 source metadata while this test
+    # constructs its legacy fixture. Production JSON always uses explicit UTF-8.
+    original_read, original_write = Path.read_text, Path.write_text
+    def locale_read(path, *args, **kwargs):
+        if not args and kwargs.get('encoding') is None:
+            kwargs['encoding'] = default_encoding
+        return original_read(path, *args, **kwargs)
+    def locale_write(path, text, *args, **kwargs):
+        if not args and kwargs.get('encoding') is None:
+            kwargs['encoding'] = default_encoding
+        return original_write(path, text, *args, **kwargs)
+    monkeypatch.setattr(Path, 'read_text', locale_read)
+    monkeypatch.setattr(Path, 'write_text', locale_write)
     ds, store = setup
     case = ds.cases[0]
     with store.open_case(case) as session:
         labels, uncertainty = arrays(session)
         old = session.save(labels, uncertainty, writer)
-    old_state = json.loads((old/'annotation.json').read_text())
+    old_state = json.loads((old/'annotation.json').read_text(encoding='utf-8'))
     old_state.pop('reader_assignment', None) # preview 8530b18 has no local-binding field
     old_state['app_version'] = '0.1.0'
-    (old/'annotation.json').write_text(json.dumps(old_state))
+    (old/'annotation.json').write_text(json.dumps(old_state), encoding='utf-8')
     rewrite_manifest(old, 'annotation.json')
     store.reader_assignment_path.unlink()
     before = {p.name: sha256(p) for p in old.iterdir()}
     reopened_store = WorkStore(store.root, ds, reader='Synthetic Repair Reader')
+    reopened_store._validate_checkpoint(old, case) # expose fixture errors before recovery's generic message
     with reopened_store.open_case(case) as session:
         regions, regional_uncertain, regional_state = session.load_regions()
         new = session.save(labels, uncertainty, writer, regions=regions, regional_uncertainty=regional_uncertain, regional_state=regional_state)

@@ -43,14 +43,14 @@ def main():
     # Ordinary draft-protocol practice, separate from a software-practice job.
     # Only this generated disposable job is changed; never reader/source data.
     job_path = source / 'correction_job.json'
-    job = json.loads(job_path.read_text())
+    job = json.loads(job_path.read_text(encoding='utf-8'))
     job.pop('practice_context')
     job_path.write_text(json.dumps(job, indent=2) + '\n', encoding='utf-8')
     before = {p.relative_to(source).as_posix(): core.sha256(p) for p in source.rglob('*') if p.is_file()}
     dataset = core.Dataset(source)
     store = core.WorkStore(OUTPUT / 'Separate synthetic reader work', dataset,
                           core.load_job_config(job_path, dataset), reader='Software QA (headless persistence)')
-    distribution = json.loads((INSTALL / 'distribution.json').read_text())
+    distribution = json.loads((INSTALL / 'distribution.json').read_text(encoding='utf-8'))
     REPORT.update(application_version=MeniscusAnnotatorLib.APP_VERSION,
                   application_commit=distribution['application_commit'],
                   application_source_sha256=distribution['application_source_sha256'],
