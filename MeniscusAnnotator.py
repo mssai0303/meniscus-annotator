@@ -12,13 +12,14 @@ import vtk
 import slicer
 from slicer.ScriptedLoadableModule import ScriptedLoadableModule, ScriptedLoadableModuleWidget
 from MeniscusAnnotatorLib import Dataset, WorkStore, ValidationError, export_approved
-from MeniscusAnnotatorLib.core import load_job_config, load_dataset_job_config, correction_inputs_present
+from MeniscusAnnotatorLib.core import load_job_config, load_dataset_job_config, correction_inputs_present, export_plan, status_label, annotation_purpose, research_eligible, work_location_problem
+from MeniscusAnnotatorLib.presentation import acquired_display_frame, slice_direction, label_plausibility
 from MeniscusAnnotatorLib.build_identity import capture_source_identity
 from MeniscusAnnotatorLib.regions import (REGIONS, initialize as initialize_regions,
                                          reconcile as reconcile_regions,
                                          invalidate_review as invalidate_regional_review)
 
-VERSION = '0.1.0'
+VERSION = '0.2.0'
 SOURCE_IDENTITY = capture_source_identity()
 LABELS = {'medial': ('Medial meniscus', (0.30, 0.78, 0.92)),
           'lateral': ('Lateral meniscus', (0.95, 0.64, 0.31)),
@@ -36,13 +37,13 @@ class CloseGuard(qt.QObject):
 
     def eventFilter(self, watched, event):
         if event.type() == qt.QEvent.Quit and self.workflow._pendingDraw():
-            self.workflow._guardContour('closing the application')
-            event.ignore()
-            return True
+            if not self.workflow._resolveContourForClose():
+                event.ignore()
+                return True
         if event.type() == qt.QEvent.Close and watched == slicer.util.mainWindow() and self.workflow.dataset:
             try:
                 # Complete storage while native modules still exist, before Qt teardown.
-                if self.workflow.closeCase() is False:
+                if not self.workflow._resolveContourForClose() or self.workflow.closeCase() is False:
                     event.ignore()
                     return True
             except Exception as exc:
@@ -110,6 +111,12 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self._startingMaskSlices = None
         self._lastExport = None
         self._diagnostic = ''
+        self._transferNotice = ''
+        self._transferToken = 0
+        self._plausibility = None
+        self._closingContourDialog = False
+        self._reviewOnlyDirty = False
+        self._saveError = False
         config_path = os.environ.get('MENISCUS_SOFTWARE_PRACTICE_CONFIG') or os.environ.get('MENISCUS_REAL_PRACTICE_CONFIG')
         self._practiceConfig = json.loads(Path(config_path).read_text(encoding='utf-8')) if config_path else None
         settings_file = os.environ.get('MENISCUS_SETTINGS_FILE')
@@ -134,7 +141,9 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         qt.QTimer.singleShot(0, self._finishLayout)
 
     def _buildStyle(self):
-        from MeniscusAnnotatorLib.interface import icon, checkmark_path
+        from MeniscusAnnotatorLib.interface import icon, checkmark_path, down_arrow_path, ChoiceStrip, WheelGuard
+        self._choiceStrip = ChoiceStrip
+        self._wheelGuardClass = WheelGuard
         self._icon = icon
         families = list(qt.QFontDatabase().families())
         if sys.platform == 'win32':
@@ -145,6 +154,19 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.font.setWeight(qt.QFont.Normal)
         self.font.setBold(False)
         self.parent.setFont(self.font)
+        # Keep native menus, message boxes and scrollbars readable even when
+        # the operating system/Slicer preference is dark. MRI pixels stay dark.
+        palette = qt.QPalette()
+        for role,color in [(qt.QPalette.Window,'#e9edf0'),(qt.QPalette.Base,'#fafbfc'),
+                           (qt.QPalette.AlternateBase,'#edf0f2'),(qt.QPalette.Button,'#e5ebef'),
+                           (qt.QPalette.WindowText,'#293842'),(qt.QPalette.Text,'#293842'),
+                           (qt.QPalette.ButtonText,'#293842'),(qt.QPalette.Highlight,'#246d98'),
+                           (qt.QPalette.HighlightedText,'#ffffff')]:
+            palette.setColor(role,qt.QColor(color))
+        for role in (qt.QPalette.WindowText,qt.QPalette.Text,qt.QPalette.ButtonText):
+            palette.setColor(qt.QPalette.Disabled,role,qt.QColor('#7b8993'))
+        slicer.app.setPalette(palette)
+        self._lightPalette = palette
         self.style = '''
         QWidget { color:#293842; font-size:11pt; font-weight:normal; }
         QWidget#workspacePanel { background:#e9edf0; }
@@ -175,6 +197,24 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         QPushButton#saveDraft { border-color:#aebdc8; background:#e4eaf0; }
         QPushButton#saveDraft:hover { background:#d7e3ec; border-color:#7c9ab0; }
         QToolButton#drawingTool { padding:3px 5px; min-height:24px; }
+        QToolButton[preferredTool=true] { font-weight:500; }
+        QPushButton[primaryStep=true] { background:#246d98; color:white; border-color:#246d98; }
+        QPushButton[primaryStep=true]:hover { background:#195a80; }
+        QLineEdit:disabled, QTextEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled { color:#7b8993; background:#e0e5e9; border-color:#cbd3d9; }
+        QComboBox::drop-down { width:24px; border-left:1px solid #bdc8d0; background:#e5ebef; }
+        QComboBox::down-arrow { image:url(DOWNARROW); width:14px; height:14px; }
+        QComboBox QAbstractItemView { background:#fafbfc; color:#293842; selection-background-color:#246d98; selection-color:white; outline:0; }
+        QComboBox QAbstractItemView::item { min-height:28px; padding:4px 8px; }
+        QPushButton[choice=true] { background:#e2e8ec; border:1px solid #b9c6ce; padding:3px 4px; min-height:26px; }
+        QPushButton[choice=true]:checked { background:#d7e8f4; border-color:#2874a0; color:#174f70; }
+        QPushButton[choice=true]:disabled { background:#e0e5e9; color:#7b8993; border-color:#cbd3d9; }
+        QToolBar#MeniscusNextStep { background:#e6edf2; border-top:1px solid #cbd3d9; }
+        QLabel#nextStep { color:#293842; }
+        QScrollBar:vertical { background:#e2e8ec; width:12px; margin:0; }
+        QScrollBar::handle:vertical { background:#9aaab6; min-height:28px; border-radius:4px; }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background:#e2e8ec; }
+        QMessageBox, QDialog { background:#edf0f2; color:#293842; }
         QLineEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox { background:#fafbfc; border:1px solid #bdc8d0; border-radius:3px; padding:4px; min-height:22px; selection-background-color:#c9e0f0; selection-color:#203340; font-weight:normal; }
         QTableWidget { background:#edf0f2; alternate-background-color:#e9edf0; color:#293842; border:0; gridline-color:#dce3e8; selection-background-color:#d4e6f3; selection-color:#203340; }
         QHeaderView::section { background:#e9edf0; color:#52636f; border:0; border-bottom:1px solid #cbd3d9; padding:5px; font-size:11pt; font-weight:normal; }
@@ -192,7 +232,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         QMenu { background:#ffffff; color:#263642; border:1px solid #c4ced7; padding:5px; }
         QMenu::item { padding:7px 20px 7px 9px; }
         QMenu::item:selected { background:#dfedf7; }
-        '''.replace('CHECKMARK', checkmark_path())
+        '''.replace('CHECKMARK', checkmark_path()).replace('DOWNARROW',down_arrow_path())
         self.parent.setStyleSheet(self.style)
 
     def _title(self, text, layout):
@@ -236,8 +276,10 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.search.connect('textChanged(QString)', self._filter)
         lay.addWidget(self.search)
         self.progressFilter = qt.QComboBox()
-        self.progressFilter.addItems(['All cases', 'Not started', 'In progress', 'Needs review', 'Approved', 'Blocked', 'Saved work needs attention'])
+        self.progressFilter.addItems(['All cases', 'Not started', 'In progress', 'Needs review', 'Ready for approval', 'Practice approved', 'Research approved', 'Blocked', 'Saved work needs attention'])
         self.progressFilter.connect('currentIndexChanged(int)', self._filter)
+        self._filterWheelGuard = self._wheelGuardClass(self.progressFilter)
+        self.progressFilter.setFocusPolicy(qt.Qt.TabFocus)
         lay.addWidget(self.progressFilter)
         self.caseTable = qt.QTableWidget(0,2)
         palette = self.caseTable.palette
@@ -287,6 +329,10 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.rightDock.setTitleBarWidget(qt.QWidget(self.rightDock))
         panel, lay = self._panel()
         self.annotationTitle = self._title('Annotation',lay)
+        self.plausibilityButton = self._button('Inspect label positions',self._showPlausibility,lay)
+        self.plausibilityButton.objectName = 'MeniscusPlausibilityAdvisory'
+        self.plausibilityButton.setToolTip('Non-blocking physical-position advisory. No labels are changed.')
+        self.plausibilityButton.hide()
         labels = qt.QHBoxLayout()
         self.labelButtons = {}
         for key in ['medial','lateral']:
@@ -298,14 +344,14 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             b.setAccessibleName(name)
             self.labelButtons[key] = b
         lay.addLayout(labels)
-        taskRow = qt.QHBoxLayout()
-        taskRow.addWidget(qt.QLabel('Task'))
-        self.taskCombo = qt.QComboBox()
-        self.taskCombo.addItems(['Whole meniscus','Regions'])
+        self.taskSelector = self._choiceStrip([
+            ('whole','Whole meniscus','Whole meniscus','MeniscusTaskWhole'),
+            ('regions','Regions (draft)','Regions (draft)','MeniscusTaskRegions')],panel)
+        self.taskCombo = self.taskSelector.model
+        self.taskButtons = self.taskSelector.buttons
         self.taskCombo.setAccessibleName('Annotation task')
         self.taskCombo.connect('currentIndexChanged(int)',self._taskChanged)
-        taskRow.addWidget(self.taskCombo,1)
-        lay.addLayout(taskRow)
+        lay.addWidget(self.taskSelector)
         b = self._button('Uncertain area',lambda:self.setLabel('uncertain'),lay)
         b.setIcon(self._icon('dot',qt.QColor.fromRgbF(*LABELS['uncertain'][1]).name()))
         b.setCheckable(True)
@@ -315,14 +361,20 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         regionLayout = qt.QVBoxLayout(self.regionPanel)
         regionLayout.setContentsMargins(0,0,0,0)
         regionLayout.setSpacing(6)
-        regionRow = qt.QHBoxLayout()
-        regionRow.addWidget(qt.QLabel('Region'))
-        self.regionCombo = qt.QComboBox()
-        self.regionCombo.addItems(['Anterior horn (AH)','Body','Posterior horn (PH)'])
+        self.regionSelector = self._choiceStrip([
+            ('anterior','Anterior horn','AH','MeniscusRegionAnterior'),
+            ('body','Body region','Body','MeniscusRegionBody'),
+            ('posterior','Posterior horn','PH','MeniscusRegionPosterior')],self.regionPanel)
+        self.regionCombo = self.regionSelector.model
+        self.regionButtons = self.regionSelector.buttons
         self.regionCombo.setAccessibleName('Selected meniscal region')
         self.regionCombo.connect('currentIndexChanged(int)',self._regionChanged)
-        regionRow.addWidget(self.regionCombo,1)
-        regionLayout.addLayout(regionRow)
+        regionLayout.addWidget(self.regionSelector)
+        self.regionMeaning = qt.QLabel('AH anterior horn · Body · PH posterior horn')
+        self.regionMeaning.objectName = 'support'
+        self.regionMeaning.wordWrap = True
+        self.regionMeaning.setToolTip('Body is a regional assignment inside the complete meniscus. Correct the whole mask in Whole meniscus first.')
+        regionLayout.addWidget(self.regionMeaning)
         self.boundaryUncertainButton = self._button('Boundary uncertain',self._boundaryUncertain,regionLayout)
         self.boundaryUncertainButton.setCheckable(True)
         self.boundaryUncertainButton.setIcon(self._icon('dot',qt.QColor.fromRgbF(*LABELS['uncertain'][1]).name()))
@@ -355,7 +407,10 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             b.setMinimumHeight(30)
             b.setCheckable(True)
             b.connect('clicked()',lambda n=name:self.setTool(n))
-            tools.addWidget(b)
+            tools.addWidget(b, 3 if name=='Draw' else 2)
+            if name=='Draw':
+                b.setProperty('preferredTool',True)
+                b.setToolTip('Main boundary tool: click points, then right-click to close and fill.')
             self.toolButtons[name] = b
         lay.addWidget(strip)
         self.toolText = qt.QLabel('Choose a case to annotate')
@@ -402,6 +457,19 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.opacity.setValue(int(self.settings.value('Meniscus/opacity',20)))
         self.opacity.connect('valueChanged(int)',self._display)
         inner.addWidget(self.opacity)
+        thicknessRow = qt.QHBoxLayout()
+        thicknessRow.addWidget(qt.QLabel('Outline width'))
+        self.outlineWidth = qt.QSpinBox()
+        self.outlineWidth.setRange(1,4)
+        self.outlineWidth.setSuffix(' px')
+        self.outlineWidth.setValue(int(self.settings.value('Meniscus/outlineWidth',2)))
+        self.outlineWidth.connect('valueChanged(int)',self._display)
+        thicknessRow.addWidget(self.outlineWidth)
+        inner.addLayout(thicknessRow)
+        self.regionLegend = qt.QLabel('')
+        self.regionLegend.wordWrap = True
+        self.regionLegend.setTextFormat(qt.Qt.RichText)
+        inner.addWidget(self.regionLegend)
         self.windowLevelButton = self._button('Window/level',self._windowLevel,inner)
         self.windowLevelButton.setCheckable(True)
         self.windowLevelButton.setToolTip('Left-drag on the image to adjust brightness and contrast. Choose Paint, Draw or Erase to return to annotation.')
@@ -420,11 +488,17 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.regionalAssessmentPanel.collapsed = True
         regionalLay = qt.QVBoxLayout(self.regionalAssessmentPanel)
         regionalLay.setContentsMargins(0,6,0,6)
-        self.regionStatusCombo = qt.QComboBox()
-        self.regionStatusCombo.addItems(['Not assessed','Present','Absent','Uncertain'])
+        regionalLay.addWidget(qt.QLabel('Region assessment'))
+        self.assessmentSelector = self._choiceStrip([
+            ('unassessed','Not assessed','Not assessed','MeniscusAssessmentUnassessed'),
+            ('present','Present','Present','MeniscusAssessmentPresent'),
+            ('absent','Absent','Absent','MeniscusAssessmentAbsent'),
+            ('uncertain','Uncertain','Uncertain','MeniscusAssessmentUncertain')],self.regionalAssessmentPanel,rows=2)
+        self.regionStatusCombo = self.assessmentSelector.model
+        self.assessmentButtons = self.assessmentSelector.buttons
         self.regionStatusCombo.setAccessibleName('Selected region assessment')
         self.regionStatusCombo.connect('currentIndexChanged(int)',self._regionalAssessmentChanged)
-        regionalLay.addWidget(self.regionStatusCombo)
+        regionalLay.addWidget(self.assessmentSelector)
         self.regionNotes = qt.QTextEdit()
         self.regionNotes.setSizePolicy(qt.QSizePolicy.Ignored,qt.QSizePolicy.Fixed)
         self.regionNotes.setFixedHeight(58)
@@ -442,7 +516,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         lay.addWidget(self.regionalAssessmentPanel)
         self.regionalAssessmentPanel.hide()
         self.notesPanel = ctk.ctkCollapsibleButton()
-        self.notesPanel.text = 'Slice notes and flags'
+        self.notesPanel.text = 'Case notes and slice flag'
         self.notesPanel.collapsed = True
         notesLay = qt.QVBoxLayout(self.notesPanel)
         notesLay.setContentsMargins(0,6,0,6)
@@ -548,16 +622,26 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.casesToggle.setChecked(True)
         self.casesToggle.connect('toggled(bool)',lambda visible:self._setPanelVisible('cases',visible))
         self.caseListDock.connect('visibilityChanged(bool)',lambda visible:self._panelVisibilityChanged(self.casesToggle,visible))
-        self.identityLabel = qt.QLabel('No case open')
+        identity = qt.QWidget()
+        identity.setSizePolicy(qt.QSizePolicy.Expanding,qt.QSizePolicy.Preferred)
+        identityLayout = qt.QVBoxLayout(identity)
+        identityLayout.setContentsMargins(0,0,0,0)
+        identityLayout.setSpacing(0)
+        self.identityLabel = qt.QLabel('Choose a dataset')
         self.identityLabel.objectName = 'identity'
-        self.identityLabel.setSizePolicy(qt.QSizePolicy.Expanding,qt.QSizePolicy.Preferred)
-        self.topBar.addWidget(self.identityLabel)
-        self.saveStatus = qt.QLabel('No case open')
+        self.identityLabel.setSizePolicy(qt.QSizePolicy.Ignored,qt.QSizePolicy.Preferred)
+        identityLayout.addWidget(self.identityLabel)
+        self.contextLabel = qt.QLabel('Reader not confirmed · No dataset')
+        self.contextLabel.objectName = 'support'
+        self.contextLabel.setSizePolicy(qt.QSizePolicy.Ignored,qt.QSizePolicy.Preferred)
+        identityLayout.addWidget(self.contextLabel)
+        self.topBar.addWidget(identity)
+        self.saveStatus = qt.QLabel('Not connected')
         self.saveStatus.objectName = 'saveState'
-        self.saveStatus.setFixedWidth(200)
+        self.saveStatus.setFixedWidth(max(170,qt.QFontMetrics(self.font).horizontalAdvance('Practice · Unsaved changes')+16))
         self.topBar.addWidget(self.saveStatus)
         self.datasetMenuButton = self._headerButton('Dataset','folder')
-        self._menu(self.datasetMenuButton,[('Open dataset…',self._chooseDataset,'folder'),('Resume work',self._resume,'resume'),(None,None,None),('Show dataset folder',self._showDataset,'folder'),('Show saved work',self._showWork,'folder'),('Export results…',self._exportDialog,'export')])
+        self._menu(self.datasetMenuButton,[('Open dataset…',self._chooseDataset,'folder'),('Resume work',self._resume,'resume'),('Reader and dataset…',self._showContext,'help'),(None,None,None),('Show dataset folder',self._showDataset,'folder'),('Show saved work',self._showWork,'folder'),('Export results…',self._exportDialog,'export')])
         self.toolsToggle = self._headerButton('Tools','tools')
         self.toolsToggle.setCheckable(True)
         self.toolsToggle.setChecked(True)
@@ -566,6 +650,43 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         helpButton = self._headerButton('Help','help')
         self._menu(helpButton,[('Controls and shortcuts',self._help,'help'),('Annotation setup…',self._loadJob,'folder'),('Troubleshooting',self._diagnostics,'help'),('About Meniscus Annotator',self._about,'help')])
         main.addToolBar(qt.Qt.TopToolBarArea,self.topBar)
+        main.addToolBarBreak(qt.Qt.TopToolBarArea)
+        self.stepBar = qt.QToolBar('Current annotation step',main)
+        self.stepBar.objectName = 'MeniscusNextStep'
+        self.stepBar.setMovable(False)
+        self.stepBar.setStyleSheet(self.style)
+        self.stepPanel = qt.QWidget()
+        self.stepPanel.objectName = 'MeniscusStepPanel'
+        self.stepPanel.setSizePolicy(qt.QSizePolicy.Expanding,qt.QSizePolicy.Preferred)
+        stepLayout = qt.QHBoxLayout(self.stepPanel)
+        stepLayout.setContentsMargins(8,2,8,2)
+        stepLayout.setSpacing(8)
+        self.instruction = qt.QLabel('Open a dataset, then confirm your reader identity.')
+        self.instruction.objectName = 'MeniscusInstruction'
+        self.instruction.wordWrap = True
+        self.instruction.setSizePolicy(qt.QSizePolicy.Ignored,qt.QSizePolicy.Preferred)
+        self.instruction.setMinimumWidth(100)
+        stepLayout.addWidget(self.instruction,1)
+        self.finishContourButton = qt.QPushButton('Finish contour')
+        self.finishContourButton.objectName = 'primary'
+        self.finishContourButton.setIcon(self._icon('check','#ffffff'))
+        self.finishContourButton.connect('clicked()',self._finishContour)
+        stepLayout.addWidget(self.finishContourButton)
+        self.discardContourButton = qt.QPushButton('Discard')
+        self.discardContourButton.connect('clicked()',self._discardContour)
+        self.discardContourButton.setToolTip('Discard only the unfinished contour; committed annotations stay unchanged.')
+        stepLayout.addWidget(self.discardContourButton)
+        self.goApprovalButton = qt.QPushButton('Go to approval')
+        self.goApprovalButton.objectName = 'MeniscusGoApproval'
+        self.goApprovalButton.connect('clicked()',self._goApproval)
+        stepLayout.addWidget(self.goApprovalButton)
+        self.notificationUndoButton = qt.QPushButton('Undo transfer')
+        self.notificationUndoButton.connect('clicked()',self._undo)
+        stepLayout.addWidget(self.notificationUndoButton)
+        for button in (self.finishContourButton,self.discardContourButton,self.goApprovalButton,self.notificationUndoButton):
+            button.hide()
+        self.stepBar.addWidget(self.stepPanel)
+        main.addToolBar(qt.Qt.TopToolBarArea,self.stepBar)
         self.bottomBar = qt.QToolBar('Acquired slices and review',main)
         self.bottomBar.objectName = 'MeniscusNavigation'
         self.bottomBar.setMovable(False)
@@ -575,74 +696,55 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.navigationPanel = footer
         footer.objectName = 'navigationPanel'
         footer.setSizePolicy(qt.QSizePolicy.Expanding,qt.QSizePolicy.Preferred)
-        footerLayout = qt.QVBoxLayout(footer)
-        footerLayout.setContentsMargins(2,2,2,2)
-        footerLayout.setSpacing(4)
-        self.actionBar = qt.QWidget()
-        nav = qt.QHBoxLayout(self.actionBar)
-        nav.setContentsMargins(0,0,0,0)
-        nav.setSpacing(8)
+        nav = qt.QHBoxLayout(footer)
+        nav.setContentsMargins(2,2,2,2)
+        nav.setSpacing(6)
+        self.actionBar = footer
         self.sliceReadout = qt.QLabel('Slice — of —')
         self.sliceReadout.objectName = 'sliceReadout'
-        self.sliceReadout.setMinimumWidth(112)
+        self.sliceReadout.setMinimumWidth(104)
         nav.addWidget(self.sliceReadout)
         self.previousButton = self._button('',lambda:self.goSlice(self.currentSlice-1),nav,icon='previous')
         self.previousButton.setAccessibleName('Previous acquired slice')
         self.previousButton.setToolTip('Previous acquired slice · Left arrow')
-        self.previousButton.setFixedWidth(32)
+        self.previousButton.setFixedWidth(30)
         self.sliceSlider = qt.QSlider(qt.Qt.Horizontal)
         self.sliceSlider.setRange(1,1)
         self.sliceSlider.setSingleStep(1)
         self.sliceSlider.setPageStep(1)
-        self.sliceSlider.setMinimumWidth(100)
-        self.sliceSlider.setToolTip('Every acquired slice, in source order. Displayed slice 1 is stored index 0.')
+        self.sliceSlider.setMinimumWidth(60)
+        self.sliceSlider.setToolTip('Every acquired slice in source order. Displayed slice 1 is stored index 0.')
         self.sliceSlider.setAccessibleName('Acquired slice')
         self.sliceSlider.connect('valueChanged(int)',lambda value:self.goSlice(value-1))
         nav.addWidget(self.sliceSlider,1)
         self.nextButton = self._button('',lambda:self.goSlice(self.currentSlice+1),nav,icon='next')
         self.nextButton.setAccessibleName('Next acquired slice')
         self.nextButton.setToolTip('Next acquired slice · Right arrow')
-        self.nextButton.setFixedWidth(32)
+        self.nextButton.setFixedWidth(30)
         self.goToLabel = qt.QLabel('Go to')
         nav.addWidget(self.goToLabel)
         self.sliceSpin = qt.QSpinBox()
         self.sliceSpin.setRange(1,1)
-        self.sliceSpin.setFixedWidth(64)
+        self.sliceSpin.setFixedWidth(60)
         self.sliceSpin.setAccessibleName('Go to acquired slice')
         self.sliceSpin.connect('valueChanged(int)',lambda value:self.goSlice(value-1))
         nav.addWidget(self.sliceSpin)
-        self.reviewButton = self._button('Mark reviewed and next',self._reviewNext,nav,True,icon='check')
-        self.saveButton = self._button('Save draft',lambda:self._safe(self.save),nav,icon='save')
-        self.saveButton.objectName = 'saveDraft'
-        footerLayout.addWidget(self.actionBar)
-        guidance = qt.QHBoxLayout()
-        guidance.setSpacing(8)
         self.progress = qt.QLabel('No slices reviewed')
         self.progress.objectName = 'support'
-        guidance.addWidget(self.progress)
-        self.sliceState = qt.QLabel('No case open')
+        nav.addWidget(self.progress)
+        self.sliceState = qt.QLabel('No case')
         self.sliceState.objectName = 'support'
-        guidance.addWidget(self.sliceState)
+        nav.addWidget(self.sliceState)
         self.jumpButton = qt.QToolButton()
         self.jumpButton.setText('Jump')
         self.jumpButton.objectName = 'quiet'
         self.jumpButton.setToolButtonStyle(qt.Qt.ToolButtonTextBesideIcon)
         self.jumpButton.setIcon(self._icon('next'))
-        self.jumpButton.setIconSize(qt.QSize(16,16))
         self._menu(self.jumpButton,[('Next unreviewed slice',self._nextUnreviewed,'next'),('Next flagged slice',self._nextFlagged,'flag')])
-        guidance.addWidget(self.jumpButton)
-        self.instruction = qt.QLabel('Open a dataset, then choose a case.')
-        self.instruction.objectName = 'MeniscusInstruction'
-        self.instruction.wordWrap = True
-        self.instruction.setSizePolicy(qt.QSizePolicy.Ignored,qt.QSizePolicy.Preferred)
-        self.instruction.setMinimumHeight(20)
-        guidance.addWidget(self.instruction,1)
-        self.finishContourButton = self._button('Finish contour',self._finishContour,guidance,True,icon='check')
-        self.discardContourButton = self._button('Discard',self._discardContour,guidance)
-        self.discardContourButton.setToolTip('Discard only the unfinished contour. Committed annotations are unchanged.')
-        self.finishContourButton.hide()
-        self.discardContourButton.hide()
-        footerLayout.addLayout(guidance)
+        nav.addWidget(self.jumpButton)
+        self.reviewButton = self._button('Mark reviewed and next',self._reviewNext,nav,True,icon='check')
+        self.saveButton = self._button('Save draft',lambda:self._safe(self.save),nav,icon='save')
+        self.saveButton.objectName = 'saveDraft'
         self.bottomBar.addWidget(footer)
         main.addToolBar(qt.Qt.BottomToolBarArea,self.bottomBar)
 
@@ -667,12 +769,16 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             return
         width = slicer.util.mainWindow().width
         self.appTitle.setVisible(width >= 1180)
-        self.goToLabel.setVisible(width >= 1120)
+        self.goToLabel.setVisible(width >= 1100)
+        self.sliceSpin.setVisible(width >= 940)
+        self.sliceState.setVisible(width >= 1180)
+        self.jumpButton.setVisible(width >= 900)
         # The current slice, review and save controls remain visible. Secondary
         # text is available through tooltips when the work area is narrow.
-        self.progress.setVisible(width >= 1120)
+        self.progress.setVisible(width >= 1380)
         self.progress.setToolTip(str(self.progress.text))
         self.jumpButton.setToolTip(str(self.progress.text) + ' · Jump to an unreviewed or flagged slice')
+        self._refreshHeaderContext()
         self._queueNavigationFit()
 
     def _queueNavigationFit(self):
@@ -683,10 +789,15 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
 
     def _fitNavigation(self):
         self._navigationFitQueued = False
+        if hasattr(self,'stepPanel'):
+            step_height = max(34,self.stepPanel.layout().heightForWidth(self.stepPanel.width))
+            if self.stepPanel.minimumHeight!=step_height or self.stepPanel.maximumHeight!=step_height:
+                self.stepPanel.setFixedHeight(step_height)
+                self.stepPanel.updateGeometry()
         panel = self.navigationPanel
         # QToolBar otherwise uses the wrapped label's narrow preferred width
         # to choose height, leaving a large blank row at the actual window width.
-        desired = max(66,panel.layout().heightForWidth(panel.width))
+        desired = max(36,panel.layout().heightForWidth(panel.width))
         if panel.minimumHeight != desired or panel.maximumHeight != desired:
             panel.setFixedHeight(desired)
             panel.updateGeometry()
@@ -694,7 +805,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
     def _finishLayout(self):
         main = slicer.util.mainWindow()
         for bar in main.findChildren(qt.QToolBar):
-            if bar not in [self.topBar,self.bottomBar]: bar.hide()
+            if bar not in [self.topBar,self.stepBar,self.bottomBar]: bar.hide()
         defaultPanel = main.findChild(qt.QDockWidget, 'PanelDockWidget')
         if defaultPanel:
             defaultPanel.hide()
@@ -710,7 +821,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         main.menuBar().hide()
         main.statusBar().hide()
         main.setWindowTitle('Meniscus Annotator ' + VERSION)
-        main.setMinimumSize(1024,640)
+        main.setMinimumSize(800,480)
         main.setStyleSheet('QMainWindow { background:#101820; } QMainWindow::separator { background:#bdc8d0; width:1px; height:1px; }')
         slicer.app.layoutManager().setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUpRedSliceView)
         for action in main.findChildren(qt.QAction):
@@ -733,7 +844,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         context = (self.session.state.get('practice_context') if self.session else None) or (getattr(self.store,'practice_context',None) if self.store else None)
         if context:
             automated = context.get('actor_type')=='automated'
-            slicer.util.mainWindow().setWindowTitle('Meniscus Annotator — AUTOMATED SOFTWARE QA' if automated else 'Meniscus Annotator — SOFTWARE PRACTICE — not research annotations')
+            slicer.util.mainWindow().setWindowTitle('Meniscus Annotator ' + VERSION + (' — AUTOMATED SOFTWARE QA' if automated else ' — SOFTWARE PRACTICE — not research annotations'))
             self.protocolLabel.setText('Automated software practice · Not human annotations' if automated else 'Software practice · Not accepted research annotations')
         return context
 
@@ -741,7 +852,8 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         if self.dataset: qt.QDesktopServices.openUrl(qt.QUrl.fromLocalFile(str(self.dataset.root)))
 
     def _diagnostics(self):
-        slicer.util.infoDisplay(self._diagnostic or 'No errors recorded in this session.',windowTitle='Troubleshooting — keep details private')
+        details = {'application_version':VERSION,'source_identity':SOURCE_IDENTITY,'slicer_version':slicer.app.applicationVersion,'slicer_revision':slicer.app.repositoryRevision,'qt_version':qt.qVersion(),'platform':sys.platform,'scale_rounding_environment':os.environ.get('QT_SCALE_FACTOR_ROUNDING_POLICY')}
+        slicer.util.infoDisplay(json.dumps(details,indent=2) + '\n\n' + (self._diagnostic or 'No errors recorded in this session.'),windowTitle='Troubleshooting — keep details private')
 
     def _about(self):
         notice = qt.QMessageBox(slicer.util.mainWindow())
@@ -770,12 +882,32 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
 
     def _installShortcuts(self):
         self.shortcuts = []
-        view = slicer.app.layoutManager().sliceWidget('Red').sliceView()
-        for key, cb in [('Left', lambda: self.goSlice(self.currentSlice-1)), ('Right', lambda: self.goSlice(self.currentSlice+1)), ('R', self._reviewNext), ('U', self._nextUnreviewed), ('F', self._nextFlagged), ('Ctrl+S', lambda: self._safe(self.save)), ('Ctrl+Z', self._undo), ('Ctrl+Y', self._redo), ('1', lambda: self.setLabel('medial')), ('2', lambda: self.setLabel('lateral')), ('3', lambda: self.setLabel('uncertain')), ('P', lambda: self.setTool('Paint')), ('D', lambda: self.setTool('Draw')), ('E', lambda: self.setTool('Erase')), ('Escape', self._escape)]:
-            shortcut = qt.QShortcut(qt.QKeySequence(key), view)
-            shortcut.setContext(qt.Qt.WidgetWithChildrenShortcut)
-            shortcut.connect('activated()', cb)
+        main = slicer.util.mainWindow()
+        for key, cb in [('Left', lambda:self.goSlice(self.currentSlice-1)),('Right', lambda:self.goSlice(self.currentSlice+1)),('R',self._reviewNext),('U',self._nextUnreviewed),('F',self._nextFlagged),('Ctrl+S',lambda:self._safe(self.save)),('Ctrl+Z',self._undo),('Ctrl+Y',self._redo),('1',lambda:self.setLabel('medial')),('2',lambda:self.setLabel('lateral')),('3',lambda:self.setLabel('uncertain')),('P',lambda:self.setTool('Paint')),('D',lambda:self.setTool('Draw')),('E',lambda:self.setTool('Erase')),('Escape',self._escape)]:
+            shortcut = qt.QShortcut(qt.QKeySequence(key),main)
+            shortcut.setContext(qt.Qt.WindowShortcut)
+            shortcut.connect('activated()',lambda callback=cb:self._runShortcut(callback))
             self.shortcuts.append(shortcut)
+        slicer.app.connect('focusChanged(QWidget*,QWidget*)',self._shortcutFocusChanged)
+        self._shortcutFocusChanged(None,qt.QApplication.focusWidget())
+
+    @staticmethod
+    def _textInputFocused(widget=None):
+        current = widget if widget is not None else qt.QApplication.focusWidget()
+        while current:
+            if isinstance(current,(qt.QLineEdit,qt.QTextEdit,qt.QPlainTextEdit,qt.QAbstractSpinBox,qt.QComboBox)):
+                return True
+            current = current.parentWidget()
+        return False
+
+    def _shortcutFocusChanged(self, previous, current):
+        enabled = not self._textInputFocused(current)
+        for shortcut in self.shortcuts:
+            shortcut.setEnabled(enabled)
+
+    def _runShortcut(self, callback):
+        if self.session and not self._textInputFocused() and qt.QApplication.activeModalWidget() is None:
+            callback()
 
     def _enable(self, enabled):
         self.rightDock.widget().setEnabled(enabled)
@@ -801,32 +933,43 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
     def _chooseReaderIdentity(self, previous=''):
         dialog = qt.QDialog(slicer.util.mainWindow())
         dialog.objectName = 'MeniscusReaderIdentityDialog'
-        dialog.setWindowTitle('Reader identity')
+        dialog.setWindowTitle('Confirm reader identity')
+        dialog.setStyleSheet(self.style)
         layout = qt.QVBoxLayout(dialog)
-        explanation = qt.QLabel('Enter the name or study ID to record with your corrections. Use your own identity. Each reader’s work is kept separately.')
+        explanation = qt.QLabel('Use your own name or study ID. Each reader has separate saved work. Confirm your identity whenever you reopen an assignment on a shared computer.')
         explanation.wordWrap = True
         layout.addWidget(explanation)
+        if previous:
+            last = qt.QLabel('Last used: ' + previous)
+            last.wordWrap = True
+            layout.addWidget(last)
         layout.addWidget(qt.QLabel('Reader name or study ID'))
         entry = qt.QLineEdit()
         entry.objectName = 'MeniscusReaderIdentityInput'
         entry.setPlaceholderText('Enter your name or assigned reader ID')
         entry.setText(previous)
         layout.addWidget(entry)
+        confirmation = qt.QCheckBox('I confirm this is my reader identity')
+        confirmation.objectName = 'MeniscusReaderIdentityConfirmed'
+        layout.addWidget(confirmation)
         buttons = qt.QDialogButtonBox()
-        proceed = buttons.addButton('Continue', qt.QDialogButtonBox.AcceptRole)
+        proceed = buttons.addButton('Continue',qt.QDialogButtonBox.AcceptRole)
         proceed.objectName = 'MeniscusReaderIdentityContinue'
-        buttons.addButton('Cancel', qt.QDialogButtonBox.RejectRole)
-        proceed.setEnabled(bool(str(entry.text).strip()))
-        entry.connect('textChanged(QString)', lambda text: proceed.setEnabled(bool(str(text).strip())))
-        buttons.connect('accepted()', dialog.accept)
-        buttons.connect('rejected()', dialog.reject)
+        buttons.addButton('Cancel',qt.QDialogButtonBox.RejectRole)
+        proceed.setEnabled(False)
+        def ready(*args):
+            proceed.setEnabled(bool(str(entry.text).strip()) and confirmation.checked)
+        entry.connect('textChanged(QString)',lambda text:(confirmation.setChecked(False),ready()))
+        confirmation.connect('toggled(bool)',ready)
+        buttons.connect('accepted()',dialog.accept)
+        buttons.connect('rejected()',dialog.reject)
         layout.addWidget(buttons)
         entry.setFocus()
         entry.selectAll()
-        if dialog.exec_() != qt.QDialog.Accepted:
+        if dialog.exec_()!=qt.QDialog.Accepted:
             return None
         reader = str(entry.text).strip()
-        return reader or None
+        return reader if reader and confirmation.checked else None
 
     def _confirmDatasetStart(self, job, previous_reader=''):
         """Confirm intentional blank work and the assigned reader before writing work."""
@@ -884,6 +1027,8 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         finally:
             qt.QApplication.restoreOverrideCursor()
         documents = qt.QStandardPaths.writableLocation(qt.QStandardPaths.DocumentsLocation)
+        local_data = qt.QStandardPaths.writableLocation(qt.QStandardPaths.GenericDataLocation)
+        local_default = Path(local_data) / 'MeniscusAnnotator' / 'work'
         version = ds.cases[0].metadata['dataset_version']
         job_path = str(self.settings.value('Meniscus/job/' + ds.identity, ''))
         fixed_job = self._practiceConfig['job_path'] if self._practiceConfig else None
@@ -900,14 +1045,16 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         reader = self._confirmedReader
         workspace = reader_workspace(version, job, reader=reader)
         remembered = self.settings.value(workspace['settings_key'], '')
-        location = work_root or (self._practiceConfig['work_root'] if self._practiceConfig else remembered) or str(Path(documents) / 'Meniscus_annotation_work' / workspace['relative_folder'])
+        location = work_root or (self._practiceConfig['work_root'] if self._practiceConfig else remembered) or str(local_default / workspace['relative_folder'])
         if self._practiceConfig and Path(location).resolve()!=Path(self._practiceConfig['work_root']).resolve():
             raise ValidationError('Software practice must use its separate local practice work folder.')
         if not work_root and not remembered and not self._practiceConfig:
             dialog = qt.QMessageBox(slicer.util.mainWindow())
+            dialog.objectName = 'MeniscusWorkFolderDialog'
             dialog.setWindowTitle('Local work folder')
-            dialog.setText('Annotations will be saved separately from the dataset.')
+            dialog.setText('Keep active annotations in a local folder on this computer.')
             dialog.setInformativeText(str(location))
+            dialog.setDetailedText('The suggested per-user folder is separate from the source dataset and return ZIPs. Known sync-managed locations are rejected; automatic detection is not comprehensive.')
             use = dialog.addButton('Use this folder', qt.QMessageBox.AcceptRole)
             change = dialog.addButton('Change location', qt.QMessageBox.ActionRole)
             existing = dialog.addButton('Open existing work', qt.QMessageBox.ActionRole)
@@ -928,6 +1075,40 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
                 if not chosen:
                     return
                 location = str(Path(chosen) / workspace['relative_folder'])
+        while True:
+            problem = work_location_problem(location,ds.root)
+            if not problem:
+                try:
+                    Path(location).mkdir(parents=True,exist_ok=True)
+                    import uuid
+                    probe = Path(location) / ('.meniscus-write-check-' + uuid.uuid4().hex)
+                    try:
+                        with probe.open('xb') as stream:
+                            stream.write(b'local work write check')
+                            stream.flush()
+                            os.fsync(stream.fileno())
+                    finally:
+                        if probe.exists(): probe.unlink()
+                except OSError:
+                    problem = 'This folder is not writable. Choose a local folder you can write to, or ask your administrator to restore access to your existing saved work.'
+            if not problem:
+                break
+            if work_root or self._practiceConfig:
+                raise ValidationError(problem)
+            warning = qt.QMessageBox(slicer.util.mainWindow())
+            warning.objectName = 'MeniscusWorkFolderProblem'
+            warning.setWindowTitle('Choose a local work folder')
+            warning.setText(problem)
+            warning.setInformativeText('Existing saved work has not been moved or changed. Choose another local folder, or cancel and restore access to the existing folder. Known sync providers are detected where possible, not comprehensively.')
+            choose = warning.addButton('Choose another folder',qt.QMessageBox.AcceptRole)
+            warning.addButton(qt.QMessageBox.Cancel)
+            warning.exec_()
+            if warning.clickedButton()!=choose:
+                return None
+            chosen = qt.QFileDialog.getExistingDirectory(slicer.util.mainWindow(),'Choose local work folder',str(local_default))
+            if not chosen:
+                return None
+            location = str(Path(chosen) if (Path(chosen)/'dataset.json').is_file() else Path(chosen)/workspace['relative_folder'])
         store = WorkStore(location, ds, job=job, reader=reader)
         if self.closeCase() is False:
             return
@@ -976,24 +1157,24 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         if not self.dataset:
             return
         self.caseTable.setRowCount(len(self.dataset.cases))
-        for row, case in enumerate(self.dataset.cases):
+        for row,case in enumerate(self.dataset.cases):
             m = case.metadata
-            identity = f"{m['participant_id']}\nM{int(m['visit_month']):03d} · {'Left' if m['knee_side']=='L' else 'Right'}"
-            item = qt.QTableWidgetItem(identity)
-            item.setData(qt.Qt.UserRole, case.key)
-            self.caseTable.setItem(row, 0, item)
+            item = qt.QTableWidgetItem(f"{m['participant_id']}\nM{int(m['visit_month']):03d} · {'Left' if m['knee_side']=='L' else 'Right'}")
+            item.setData(qt.Qt.UserRole,case.key)
+            self.caseTable.setItem(row,0,item)
             status = 'Not started'
-            rule = (self.store.job or {}).get('cases', {}).get(case.key, {})
-            if rule.get('availability') == 'unresolved':
+            rule = (self.store.job or {}).get('cases',{}).get(case.key,{})
+            if rule.get('availability')=='unresolved':
                 status = 'Blocked'
-                item.setToolTip(str(rule.get('reason', 'Starting mask unresolved')))
-            elif self.session and self.session.case.key == case.key:
-                status = 'Approved' if self.session.state.get('status') in ('approved', 'practice_approved') else ('Needs review' if any(not r['reviewed'] for r in self.session.state['review']) else 'In progress')
-            elif hasattr(self.store, 'summary'):
+                item.setToolTip(str(rule.get('reason','Starting mask unresolved')))
+            elif self.session and self.session.case.key==case.key:
+                status = status_label(self.session.state,uncertainty=self._lastArrays[1])
+            else:
                 summary = self.store.summary(case)
-                status = {'approved':'Approved', 'practice_approved':'Approved', 'not_started':'Not started', 'needs_review':'Needs review', 'in_progress':'In progress', 'saved_unavailable':'Saved work needs attention', 'configuration_mismatch':'Saved work needs attention'}.get(summary.get('status'), 'In progress')
-            progressItem = qt.QTableWidgetItem(status)
-            self.caseTable.setItem(row,1,progressItem)
+                status = summary.get('display_status') or {'approved':'Research approved','practice_approved':'Practice approved','not_started':'Not started','needs_review':'Needs review','in_progress':'In progress','saved_unavailable':'Saved work needs attention','configuration_mismatch':'Saved work needs attention'}.get(summary.get('status'),'In progress')
+                if summary.get('reason'):
+                    item.setToolTip(summary['reason'])
+            self.caseTable.setItem(row,1,qt.QTableWidgetItem(status))
             if self.session and case.key==self.session.case.key:
                 self.caseTable.selectRow(row)
         self._filter()
@@ -1027,7 +1208,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             return False
         if not self._loading:
             self._segmentChanged()  # Commit a queued native stroke before switching/closing.
-        if self.dirty:
+        if self.dirty or getattr(self.session,'review_journal_pending',False):
             self.save()
         self._loading = True
         self._removeDrawMarkers()
@@ -1056,20 +1237,25 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.taskCombo.blockSignals(True)
         self.taskCombo.setCurrentIndex(0)
         self.taskCombo.blockSignals(False)
+        self.taskSelector.sync()
         self.regionPanel.hide()
         self.regionalAssessmentPanel.hide()
         self.labelButtons['uncertain'].show()
         self.notesPanel.show()
         self._drawHint = ''
         self._workflowHint = ''
+        self._transferNotice = ''
+        self._plausibility = None
+        self._saveError = False
+        self.plausibilityButton.hide()
         self._loading = False
         self._enable(False)
         self.sliceReadout.setText('Slice — of —')
         self.sliceState.setText('No case open')
-        self.identityLabel.setText('No case open')
+        self.identityLabel.setText('Choose a case')
         self.annotationTitle.setText('Annotation')
         self.initializationLabel.setText('')
-        self.saveStatus.setText('No case open')
+        self.saveStatus.setText('No work open')
         self._updateGuidance()
         if getattr(self,'emptyCanvas',None): self.emptyCanvas.ready(bool(self.dataset))
         return True
@@ -1089,6 +1275,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             labels, uncertain, seg_path = self.session.load()
             regions, regional_uncertain, self.regionalState = self.session.load_regions()
             self._startingMaskSlices = None
+            self._plausibility = label_plausibility(labels,case.affine_ras,case.metadata['knee_side'])
             if self.session.state['initialization']['method'] == 'correction':
                 import nibabel as nib
                 start = self.session.state['initialization']['starting_mask']
@@ -1138,7 +1325,13 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             slicer.util.setSliceViewerLayers(background=self.volume)
             self._layoutViews()
             resume_key = 'Meniscus/slice/' + self.session.case.identity
-            self.currentSlice = int(self.settings.value(resume_key, self.session.state.get('last_slice', 0)))
+            if self.settings.contains(resume_key):
+                self.currentSlice = int(self.settings.value(resume_key,0))
+            elif self.session.current_checkpoint:
+                self.currentSlice = int(self.session.state.get('last_slice',0))
+            else:
+                per_slice = np.count_nonzero(labels,axis=(1,2))
+                self.currentSlice = int(per_slice.argmax()) if per_slice.any() else 0
             self._nativePlane(self.currentSlice, reset=True)
             sliceNode = slicer.app.layoutManager().sliceWidget('Red').mrmlSliceNode()
             self._observers.append((sliceNode, sliceNode.AddObserver(vtk.vtkCommand.ModifiedEvent, self._sliceMoved, 2.0)))
@@ -1169,9 +1362,13 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self._loading = False
         self.refreshReview()
         self._populate()
-        self.message.setText('')
+        self.message.setText(self._plausibility.get('message','') if self._plausibility and self._plausibility.get('status')=='check' else '')
         if self.session.recovered:
             self.message.setText('Recovered the most recent intact checkpoint. A newer checkpoint was damaged; preserve the work folder for diagnostics.')
+        if self.session.journal_warning:
+            self.message.setText(self.session.journal_warning)
+            self._workflowHint = self.session.journal_warning
+            self._updateGuidance()
         return self.session
 
     def _newSegmentation(self, name, ids):
@@ -1179,7 +1376,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         node.SetSaveWithScene(False)
         node.CreateDefaultDisplayNodes()
         node.GetDisplayNode().SetSaveWithScene(False)
-        node.GetDisplayNode().SetSliceIntersectionThickness(1)
+        node.GetDisplayNode().SetSliceIntersectionThickness(int(self.outlineWidth.value))
         node.SetReferenceImageGeometryParameterFromVolumeNode(self.volume)
         for key in ids:
             name, color = (LABELS if key in LABELS else REGIONAL_LABELS)[key]
@@ -1204,14 +1401,91 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self._updateGuidance()
         return False
 
+    def _resolveContourForClose(self):
+        if not self._pendingDraw():
+            return True
+        if self._closingContourDialog:
+            return False
+        self._closingContourDialog = True
+        try:
+            pipeline = self._pendingDraw()
+            dialog = qt.QMessageBox(slicer.util.mainWindow())
+            dialog.objectName = 'MeniscusContourGuardDialog'
+            dialog.setWindowTitle('Finish or discard the unfinished contour')
+            dialog.setText(str(self.annotationTitle.text) + ' has an unfinished contour. The application is still responding.')
+            dialog.setInformativeText('Finish it on this acquired slice, discard only these unfinished points, or keep drawing. Previous saved work is unchanged.')
+            finish = dialog.addButton('Finish contour',qt.QMessageBox.AcceptRole)
+            finish.setEnabled(pipeline.rasPoints.GetNumberOfPoints()>=3)
+            discard = dialog.addButton('Discard contour',qt.QMessageBox.DestructiveRole)
+            keep = dialog.addButton('Keep drawing',qt.QMessageBox.RejectRole)
+            dialog.setDefaultButton(keep)
+            dialog.setEscapeButton(keep)
+            dialog.exec_()
+            if dialog.clickedButton()==finish:
+                self._finishContour()
+            elif dialog.clickedButton()==discard:
+                pipeline.resetPolyData()
+                pipeline.actionState = ''
+                pipeline.positionActors()
+                self._drawContext = None
+                self._drawHint = ''
+                self._pollDrawState()
+            else:
+                self._guardContour('closing the application')
+                return False
+            return not bool(self._pendingDraw())
+        finally:
+            self._closingContourDialog = False
+
     def _refreshIdentity(self):
         if self.session:
             m = self.session.case.metadata
             side = 'Left knee' if m['knee_side']=='L' else 'Right knee'
             self.identityLabel.setText(f"OAI {m['participant_id']} · M{int(m['visit_month']):03d} · {side}")
-            target = REGIONAL_LABELS[self._editingTargetID()][0] if self.annotationTask == 'regions' else LABELS[self.activeLabel][0]
+            if self.annotationTask=='regions':
+                suffix = 'Boundary uncertain' if self._regionBoundary else {'anterior':'Anterior horn','body':'Body','posterior':'Posterior horn'}[self.activeRegion]
+                target = self._parentCompartment().capitalize() + ' · ' + suffix
+            else:
+                target = LABELS[self.activeLabel][0]
             self.identityLabel.setToolTip(target + ' · ' + side)
-            self.annotationTitle.setText(LABELS[self._parentCompartment()][0] if self.annotationTask == 'regions' else target)
+            self.annotationTitle.setText(target)
+        self._refreshHeaderContext()
+
+    def _refreshHeaderContext(self):
+        if not hasattr(self,'contextLabel'):
+            return
+        if not self.store or not self.dataset:
+            text = 'Reader not confirmed · No dataset'
+        else:
+            text = 'Reader: ' + self.store.annotator + ' · Dataset: ' + str(self.dataset.version)
+        self.contextLabel.setToolTip(text)
+        self.contextLabel.setAccessibleName(text)
+        width = max(170,self.contextLabel.width)
+        self.contextLabel.setText(qt.QFontMetrics(self.contextLabel.font).elidedText(text,qt.Qt.ElideMiddle,width))
+
+    def _showContext(self):
+        if not self.store:
+            slicer.util.infoDisplay('No dataset is connected. Choose Open dataset, then confirm your reader identity.',windowTitle='Reader and dataset')
+            return
+        slicer.util.infoDisplay('Reader: ' + self.store.annotator + '\nDataset: ' + self.dataset.version + '\n\nActive work: ' + str(self.store.root) + '\nSource scans: ' + str(self.dataset.root) + '\n\nSource files are read only. Saved work and return ZIPs are separate.',windowTitle='Reader and dataset')
+
+    def _isPractice(self):
+        state = self.session.state if self.session else None
+        protocol = (state or {}).get('protocol') or ((self.store.job or {}).get('protocol',{}) if self.store else {})
+        return bool((state or {}).get('practice_context') or protocol.get('status')=='draft')
+
+    def _goApproval(self):
+        if not self.session or not self._guardContour('opening the approval checklist'):
+            return
+        if self.annotationTask!='whole':
+            self.setAnnotationTask('whole')
+        self.caseReviewPanel.collapsed = False
+        slicer.app.processEvents()
+        scroll = self.rightDock.findChild(qt.QScrollArea)
+        if scroll:
+            scroll.ensureWidgetVisible(self.approveButton)
+        self.medialConsidered.setFocus()
+        self._updateGuidance()
 
     def _updateGuidance(self):
         if not hasattr(self,'instruction'):
@@ -1220,41 +1494,57 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         count = pending.rasPoints.GetNumberOfPoints() if pending else 0
         self.finishContourButton.setVisible(bool(count))
         self.discardContourButton.setVisible(bool(count))
-        self.finishContourButton.setEnabled(count >= 3)
+        self.finishContourButton.setEnabled(count>=3)
+        self.reviewButton.setEnabled(bool(self.session) and not count)
+        self.saveButton.setEnabled(bool(self.session) and not count)
+        self.undoButton.setEnabled(bool(self.session) and not count)
+        self.redoButton.setEnabled(bool(self.session) and not count)
+        self.goApprovalButton.hide()
+        self.notificationUndoButton.setVisible(bool(self._transferNotice) and not count)
         if not self.session:
-            self.instruction.setText('Choose a case to begin.' if self.dataset else 'Open a dataset, then choose a case.')
+            self.instruction.setText('Choose a case to begin.' if self.dataset else 'Open a dataset, then confirm your reader identity.')
             self.brushRow.hide()
             return
         tool = self.editor.activeEffect().name if self.editor.activeEffect() else 'Navigate'
-        if self._windowLevelActive:
-            text = 'Left-drag to adjust brightness and contrast. Choose a drawing tool to return.'
-        elif tool == 'Draw':
-            text = 'Click around the boundary. Right-click to close and fill.'
-            if count:
-                text = self._drawHint or f'Unfinished contour · {count} points. Right-click or Finish contour to close and fill.'
-        elif tool == 'Erase':
-            text = 'Drag to remove pixels from the selected label.'
-        elif tool == 'Paint':
-            text = 'Drag to add pixels to the selected label.'
-        else:
-            text = 'Navigate: Scroll for slices. Ctrl+wheel zooms; middle-drag pans.'
-        if not count and (self._startingMaskSlices is None or not self._startingMaskSlices[self.currentSlice]):
-            text += ' No starting mask on this slice.'
-        if self.annotationTask == 'regions' and not count:
-            text += ' Regions stay inside the selected meniscus.'
-        if self._workflowHint:
-            text = self._workflowHint
-        if not self.rightDock.isVisible():
-            target = REGIONAL_LABELS[self._editingTargetID()][0] if self.annotationTask == 'regions' else LABELS[self.activeLabel][0]
-            if self.annotationTask == 'regions' and self._regionBoundary:
-                target = self._parentCompartment().capitalize() + ' · ' + target
-            text = ('Regions · ' if self.annotationTask == 'regions' else '') + target + ' · ' + tool + ': ' + text
-        self.instruction.setText(text)
-        self._queueNavigationFit()
-        self.undoButton.setEnabled(not count)
-        self.redoButton.setEnabled(not count)
+        target = str(self.annotationTitle.text)
+        whole = self.session.state
+        all_reviewed = all(row['reviewed'] for row in whole['review'])
+        approved = whole.get('status') in ('approved','practice_approved')
         if count:
-            self.saveStatus.setText(('Practice · ' if self.session.state.get('practice_context') else '') + 'Unsaved contour')
+            text = target + ' · Unfinished contour · ' + str(count) + ' points. ' + (self._drawHint or 'Right-click or Finish contour to close and fill.')
+            self.saveStatus.setText(('Practice · ' if self._isPractice() else '') + 'Unsaved contour')
+        elif self._transferNotice:
+            text = self._transferNotice
+        elif self.annotationTask=='whole' and approved:
+            text = status_label(whole) + '. Continue inspection, or use Dataset → Export results.'
+        elif self.annotationTask=='whole' and all_reviewed:
+            text = 'All slices reviewed. Confirm both compartments and resolve uncertainty, then approve the case.'
+            self.goApprovalButton.show()
+            self.goApprovalButton.setProperty('primaryStep',True)
+        elif self._workflowHint:
+            text = self._workflowHint
+        elif self._windowLevelActive:
+            text = 'Left-drag to adjust brightness and contrast. Choose a drawing tool to return.'
+        elif tool=='Draw':
+            text = target + ' · Click around the boundary. Right-click to close and fill.'
+        elif tool=='Erase':
+            text = target + ' · Drag to remove pixels from the selected label.'
+        elif tool=='Paint':
+            text = target + ' · Drag to add pixels to the selected label.'
+        else:
+            text = 'Inspect this slice, then mark it reviewed. Scroll for slices; Ctrl+wheel zooms.'
+        if not count and self.annotationTask=='regions':
+            text += ' Draft regions stay inside the whole mask; use Whole meniscus to add tissue.'
+        elif not count and not all_reviewed and (self._startingMaskSlices is None or not self._startingMaskSlices[self.currentSlice]):
+            text += ' No starting mask on this slice; inspect the MRI.'
+        self.instruction.setText(text)
+        self.reviewButton.objectName = 'primary' if not count and not all_reviewed and not approved else 'quiet'
+        self.reviewButton.setIcon(self._icon('check','#ffffff' if self.reviewButton.objectName=='primary' else '#425363'))
+        self.reviewButton.setToolTip('Finish or discard the contour first.' if count else 'Explicit review of this acquired slice. Repeating an existing review does not remove approval.')
+        self.saveButton.setToolTip('Finish or discard the contour before saving.' if count else 'Save a complete verified checkpoint; saving does not approve the case.')
+        self.reviewButton.style().unpolish(self.reviewButton)
+        self.reviewButton.style().polish(self.reviewButton)
+        self._queueNavigationFit()
 
     def _validDrawContext(self, pipeline):
         if self._drawContext != self._drawingTargetContext():
@@ -1399,6 +1689,10 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             renderer.AddActor2D(actor)
             self._drawMarkers = (renderer,actor,data,glyph,mapper,pipeline)
             pipeline.actor.GetProperty().SetColor(1.,.95,.45)
+        color = (REGIONAL_LABELS.get(self._editingTargetID()) or LABELS.get(self.activeLabel))[1]
+        self._drawMarkers[1].GetProperty().SetColor(*color)
+        pipeline.actor.GetProperty().SetColor(*color)
+        pipeline.actor.GetProperty().SetLineWidth(2)
         self._drawMarkers[2].Modified()
 
     def _pollDrawState(self):
@@ -1432,13 +1726,8 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         if not self.volume:
             return
         a = self.session.case.affine_ras
-        normal = a[:3,2]/np.linalg.norm(a[:3,2])
-        up = a[:3,1]/np.linalg.norm(a[:3,1])
-        # Use a superior-up display while retaining the acquired-plane normal and
-        # original IJK grid. This is an in-plane 180-degree camera rotation only.
-        if up[2] < 0:
-            up = -up
-        horizontal = np.cross(up, normal)
+        frame = acquired_display_frame(a)
+        horizontal,up,normal = frame[:,0],frame[:,1],frame[:,2]
         centre = a @ np.array([(self.session.case.shape_xyz[0]-1)/2, (self.session.case.shape_xyz[1]-1)/2, k, 1])
         node = slicer.app.layoutManager().sliceWidget('Red').mrmlSliceNode()
         mat = node.GetSliceToRAS()
@@ -1492,11 +1781,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
 
     def _onAcquiredPlane(self):
         a = self.session.case.affine_ras
-        normal = a[:3,2]/np.linalg.norm(a[:3,2])
-        up = a[:3,1]/np.linalg.norm(a[:3,1])
-        if up[2] < 0:
-            up = -up
-        frame = np.column_stack((np.cross(up,normal),up,normal))
+        frame = acquired_display_frame(a)
         matrix = slicer.app.layoutManager().sliceWidget('Red').mrmlSliceNode().GetSliceToRAS()
         actual = np.array([[matrix.GetElement(i,j) for j in range(4)] for i in range(4)])
         k = (np.linalg.inv(a) @ actual[:,3])[2]
@@ -1631,6 +1916,15 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
                 self.session.mark_changed(changed)
             if changed or regional_changed:
                 self.dirty = True
+            if self.annotationTask=='whole' and self.activeLabel in ('medial','lateral') and self._lastArrays is not None:
+                selected_value = 1 if self.activeLabel=='medial' else 2
+                other_value = 3-selected_value
+                transferred = int(np.count_nonzero((self._lastArrays[0]==other_value) & (arrays[0]==selected_value)))
+                if transferred:
+                    self._transferNotice = str(transferred) + ' voxels transferred from ' + ('Lateral' if other_value==2 else 'Medial') + ' to ' + self.activeLabel.capitalize() + '. Inspect the boundary; Undo is available.'
+                    self._transferToken += 1
+                    token = self._transferToken
+                    qt.QTimer.singleShot(9000,lambda:self._clearTransfer(token))
             self._lastArrays = tuple(a.copy() for a in arrays)
             self._lastRegionalArrays = (region_array.copy(),contained_uncertain.copy())
             if changed or regional_changed:
@@ -1689,6 +1983,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             self.taskCombo.blockSignals(True)
             self.taskCombo.setCurrentIndex(1 if self.annotationTask == 'regions' else 0)
             self.taskCombo.blockSignals(False)
+            self.taskSelector.sync()
             return False
         if task == self.annotationTask and self._pendingDraw():
             return True
@@ -1701,6 +1996,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.taskCombo.blockSignals(True)
         self.taskCombo.setCurrentIndex(1 if task == 'regions' else 0)
         self.taskCombo.blockSignals(False)
+        self.taskSelector.sync()
         self.regionPanel.setVisible(task == 'regions')
         self.regionalAssessmentPanel.setVisible(task == 'regions')
         self.notesPanel.setVisible(task == 'whole')
@@ -1725,6 +2021,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             self.regionCombo.blockSignals(True)
             self.regionCombo.setCurrentIndex(('anterior','body','posterior').index(self.activeRegion))
             self.regionCombo.blockSignals(False)
+            self.regionSelector.sync()
             return False
         if region == self.activeRegion and not self._regionBoundary and self._pendingDraw():
             return True
@@ -1735,6 +2032,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.regionCombo.blockSignals(True)
         self.regionCombo.setCurrentIndex(('anterior','body','posterior').index(region))
         self.regionCombo.blockSignals(False)
+        self.regionSelector.sync()
         self._applyEditingTarget()
         self._refreshRegionalControls()
         self._rememberTarget()
@@ -1761,6 +2059,12 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.regionStatusCombo.blockSignals(True)
         self.regionStatusCombo.setCurrentIndex(('unassessed','present','absent','uncertain').index(assessment['status']))
         self.regionStatusCombo.blockSignals(False)
+        self.assessmentSelector.sync()
+        assessment_target = self._parentCompartment().capitalize() + ' · ' + {'anterior':'Anterior horn','body':'Body','posterior':'Posterior horn'}[self.activeRegion]
+        self.regionalAssessmentPanel.text = assessment_target
+        self.regionalAssessmentPanel.setAccessibleName(assessment_target + ' assessment')
+        self.regionalAssessmentPanel.setToolTip(assessment_target + ' assessment. Body is assigned within the complete meniscus, not instead of whole-meniscus correction.')
+        self.regionLegend.setText('<br>'.join('<span style="color:' + qt.QColor.fromRgbF(*REGIONAL_COLORS[index + (0 if self._parentCompartment()=="medial" else 3)]).name() + '">━━</span> ' + name for index,name in enumerate(['AH · Anterior horn','B · Body','PH · Posterior horn'])))
         note = assessment.get('note','')
         if str(self.regionNotes.toPlainText()) != note:
             self.regionNotes.blockSignals(True)
@@ -1796,6 +2100,8 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             return
         key = self._selectedRegionID()
         status = ('unassessed','present','absent','uncertain')[index]
+        if self.regionalState['assessments'][key]['status']==status:
+            return
         if status == 'absent':
             regions,_ = self.collectRegionalArrays()
             value = next(item['value'] for item in REGIONS if item['id'] == key)
@@ -1804,8 +2110,12 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
                 slicer.util.infoDisplay('This region still has assigned voxels. Erase those assignments before recording the region as absent. Whole-meniscus tissue is preserved.',windowTitle='Region assessment')
                 return
         self.regionalState['assessments'][key]['status'] = status
-        self.regionalState = invalidate_regional_review(self.regionalState,range(self.session.case.n_slices),(self._parentCompartment(),))
         self._regionalChanged()
+        if status=='present':
+            value = next(item['value'] for item in REGIONS if item['id']==key)
+            if not np.any(self._lastRegionalArrays[0]==value):
+                self._workflowHint = 'Present is recorded, but this region has no assigned voxels. Assign the region or revise its assessment before completing regional review.'
+                self._updateGuidance()
 
     def _regionalNoteChanged(self):
         if self._loading or not self.regionalState or not self.session:
@@ -1921,8 +2231,18 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             self._configureEffects()
             self._toolStatus()
 
+    def _clearTransfer(self, token=None):
+        if token is None or token==self._transferToken:
+            self._transferNotice = ''
+            self._updateGuidance()
+
+    def _showPlausibility(self):
+        if self._plausibility:
+            slicer.util.infoDisplay(self._plausibility['message'] + '\n\nThis is a simple physical-position prompt, not anatomical validation. Tiny, absent or unusual masks may be inconclusive. No voxels have been swapped or removed.',windowTitle='Inspect medial/lateral labels')
+
     def _undo(self):
         if self.session and self._guardContour('undoing a committed edit'):
+            self._transferNotice = ''
             self.editor.undo()
             self._segmentChanged()
 
@@ -1935,6 +2255,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.opacity.setEnabled(self.fill.checked)
         self.settings.setValue('Meniscus/fill',bool(self.fill.checked))
         self.settings.setValue('Meniscus/opacity',self.opacity.value)
+        self.settings.setValue('Meniscus/outlineWidth',self.outlineWidth.value)
         if not self.anatomy:
             return
         for node in [self.anatomy]:
@@ -1942,6 +2263,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             d.SetVisibility(self.visible.checked)
             d.SetOpacity2DFill(self.opacity.value/100 if self.fill.checked else 0)
             d.SetOpacity2DOutline(1)
+            d.SetSliceIntersectionThickness(int(self.outlineWidth.value))
             for key in LABELS:
                 d.SetSegmentVisibility(key,True)
                 d.SetSegmentOpacity2DFill(key,0 if self.showRegions.checked and key in ('medial','lateral') else 1)
@@ -1992,30 +2314,74 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
 
     def _notesChanged(self):
         if self.session and not self._loading:
-            self.session.state['notes'] = str(self.notes.toPlainText())
-            self._changed()
+            text = str(self.notes.toPlainText())
+            if text != self.session.state['notes']:
+                self.session.state['notes'] = text
+                self._changed()
 
     def _compartments(self, *args):
         if self.session and not self._loading:
-            self.session.state['compartments'] = {'medial': self.medialConsidered.checked, 'lateral': self.lateralConsidered.checked}
-            self._changed()
+            value = {'medial': self.medialConsidered.checked, 'lateral': self.lateralConsidered.checked}
+            if value != self.session.state['compartments']:
+                self.session.state['compartments'] = value
+                self._changed()
 
     def _flag(self, checked):
         if self.session and not self._loading:
-            self.session.state['review'][self.currentSlice]['flag'] = bool(checked)
-            self._changed()
+            row = self.session.state['review'][self.currentSlice]
+            if row['flag'] != bool(checked):
+                row['flag'] = bool(checked)
+                self._changed()
 
     def _reviewNext(self):
-        if self.session and self._guardContour('marking the slice reviewed'):
+        if not self.session or not self._guardContour('marking the slice reviewed'):
+            return
+        if self._editQueued:
             self._segmentChanged()
-            if self.annotationTask == 'regions':
-                self.regionalState['review'][self.currentSlice][self._parentCompartment() + '_reviewed'] = True
-                self._regionalChanged()
-            else:
-                self.session.state['review'][self.currentSlice]['reviewed'] = True
-                self._changed()
-            self.goSlice(self.currentSlice+1)
-            self._safe(self.save)
+        self._assertGrid()
+        regional = self.annotationTask=='regions'
+        changed = self.session.mark_reviewed(self.currentSlice,compartment=self._parentCompartment() if regional else None,regional_state=self.regionalState if regional else None)
+        if changed:
+            self.dirty = True
+            if self._safe(self._persistReview) is None:
+                return
+        self.goSlice(self.currentSlice+1)
+        self._updateCurrentStatus()
+        self._updateGuidance()
+
+    def _persistReview(self):
+        # The native source observers keep these exact arrays current. Review
+        # alone does not repeatedly pull ten full-volume native labelmaps.
+        arrays = self._lastArrays
+        regions,regional_uncertain = self._lastRegionalArrays
+        self.saveStatus.setText(('Practice · ' if self._isPractice() else '') + 'Saving…')
+        self.saveStatus.repaint()
+        try:
+            if self.session.can_journal_review(arrays[0],arrays[1],regions=regions,regional_uncertainty=regional_uncertain):
+                path = self.session.save_review_journal(arrays[0],arrays[1],regional_state=self.regionalState,regions=regions,regional_uncertainty=regional_uncertain)
+                self.dirty = False
+                self._saveError = False
+                self._reviewOnlyDirty = True
+                self.refreshReview()
+                self.saveStatus.setToolTip('Saved in a recoverable review record. Save draft or approval creates a full checkpoint; no earlier checkpoint was changed.')
+                return path
+            return self.save()
+        except Exception:
+            self.dirty = True
+            self._saveError = True
+            self.saveStatus.setText('Save failed')
+            self.saveStatus.setToolTip('The review mark is still unsaved. Check disk space and work-folder permissions, then retry Save draft.')
+            raise
+
+    def _updateCurrentStatus(self):
+        if not self.session or not self.dataset:
+            return
+        for row in range(self.caseTable.rowCount):
+            if self.caseTable.item(row,0).data(qt.Qt.UserRole)==self.session.case.key:
+                text = status_label(self.session.state,uncertainty=self._lastArrays[1])
+                self.caseTable.item(row,1).setText(text)
+                break
+        self._filter()
 
     def _jump(self, predicate):
         if self.session:
@@ -2051,7 +2417,10 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.progress.setText((self._parentCompartment().capitalize() + ' regions · ' if regional else '') + f'{count} of {len(review)} reviewed · {flags} flagged')
         self.progress.setToolTip(str(self.progress.text))
         self.jumpButton.setToolTip(str(self.progress.text) + ' · Jump to an unreviewed or flagged slice')
-        self.sliceReadout.setText(f'Slice {self.currentSlice+1} of {len(review)}')
+        direction = slice_direction(self.session.case.affine_ras,m['knee_side'])
+        cue = ('Next → ' + direction['toward']) if direction['toward']!='ambiguous' else 'Next → oblique'
+        self.sliceReadout.setText(f'Slice {self.currentSlice+1} of {len(review)}\n' + cue)
+        self.sliceReadout.setToolTip(direction['explanation'] + ' Displayed slice 1 is stored array k=0; increasing slice numbers follow the original stored K direction.')
         self.sliceSlider.blockSignals(True)
         self.sliceSlider.setValue(self.currentSlice+1)
         self.sliceSlider.blockSignals(False)
@@ -2067,11 +2436,14 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.sliceState.setText(state + (' · Flagged' if review[self.currentSlice]['flag'] else ''))
         self.sliceState.setToolTip(('Regional review · ' + self._parentCompartment()) if regional else 'Whole-meniscus slice review')
         context = self._updatePracticeContext()
-        save_text = 'Unsaved contour' if self._pendingDraw() else ('Unsaved changes' if self.dirty else ('Saved' if self.session.current_checkpoint else 'New draft'))
-        self.saveStatus.setText(('Practice · ' if context else '') + save_text)
+        save_text = 'Save failed' if self._saveError else ('Unsaved contour' if self._pendingDraw() else ('Unsaved changes' if self.dirty else ('Saved' if self.session.current_checkpoint else 'New draft')))
+        self.saveStatus.setText(('Practice · ' if self._isPractice() else '') + save_text)
         self.saveStatus.setToolTip('Saving preserves a draft. It does not mark a slice reviewed or approve a case.')
-        status = self.session.state.get('status','draft')
-        self.approvalStateLabel.setText('Whole meniscus · ' + {'practice_approved':'Practice approved — not research annotations','approved':'Approved','needs_review':'Needs review','in_progress':'In progress','not_started':'Not started'}.get(status,status.replace('_',' ').capitalize()))
+        status = status_label(self.session.state,uncertainty=self._lastArrays[1])
+        self.approvalStateLabel.setText('Whole meniscus · ' + status)
+        self.approveButton.setText('Approve practice case' if self._isPractice() else 'Approve case')
+        self.plausibilityButton.setVisible(bool(self._plausibility and self._plausibility['status']=='check'))
+        self._updateCurrentStatus()
         self._refreshRegionalControls()
         annotation = slicer.app.layoutManager().sliceWidget('Red').sliceView().cornerAnnotation()
         annotation.SetText(vtk.vtkCornerAnnotation.UpperLeft,'')
@@ -2086,6 +2458,14 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
                 for key in ids:
                     if not combined.GetSegmentation().CopySegmentFromSegmentation(node.GetSegmentation(),key):
                         raise ValidationError('Could not preserve the editable segmentation.')
+                    segment = combined.GetSegmentation().GetSegment(key)
+                    segment.SetTag('annotation_purpose',annotation_purpose(self.session.state))
+                    approving,practice = getattr(self,'_savingApproval',(False,False))
+                    eligible = research_eligible(self.session.state) or (approving and not practice and self.session.state['protocol']['status']=='released' and not self.session.state.get('practice_context'))
+                    segment.SetTag('research_eligible','true' if key in ('medial','lateral') and eligible else 'false')
+                    segment.SetTag('application_version',VERSION)
+                    if key in REGIONAL_LABELS:
+                        segment.SetTag('regional_protocol_status','pending')
             storage = combined.CreateDefaultStorageNode()
             slicer.mrmlScene.AddNode(storage)
             combined.SetAndObserveStorageNodeID(storage.GetID())
@@ -2124,23 +2504,27 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         if hashlib.sha256(slicer.util.arrayFromVolume(self.volume).tobytes()).hexdigest() != self._volumeDigest:
             self.editor.setActiveEffectByName('')
             raise ValidationError('The loaded source image pixels changed. Reopen the case before saving.')
-        self.saveStatus.setText(('Practice · ' if self.session.state.get('practice_context') else '') + 'Saving…')
+        self.saveStatus.setText(('Practice · ' if self._isPractice() else '') + 'Saving…')
         self.saveStatus.repaint()
         labels, uncertain = self.collectArrays()
-        self.session.state['runtime'] = {'slicer_version':slicer.app.applicationVersion, 'slicer_revision':slicer.app.repositoryRevision, 'application_version':VERSION, 'interface_revision':'clinical-workspace-regions-1', **SOURCE_IDENTITY}
+        self.session.state['runtime'] = {'slicer_version':slicer.app.applicationVersion, 'slicer_revision':slicer.app.repositoryRevision, 'application_version':VERSION, 'interface_revision':'reader-repair-0.2', **SOURCE_IDENTITY}
         regions, regional_uncertain = self.collectRegionalArrays()
+        self._savingApproval = (bool(approve),bool(practice))
         try:
             path = self.session.save(labels, uncertain, self._segWriter, approve=approve, practice=practice,regions=regions,regional_uncertainty=regional_uncertain,regional_state=self.regionalState)
         except Exception:
             self.dirty = True
+            self._saveError = True
             self.saveStatus.setText('Save failed')
             self.saveStatus.setToolTip('Unsaved changes. Check disk space and work-folder permissions, then retry Save draft.')
             raise
         self.regionalState = self.session.regional_state
         self.dirty = False
+        self._saveError = False
+        self._reviewOnlyDirty = False
         self.refreshReview()
         self._populate()
-        self.saveStatus.setText(('Practice · ' if self.session.state.get('practice_context') else '') + 'Saved')
+        self.saveStatus.setText(('Practice · ' if self._isPractice() else '') + 'Saved')
         return path
 
     def _approve(self):
@@ -2186,6 +2570,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
                 self.save()
             except Exception:
                 self._diagnostic = traceback.format_exc()
+                self._saveError = True
                 self.saveStatus.setText('Save failed')
                 self.saveStatus.setToolTip('Autosave failed. Previous checkpoints are intact. Check disk space and work-folder permissions, then use Save draft.')
                 self.message.setText('Check disk space and work-folder permissions, then use Save draft. Previous checkpoints are intact.')
@@ -2195,71 +2580,154 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             qt.QDesktopServices.openUrl(qt.QUrl.fromLocalFile(str(self.store.root)))
 
     def _exportDialog(self):
-        if not self.store:
+        if not self.store or not self._guardContour('exporting'):
             return
-        if not self._guardContour('exporting'):
-            return
+        if self.session and (self.dirty or getattr(self.session,'review_journal_pending',False)):
+            if self._safe(self.save) is None:
+                return
         chosen_rows = sorted({index.row() for index in self.caseTable.selectedIndexes()})
         chosen_keys = [self.caseTable.item(row,0).data(qt.Qt.UserRole) for row in chosen_rows]
         dialog = qt.QDialog(slicer.util.mainWindow())
-        dialog.setObjectName('MeniscusExportDialog')
+        dialog.objectName = 'MeniscusExportDialog'
         dialog.setWindowTitle('Export results')
+        dialog.setStyleSheet(self.style)
+        dialog.resize(860,520)
+        dialog.setMinimumSize(720,380)
         layout = qt.QVBoxLayout(dialog)
-        layout.addWidget(qt.QLabel('Export verified approved checkpoints without MRI images.'))
-        selected = qt.QCheckBox('Selected cases only (' + str(len(chosen_keys)) + ')')
-        selected.setObjectName('MeniscusExportSelectedOnly')
+        heading = qt.QLabel('Review the exact cases and versions to return. MRI images are not included.')
+        heading.wordWrap = True
+        layout.addWidget(heading)
+        selected = qt.QCheckBox('Selected cases only ('+str(len(chosen_keys))+')')
+        selected.objectName = 'MeniscusExportSelectedOnly'
         selected.setEnabled(bool(chosen_keys))
+        selected.setToolTip('Select cases in the case list before opening Export.' if not chosen_keys else 'Export only these selected cases; unapproved selections require attention.')
         layout.addWidget(selected)
-        practice = qt.QCheckBox('Practice results (separate from research approval)')
-        practice.setObjectName('MeniscusExportPractice')
-        if getattr(self.store,'practice_context',None):
-            practice.setText('SOFTWARE PRACTICE results only — not research annotations')
+        practice = qt.QCheckBox('Practice results — not research/training eligible')
+        practice.objectName = 'MeniscusExportPractice'
+        draft = (self.store.job or {}).get('protocol',{}).get('status','draft')=='draft'
+        if self.store.practice_context or draft:
             practice.setChecked(True)
             practice.setEnabled(False)
+            practice.setText('Software-practice results only — not research annotations' if self.store.practice_context else 'Practice results only — draft anatomical protocol')
         layout.addWidget(practice)
-        # PythonQt can resolve the single integer argument as an orientation,
-        # leaving the box empty. Set standard buttons explicitly after parenting.
+        earlier = qt.QCheckBox('Explicitly use the earlier approved versions listed below')
+        earlier.objectName = 'MeniscusExportEarlier'
+        omit = qt.QCheckBox('Exclude cases with newer unapproved work')
+        omit.objectName = 'MeniscusExportOmitNewer'
+        layout.addWidget(earlier)
+        layout.addWidget(omit)
+        table = qt.QTableWidget(0,4)
+        table.objectName = 'MeniscusExportSummary'
+        table.setHorizontalHeaderLabels(['Case','Result','Version','Action / reason'])
+        table.verticalHeader().hide()
+        table.setEditTriggers(qt.QAbstractItemView.NoEditTriggers)
+        table.setWordWrap(True)
+        table.horizontalHeader().setStretchLastSection(True)
+        layout.addWidget(table,1)
+        message = qt.QLabel('Preparing export summary…')
+        message.objectName = 'MeniscusExportSummaryText'
+        message.wordWrap = True
+        layout.addWidget(message)
         buttons = qt.QDialogButtonBox(dialog)
-        buttons.setObjectName('MeniscusExportButtons')
+        buttons.objectName = 'MeniscusExportButtons'
         buttons.setStandardButtons(qt.QDialogButtonBox.Ok | qt.QDialogButtonBox.Cancel)
         export_button = buttons.button(qt.QDialogButtonBox.Ok)
-        export_button.setObjectName('MeniscusExportConfirm')
+        export_button.objectName = 'MeniscusExportConfirm'
         export_button.setText('Export')
         export_button.setDefault(True)
-        buttons.button(qt.QDialogButtonBox.Cancel).setObjectName('MeniscusExportCancel')
+        buttons.button(qt.QDialogButtonBox.Cancel).objectName = 'MeniscusExportCancel'
         buttons.connect('accepted()',dialog.accept)
         buttons.connect('rejected()',dialog.reject)
         layout.addWidget(buttons)
-        if dialog.exec_() != qt.QDialog.Accepted:
+        state = {'plan':None,'keys':None,'choices':{}}
+        def caption(key):
+            m = self.dataset.by_key[key].metadata
+            return f"OAI {m['participant_id']} · M{int(m['visit_month']):03d} · {'Left' if m['knee_side']=='L' else 'Right'}"
+        def refresh(*args):
+            keys = chosen_keys if selected.checked else None
+            try:
+                initial = export_plan(self.store,case_keys=keys,include_practice=practice.checked)
+                choices = {row['case_key']:row['approved_checkpoint'] if earlier.checked else None for row in initial['requires_choice']} if earlier.checked or omit.checked else {}
+                plan = export_plan(self.store,case_keys=keys,include_practice=practice.checked,earlier_choices=choices)
+                state.update(plan=plan,keys=keys,choices=choices)
+                earlier.setVisible(bool(initial['requires_choice']))
+                omit.setVisible(bool(initial['requires_choice']))
+                def version_text(item,checkpoint=None):
+                    lines = [('Export: ' if checkpoint else 'Approval: ') + (checkpoint or item.get('approved_checkpoint') or '—')]
+                    if item.get('earlier_version') or item in plan['requires_choice']:
+                        lines.append('Exclude latest: ' + (item.get('latest_checkpoint') or '—'))
+                        journal = item.get('latest_review_journal')
+                        if journal:
+                            lines.append('Exclude review: ' + journal['record'])
+                    return '\n'.join(lines)
+                rows = [(item,'Include '+item['status_label'],version_text(item,item['checkpoint']),('Earlier approval explicitly chosen; newer work is excluded.' if item['earlier_version'] else 'Latest approved checkpoint')) for item in plan['included']]
+                rows += [(item,'Decision required',version_text(item),item['reason']+' '+item['action']) for item in plan['requires_choice']]
+                rows += [(item,'Excluded',item.get('latest_checkpoint') or '—',item['reason']+' '+item['action']) for item in plan['excluded']]
+                table.setRowCount(len(rows))
+                for row,(item,result,version,action) in enumerate(rows):
+                    for col,text in enumerate([caption(item['case_key']),result,version,action]):
+                        cell = qt.QTableWidgetItem(text)
+                        cell.setToolTip(text)
+                        table.setItem(row,col,cell)
+                table.resizeColumnsToContents()
+                table.setColumnWidth(0,200)
+                table.setColumnWidth(1,145)
+                table.setColumnWidth(2,180)
+                table.resizeRowsToContents()
+                blocked = bool(plan['requires_choice']) or (selected.checked and any(item['code']!='explicitly_omitted' for item in plan['excluded']))
+                export_button.setEnabled(bool(plan['included']) and not blocked)
+                if plan['requires_choice']:
+                    message.setText('Newer unapproved work exists. Approve the newest work, explicitly choose the listed earlier approval, or exclude those cases. Nothing will be silently replaced.')
+                elif selected.checked and blocked:
+                    message.setText('Some selected cases are not eligible. Follow the listed action, or cancel and change the selection. Choose all approved cases to return eligible cases with exclusions listed.')
+                elif not plan['included']:
+                    message.setText('No eligible approved cases are available. Review the listed reasons. Complete review and approval, then reopen Export; no results folder has been created.')
+                else:
+                    message.setText(str(len(plan['included']))+' case(s) will be returned; '+str(len(plan['excluded']))+' excluded. '+('PRACTICE ONLY — not research/training eligible.' if practice.checked else 'Research approvals only.'))
+            except Exception as exc:
+                export_button.setEnabled(False)
+                message.setText('The selection could not be verified. '+str(exc))
+                self._diagnostic = traceback.format_exc()
+        def earlier_changed(value):
+            if value:
+                omit.blockSignals(True); omit.setChecked(False); omit.blockSignals(False)
+            refresh()
+        def omit_changed(value):
+            if value:
+                earlier.blockSignals(True); earlier.setChecked(False); earlier.blockSignals(False)
+            refresh()
+        selected.connect('toggled(bool)',refresh)
+        practice.connect('toggled(bool)',refresh)
+        earlier.connect('toggled(bool)',earlier_changed)
+        omit.connect('toggled(bool)',omit_changed)
+        refresh()
+        if dialog.exec_()!=qt.QDialog.Accepted or not state['plan']:
             return
-        if self.session and self.dirty and self._safe(self.save) is None:
-            return
-        documents = qt.QStandardPaths.writableLocation(qt.QStandardPaths.DocumentsLocation)
         if self._practiceConfig:
             destination = Path(self._practiceConfig['results_root'])
         else:
-            target = qt.QFileDialog.getExistingDirectory(slicer.util.mainWindow(), 'Export results to folder', documents)
+            documents = qt.QStandardPaths.writableLocation(qt.QStandardPaths.DocumentsLocation)
+            target = qt.QFileDialog.getExistingDirectory(slicer.util.mainWindow(),'Export return ZIP to folder',documents)
             if not target:
                 return
             destination = Path(target)/'Meniscus_annotation_results'
-        keys = None
-        if selected.checked:
-            keys = chosen_keys
-        result = self._safe(lambda: export_approved(self.store, destination, case_keys=keys, include_practice=practice.checked))
+        result = self._safe(lambda:export_approved(self.store,destination,case_keys=state['keys'],include_practice=practice.checked,earlier_choices=state['choices'],plan=state['plan']))
         if result:
             self._lastExport = result
-            self.message.setText('Export verified: ' + Path(result).name)
+            self.message.setText('Export verified: '+Path(result).name)
             notice = qt.QMessageBox(slicer.util.mainWindow())
+            notice.objectName = 'MeniscusExportComplete'
             notice.setWindowTitle('Export complete')
-            notice.setText('Results ZIP created and checked.\n\n' + Path(result).name)
-            showFile = notice.addButton('Show exported file', qt.QMessageBox.ActionRole)
+            notice.setText('Results ZIP created and checked.\n\n'+Path(result).name)
+            notice.setInformativeText(str(len(state['plan']['included']))+' case(s), '+str(len(state['plan']['excluded']))+' excluded. The confirmed checkpoint versions are recorded in results.json.')
+            show = notice.addButton('Show exported file',qt.QMessageBox.ActionRole)
             notice.addButton(qt.QMessageBox.Close)
             notice.exec_()
-            if notice.clickedButton() == showFile:
+            if notice.clickedButton()==show:
                 qt.QDesktopServices.openUrl(qt.QUrl.fromLocalFile(str(Path(result).parent)))
 
     def _help(self):
-        text = 'Meniscus Annotator ' + VERSION + '\n\nOpen dataset → Open case → Draw → Review every slice → Save draft → Approve → Export.\n\nMRI view shortcuts (inactive while typing notes):\nLeft / Right: acquired slice · R: reviewed and next\nU: next unreviewed · F: next flagged\n1 / 2 / 3: medial / lateral / uncertain\nD / E / P: draw / erase / paint · Esc: discard contour or navigate\nCtrl+S: save · Ctrl+Z / Ctrl+Y: undo / redo\n\nNative Slicer mouse controls:\nCtrl+wheel: zoom · middle drag: pan\nWheel: one acquired slice · Draw reserves right-click for finishing\nWindow/level: choose it in Image and annotation display, then left-drag\nDraw: Click around the boundary. Right-click to close and fill.\nCtrl+wheel zooms while drawing. Right-drag keeps the unfinished contour.\nFinish or explicitly discard a contour before changing slices, labels or tools, saving or closing. X removes the last point.\n\nEvery changed slice requires review again. Uncertainty is a separate overlapping mask and blocks approval until resolved. Draft protocols allow practice approval only. Saved versions recover work after restart; in-memory undo history does not survive restart.\n\nHelp → Troubleshooting includes details of the last error.'
+        text = 'Meniscus Annotator ' + VERSION + '\n\nOpen dataset → Open case → Draw → Review every slice → Save draft → Approve → Export.\n\nWorkspace shortcuts (inactive in text and number fields):\nLeft / Right: acquired slice · R: reviewed and next\nU: next unreviewed · F: next flagged\n1 / 2 / 3: medial / lateral / uncertain\nD / E / P: draw / erase / paint · Esc: discard contour or navigate\nCtrl+S: save · Ctrl+Z / Ctrl+Y: undo / redo\n\nNative Slicer mouse controls:\nCtrl+wheel: zoom · middle drag: pan\nWheel: one acquired slice · Draw reserves right-click for finishing\nWindow/level: choose it in Image and annotation display, then left-drag\nDraw: Click around the boundary. Right-click to close and fill.\nCtrl+wheel zooms while drawing. Right-drag keeps the unfinished contour.\nFinish or explicitly discard a contour before changing slices, labels or tools, or saving. Closing offers Finish contour, Discard contour and Keep drawing. X removes the last point.\n\nEvery changed slice requires review again. Uncertainty is a separate overlapping mask and blocks approval until resolved. Draft protocols allow Practice approved only; Export includes practice by default and identifies it separately. If a newer draft exists, the export dialog requires an explicit earlier-version or omission choice. Whole meniscus corrects complete medial/lateral masks; Regions (draft) assigns anterior horn, body and posterior horn within the selected parent. Regional research approval is unavailable pending expert boundaries. Saved versions recover work after restart; in-memory undo history does not survive restart.\n\nHelp → Troubleshooting includes details of the last error.'
         dialog = qt.QMessageBox(slicer.util.mainWindow())
         dialog.setWindowTitle('Setup and shortcut help')
         dialog.setText(text)
@@ -2275,7 +2743,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
                 self.closeCase()
                 self._safe(lambda: self.openCase(key))
         if dialog.clickedButton() == diagnostics:
-            slicer.util.infoDisplay(self._diagnostic or 'No errors recorded in this session.',windowTitle='Local diagnostic details — keep private')
+            self._diagnostics()
 
     def _quit(self):
         if self.session:
@@ -2296,7 +2764,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         if hasattr(self, 'drawFeedback'):
             self.drawFeedback.stop()
         self.closeCase()
-        for name in ['caseListDock','rightDock','topBar','bottomBar']:
+        for name in ['caseListDock','rightDock','topBar','stepBar','bottomBar']:
             widget = getattr(self, name, None)
             if widget:
                 widget.hide()

@@ -146,7 +146,7 @@ def test_cancelled_dataset_confirmation_creates_no_store_or_settings(tmp_path):
         QEventLoop=SimpleNamespace(ExcludeUserInputEvents=2),
         QApplication=SimpleNamespace(setOverrideCursor=lambda cursor: None,
                                       restoreOverrideCursor=lambda: None),
-        QStandardPaths=SimpleNamespace(DocumentsLocation=3,
+        QStandardPaths=SimpleNamespace(DocumentsLocation=3, GenericDataLocation=4,
                                        writableLocation=lambda _: str(tmp_path)),
     )
     slicer = SimpleNamespace(app=SimpleNamespace(processEvents=lambda *args: None))

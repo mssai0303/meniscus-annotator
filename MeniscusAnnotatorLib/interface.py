@@ -3,6 +3,62 @@ import tempfile
 from pathlib import Path
 import qt
 
+
+class ChoiceStrip(qt.QWidget):
+    """Visible named choices; the hidden model preserves the existing state API.
+
+    Unlike a combo box, scrolling and letter keys cannot silently pick a new
+    annotation target. Buttons retain full accessible names when the compact
+    visible caption is abbreviated.
+    """
+    def __init__(self, options, parent=None, rows=1):
+        super().__init__(parent)
+        self.model = qt.QComboBox(self)
+        self.model.addItems([item[1] for item in options])
+        self.model.hide()
+        self.buttons = {}
+        self.options = options
+        layout = qt.QGridLayout(self)
+        layout.setContentsMargins(0,0,0,0)
+        layout.setHorizontalSpacing(2)
+        layout.setVerticalSpacing(2)
+        columns = (len(options)+rows-1)//rows
+        for index,(key,label,caption,object_name) in enumerate(options):
+            button = qt.QPushButton(caption)
+            button.objectName = object_name
+            button.setAccessibleName(label)
+            button.setToolTip(label)
+            button.setCheckable(True)
+            button.setSizePolicy(qt.QSizePolicy.Ignored,qt.QSizePolicy.Fixed)
+            button.setProperty('choice',True)
+            button.connect('clicked()',lambda i=index:self.choose(i))
+            layout.addWidget(button,index//columns,index%columns)
+            self.buttons[key] = button
+        self.model.connect('currentIndexChanged(int)',self.sync)
+        self.sync(0)
+
+    def choose(self, index):
+        self.model.setCurrentIndex(index)
+        self.sync()  # Clicking an already selected choice must keep it selected.
+
+    def sync(self, index=None):
+        index = self.model.currentIndex if index is None else index
+        for i,(key,_,_,_) in enumerate(self.options):
+            self.buttons[key].setChecked(i==index)
+
+
+class WheelGuard(qt.QObject):
+    """Do not change a remaining list selection through incidental scrolling."""
+    def __init__(self, parent):
+        super().__init__(parent)
+        parent.installEventFilter(self)
+
+    def eventFilter(self, watched, event):
+        if event.type()==qt.QEvent.Wheel and isinstance(watched,qt.QComboBox):
+            event.ignore()
+            return True
+        return False
+
 _cache = None
 
 def checkmark_path():
@@ -11,6 +67,14 @@ def checkmark_path():
         _cache = tempfile.TemporaryDirectory(prefix='meniscus-ui-')
         Path(_cache.name, 'checked.svg').write_text('<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M4 9l3.2 3.2L14 5.5" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>', encoding='utf-8')
     return Path(_cache.name, 'checked.svg').as_posix()
+
+def down_arrow_path():
+    checkmark_path()  # Share the application-owned temporary SVG directory.
+    path = Path(_cache.name, 'down-arrow.svg')
+    if not path.exists():
+        path.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" fill="none" stroke="#425363" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',encoding='utf-8')
+    return path.as_posix()
+
 
 def icon(name, color='#425363', size=20):
     pix = qt.QPixmap(size * 2, size * 2)
