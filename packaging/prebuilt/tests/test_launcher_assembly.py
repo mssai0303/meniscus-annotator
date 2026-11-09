@@ -47,16 +47,25 @@ def test_every_real_test_application_has_its_canonical_launcher_settings(tmp_pat
 
     canonical = (output / 'bin/MeniscusAnnotatorTestLauncherSettings.ini').read_text(encoding='utf-8')
     assert 'MENISCUS_TEST_ACTION=' not in canonical
+    # The environment must be set by the native launcher before QApplication
+    # creation; assigning it later from Python cannot fix Qt 5 OS-DPI rounding.
+    assert 'QT_SCALE_FACTOR_ROUNDING_POLICY=PassThrough\n' in canonical
+    reader_config = (output / 'bin/MeniscusAnnotatorLauncherSettings.ini').read_text(encoding='utf-8')
+    assert 'QT_SCALE_FACTOR_ROUNDING_POLICY=PassThrough\n' in reader_config
+    assert 'QT_SCALE_FACTOR=' not in reader_config
     for alias, action in [('Examples', 'create'), ('CorrectionChecks', 'correction'), ('CorrectionResumeCheck', 'correction-resume'),
                           ('DrawChecks', 'draw'), ('DrawResumeCheck', 'draw-resume'), ('DrawLayoutChecks', 'draw-layout'),
                           ('RegionsChecks', 'regions'), ('RegionsResumeCheck', 'regions-resume'),
-                          ('RegionsLegacyCheck', 'regions-legacy')]:
+                          ('RegionsLegacyCheck', 'regions-legacy'),
+                          ('ReviewChecks', 'review'), ('ReviewResumeCheck', 'review-resume')]:
         config = (output / ('bin/MeniscusAnnotator' + alias + 'LauncherSettings.ini')).read_text(encoding='utf-8')
         assert 'MENISCUS_TEST_ACTION=' + action + '\n' in config
-    for relative in ('tests/slicer_draw_workflow.py', 'tests/slicer_regions_workflow.py', 'tests/draw_fixture.py'):
+    for relative in ('tests/slicer_draw_workflow.py', 'tests/slicer_regions_workflow.py',
+                     'tests/slicer_review_repair.py', 'tests/draw_fixture.py'):
         assert (output / 'TestKit' / relative).read_bytes() == (repo / relative).read_bytes()
         assert 'TestKit/' + relative in manifest['files_sha256']
     assert not (output / 'TestKit/MeniscusAnnotator.py').exists()
+    assert (output / 'TestKit/CorePersistenceCheck.py').read_bytes() == (repo / 'packaging/prebuilt/CorePersistenceCheck.py').read_bytes()
     assert not (output / 'bin/opengl32.dll').exists()  # diagnostic alias is never shipped
     assert (output / 'ReaderGuide.html').read_bytes() == (repo / 'docs/QUICK_START.html').read_bytes()
     assert 'ReaderGuide.html' in manifest['files_sha256']

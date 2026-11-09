@@ -1,15 +1,15 @@
-# Mac review preview — visual and regional revision 1
+# Mac review preview — 0.2.0 repaired review candidate
 
 Windows x64 remains the release target. This Mac preview runs the actual
 Meniscus Annotator module in pinned **Intel Slicer 5.12.4 through Rosetta on
 Apple Silicon**; it is not a native ARM build or a browser mock-up.
 
-[Open Meniscus Annotator](/Users/saim/Downloads/Meniscus_Annotator_Visual_Preview_20261108/Open_Meniscus_Annotator.command)
+[Open Meniscus Annotator](/Users/saim/Downloads/Meniscus_Annotator_Repair_Preview_20261108/Open_Meniscus_Annotator.command)
 
 Full Terminal command:
 
 ```sh
-/bin/zsh /Users/saim/Downloads/Meniscus_Annotator_Visual_Preview_20261108/Open_Meniscus_Annotator.command
+/bin/zsh /Users/saim/Downloads/Meniscus_Annotator_Repair_Preview_20261108/Open_Meniscus_Annotator.command
 ```
 
 This revision has a separate preview profile and work folder. The earlier
@@ -19,15 +19,15 @@ including the oblique acquisition, with their unchanged explicit starting-mask
 permissions and practice protocol. It opens directly into the focused workspace.
 The compact header contains case identity and save state; active compartment
 and the Draw/Erase/Paint toolbar remain beside the MRI. Cases reopens the
-remembered browser, and approval is inside Case details and review.
+remembered browser, and approval is in Case details and approval, with a visible Go to approval route after full-stack review.
 The human practice actor is **Preview user (identity unverified)**. No automated
 QA drawing, note, review or approval is loaded into this workspace.
 
 Your work and exports are separate:
 
 ```text
-/Users/saim/Downloads/Meniscus_Annotator_Visual_Preview_20261108/Practice_work/
-/Users/saim/Downloads/Meniscus_Annotator_Visual_Preview_20261108/Practice_exports/
+/Users/saim/Downloads/Meniscus_Annotator_Repair_Preview_20261108/Practice_work/
+/Users/saim/Downloads/Meniscus_Annotator_Repair_Preview_20261108/Practice_exports/
 ```
 
 Earlier synthetic, real blank-practice and correction work folders are preserved.

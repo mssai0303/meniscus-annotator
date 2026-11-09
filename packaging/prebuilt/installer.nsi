@@ -13,9 +13,9 @@ Unicode true
 !ifndef LICENSE_FILE
 !error "LICENSE_FILE must be supplied"
 !endif
-Name "Meniscus Annotator 0.1.0"
+Name "Meniscus Annotator 0.2.0"
 OutFile "${OUTPUT}"
-InstallDir "$LOCALAPPDATA\Programs\Meniscus Annotator\0.1.0"
+InstallDir "$LOCALAPPDATA\Programs\Meniscus Annotator\0.2.0"
 RequestExecutionLevel user
 ManifestDPIAware true
 ManifestLongPathAware true
@@ -45,8 +45,13 @@ Var RuntimeGuard4
 Var RuntimeGuard5
 Function .onInit
   ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.1.0" "InstallLocation"
+  StrCmp $0 "" no_legacy_install
+    MessageBox MB_ICONSTOP "An earlier Meniscus Annotator 0.1.0 is installed at $0. Save and close it, then uninstall that application before installing 0.2.0. Keep your separate work folder and dataset. Uninstalling the application does not remove them. Do not reopen migrated work in the older version." /SD IDOK
+    Abort
+  no_legacy_install:
+  ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.2.0" "InstallLocation"
   StrCmp $0 "" no_registered_install
-    MessageBox MB_ICONSTOP "Meniscus Annotator 0.1.0 is already registered at $0. Close it and use its uninstaller before installing another copy of this fixed version. Saved work is outside the installation folder." /SD IDOK
+    MessageBox MB_ICONSTOP "Meniscus Annotator 0.2.0 is already registered at $0. Close it and use its uninstaller before installing another copy of this fixed version. Saved work is outside the installation folder." /SD IDOK
     Abort
   no_registered_install:
   ${IfNot} ${RunningX64}
@@ -82,18 +87,18 @@ Section "Application" SEC_APP
   SetOutPath "$INSTDIR"
   File /r "${PAYLOAD}\*"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
-  CreateDirectory "$SMPROGRAMS\Meniscus Annotator 0.1.0"
-  CreateShortCut "$SMPROGRAMS\Meniscus Annotator 0.1.0\Meniscus Annotator.lnk" "$INSTDIR\MeniscusAnnotator.exe" "" "$INSTDIR\MeniscusAnnotator.ico"
-  CreateShortCut "$SMPROGRAMS\Meniscus Annotator 0.1.0\Reader guide.lnk" "$INSTDIR\ReaderGuide.html"
-  CreateShortCut "$SMPROGRAMS\Meniscus Annotator 0.1.0\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
+  CreateDirectory "$SMPROGRAMS\Meniscus Annotator 0.2.0"
+  CreateShortCut "$SMPROGRAMS\Meniscus Annotator 0.2.0\Meniscus Annotator.lnk" "$INSTDIR\MeniscusAnnotator.exe" "" "$INSTDIR\MeniscusAnnotator.ico"
+  CreateShortCut "$SMPROGRAMS\Meniscus Annotator 0.2.0\Reader guide.lnk" "$INSTDIR\ReaderGuide.html"
+  CreateShortCut "$SMPROGRAMS\Meniscus Annotator 0.2.0\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
   ; Maintainer TestKit remains internal; the reader menu has no QA shortcuts.
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.1.0" "DisplayName" "Meniscus Annotator 0.1.0 (3D Slicer 5.12.4 runtime)"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.1.0" "DisplayVersion" "0.1.0"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.1.0" "UninstallString" '$\"$INSTDIR\Uninstall.exe$\"'
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.1.0" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.1.0" "DisplayIcon" "$INSTDIR\MeniscusAnnotator.exe"
-  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.1.0" "NoModify" 1
-  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.1.0" "NoRepair" 1
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.2.0" "DisplayName" "Meniscus Annotator 0.2.0 (3D Slicer 5.12.4 runtime)"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.2.0" "DisplayVersion" "0.2.0"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.2.0" "UninstallString" '$\"$INSTDIR\Uninstall.exe$\"'
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.2.0" "InstallLocation" "$INSTDIR"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.2.0" "DisplayIcon" "$INSTDIR\MeniscusAnnotator.exe"
+  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.2.0" "NoModify" 1
+  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.2.0" "NoRepair" 1
 SectionEnd
 # Obtain exclusive write guards before deleting anything. Existing executable/DLL
 # mappings reject these opens; new application launches are blocked until removal.
@@ -143,18 +148,18 @@ Section "Uninstall"
   !include "${UNINSTALL_FILES}"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir "$INSTDIR"
-  ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.1.0" "InstallLocation"
+  ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.2.0" "InstallLocation"
   StrCmp $0 "$INSTDIR" 0 uninstall_registration_done
-  Delete "$SMPROGRAMS\Meniscus Annotator 0.1.0\Meniscus Annotator.lnk"
-  Delete "$SMPROGRAMS\Meniscus Annotator 0.1.0\Reader guide.lnk"
-  Delete "$SMPROGRAMS\Meniscus Annotator 0.1.0\Uninstall.lnk"
-  Delete "$SMPROGRAMS\Meniscus Annotator 0.1.0\Testing\Create synthetic examples.lnk"
-  Delete "$SMPROGRAMS\Meniscus Annotator 0.1.0\Testing\Run synthetic workflow checks.lnk"
-  Delete "$SMPROGRAMS\Meniscus Annotator 0.1.0\Testing\Check synthetic resume.lnk"
-  Delete "$SMPROGRAMS\Meniscus Annotator 0.1.0\Testing\Run correction checks.lnk"
-  Delete "$SMPROGRAMS\Meniscus Annotator 0.1.0\Testing\Check correction resume.lnk"
-  RMDir "$SMPROGRAMS\Meniscus Annotator 0.1.0\Testing"
-  RMDir "$SMPROGRAMS\Meniscus Annotator 0.1.0"
-  DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.1.0"
+  Delete "$SMPROGRAMS\Meniscus Annotator 0.2.0\Meniscus Annotator.lnk"
+  Delete "$SMPROGRAMS\Meniscus Annotator 0.2.0\Reader guide.lnk"
+  Delete "$SMPROGRAMS\Meniscus Annotator 0.2.0\Uninstall.lnk"
+  Delete "$SMPROGRAMS\Meniscus Annotator 0.2.0\Testing\Create synthetic examples.lnk"
+  Delete "$SMPROGRAMS\Meniscus Annotator 0.2.0\Testing\Run synthetic workflow checks.lnk"
+  Delete "$SMPROGRAMS\Meniscus Annotator 0.2.0\Testing\Check synthetic resume.lnk"
+  Delete "$SMPROGRAMS\Meniscus Annotator 0.2.0\Testing\Run correction checks.lnk"
+  Delete "$SMPROGRAMS\Meniscus Annotator 0.2.0\Testing\Check correction resume.lnk"
+  RMDir "$SMPROGRAMS\Meniscus Annotator 0.2.0\Testing"
+  RMDir "$SMPROGRAMS\Meniscus Annotator 0.2.0"
+  DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.2.0"
   uninstall_registration_done:
 SectionEnd

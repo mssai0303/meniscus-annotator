@@ -64,7 +64,7 @@ $Distribution = Get-Content -Raw (Join-Path $Payload 'distribution.json') | Conv
 if ($Distribution.application_source_dirty -or $Distribution.application_commit -eq 'unrecorded-local-source') {
   throw 'Installer builds require a clean recorded source commit. Commit the reviewed source before packaging.'
 }
-$Output = Join-Path $BuildRoot 'MeniscusAnnotator-0.1.0-Windows-x64.exe'
+$Output = Join-Path $BuildRoot 'MeniscusAnnotator-0.2.0-Windows-x64.exe'
 $NsisArguments = @('/V2',"/DPAYLOAD=$Payload","/DOUTPUT=$Output",
   "/DUNINSTALL_FILES=$(Join-Path $BuildRoot 'uninstall-files.nsh')",
   "/DLICENSE_FILE=$(Join-Path $Repo 'LICENSE')")
@@ -72,7 +72,7 @@ if ($FastPackage) { $NsisArguments += '/DFAST_PACKAGE' }
 $NsisArguments += (Join-Path $PSScriptRoot 'installer.nsi')
 Checked $Nsis $NsisArguments
 $receipt = [ordered]@{
-  schema_version='meniscus_installer_build/1'; route=$Lock.route; app_version='0.1.0'
+  schema_version='meniscus_installer_build/1'; route=$Lock.route; app_version='0.2.0'
   runner_os=[Environment]::OSVersion.VersionString; runner_image=$env:ImageVersion
   runtime_download_sha512=$Lock.slicer.sha512
   application_commit=$Distribution.application_commit
@@ -85,6 +85,8 @@ $receipt = [ordered]@{
   synthetic_desktop_test='NOT RUN'; synthetic_resume_test='NOT RUN'; synthetic_correction_test='NOT RUN'; synthetic_correction_resume_test='NOT RUN'
   synthetic_draw_test='NOT RUN'; synthetic_draw_resume_test='NOT RUN'; synthetic_draw_layout_tests='NOT RUN'
   synthetic_regional_test='NOT RUN'; synthetic_regional_resume_test='NOT RUN'; synthetic_regional_legacy_test='NOT RUN'
+  ordinary_reader_workflow_test='NOT RUN'; ordinary_reader_resume_test='NOT RUN'
+  headless_technical_persistence_test='NOT RUN'
   regional_reader_example_import_test='NOT RUN'
   installed_graphics_probe='NOT RUN'; installed_graphics_mode='system'
   offline_runtime_import_test='NOT RUN'; process_network_block='NOT RUN'
@@ -94,6 +96,19 @@ $NetworkRules = @()
 try {
 if ($TestInstall) {
   # Private ephemeral build host only. No MRI data enter this workflow.
+  $LegacyKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.1.0'
+  if (Test-Path $LegacyKey) { throw 'Use a clean host for the legacy-registration guard test.' }
+  $GuardTarget = Join-Path $BuildRoot 'Legacy upgrade refusal'
+  try {
+    New-Item -Path $LegacyKey -Force | Out-Null
+    New-ItemProperty -Path $LegacyKey -Name InstallLocation -Value 'C:\Synthetic legacy registration only' -PropertyType String | Out-Null
+    $Guarded = Start-Process -FilePath $Output -ArgumentList @('/S',"/D=$GuardTarget") -Wait -PassThru
+    if (Test-Path (Join-Path $GuardTarget 'MeniscusAnnotator.exe')) { throw 'Legacy upgrade guard allowed mixed versions.' }
+    $receipt['legacy_registration_guard']='PASSED: simulated 0.1 registration rejected; actual old-binary upgrade not claimed'
+  } finally { Remove-Item -Path $LegacyKey -Force -ErrorAction SilentlyContinue }
+  $WorkSentinel = Join-Path $BuildRoot 'Synthetic work outside installation.txt'
+  'Preserve existing reader work' | Set-Content $WorkSentinel
+  $WorkSentinelHash = (Get-FileHash $WorkSentinel -Algorithm SHA256).Hash
   $Installed = Join-Path $BuildRoot 'Installed with spaces'
   $process = Start-Process -FilePath $Output -ArgumentList @('/S',"/D=$Installed") -Wait -PassThru
   if ($process.ExitCode -ne 0) { throw 'Installer execution failed.' }
@@ -163,11 +178,27 @@ if ($TestInstall) {
   $created = Get-Content -Raw $createdReport | ConvertFrom-Json
   if (-not $created.passed -or $created.folder_layout -ne 'flat' -or $created.annotation_mode -ne 'correction') { throw 'Installed synthetic correction package validation failed.' }
   $receipt['installed_synthetic_generation_test']=$created
+  # The storage/core path can run without a render context. Use actual installed
+  # Slicer segmentation storage and an independent NIfTI reader. This is separate
+  # evidence from GUI Draw/Erase/Export-dialog acceptance below the graphics gate.
+  $CoreEvidence = Join-Path $BuildRoot 'headless-persistence'
+  New-Item -ItemType Directory -Force $CoreEvidence | Out-Null
+  $env:MENISCUS_CORE_CHECK_OUTPUT = Join-Path $CoreEvidence 'Synthetic work'
+  $CoreProcess = Start-Process -FilePath (Join-Path $Installed 'MeniscusAnnotator.exe') `
+    -ArgumentList @('--no-main-window','--testing','--ignore-slicerrc','--python-script',('"' + (Join-Path $Installed 'TestKit\CorePersistenceCheck.py') + '"')) `
+    -RedirectStandardOutput (Join-Path $CoreEvidence 'stdout.txt') `
+    -RedirectStandardError (Join-Path $CoreEvidence 'stderr.txt') -PassThru
+  if (-not $CoreProcess.WaitForExit(120000)) { $CoreProcess.Kill($true); throw 'Installed headless persistence check exceeded two minutes.' }
+  $CoreReportPath = Join-Path $CoreEvidence 'headless-persistence-check.json'
+  if ($CoreProcess.ExitCode -ne 0 -or -not (Test-Path $CoreReportPath)) { throw 'Installed headless persistence check failed; inspect its dedicated evidence.' }
+  $CoreReport = Get-Content -Raw $CoreReportPath | ConvertFrom-Json
+  if (-not $CoreReport.passed -or $CoreReport.application_source_sha256 -ne $Distribution.application_source_sha256) { throw 'Installed headless persistence result or source identity failed.' }
+  $receipt['headless_technical_persistence_test']=$CoreReport
+  Remove-Item Env:\MENISCUS_CORE_CHECK_OUTPUT
   if ($RunIntegration) {
-    # Hosted runners may have no usable WGL pixel format. Probe the actual
-    # capabilities first, including a bounded test-only route through the
-    # software renderer already supplied by the verified official runtime.
-    # No renderer alias or environment override enters the installer payload.
+    # Hosted runners may have no usable WGL pixel format. One bounded fresh
+    # system-renderer probe records the actual capability. Do not repeatedly
+    # retry the known hosted OpenGL limitation or spoof a required version.
     . (Join-Path $PSScriptRoot 'InstalledGraphics.ps1')
     $Graphics = Test-InstalledGraphics -Installed $Installed -Evidence (Join-Path $BuildRoot 'graphics-probe')
     $receipt['installed_graphics_probe']=$Graphics
@@ -175,6 +206,22 @@ if ($TestInstall) {
     $receipt['installed_graphics_mode']=$Graphics.selected_mode
     $GraphicsContext = Enter-InstalledGraphicsMode -Installed $Installed -Mode $Graphics.selected_mode
     try {
+    foreach ($ReviewAction in @(@{name='review';entry='MeniscusAnnotatorReviewChecks.exe'},@{name='review-resume';entry='MeniscusAnnotatorReviewResumeCheck.exe'})) {
+      $env:MENISCUS_TEST_RUN_ID = [Guid]::NewGuid().ToString('N')
+      $ReviewRoot = Join-Path $TestBase $env:MENISCUS_TEST_RUN_ID
+      $ReviewEvidence = Join-Path $BuildRoot $ReviewAction.name
+      New-Item -ItemType Directory -Force $ReviewEvidence | Out-Null
+      $ReviewProcess = Start-Process -FilePath (Join-Path $Installed $ReviewAction.entry) `
+        -RedirectStandardOutput (Join-Path $ReviewEvidence 'stdout.txt') `
+        -RedirectStandardError (Join-Path $ReviewEvidence 'stderr.txt') -PassThru
+      if (-not $ReviewProcess.WaitForExit(300000)) { $ReviewProcess.Kill($true); throw 'Ordinary reader check exceeded five minutes.' }
+      if (Test-Path $ReviewRoot) { Get-ChildItem $ReviewRoot -Recurse -File | Where-Object { $_.Extension -in @('.json','.png') } | Copy-Item -Destination $ReviewEvidence }
+      if ($ReviewProcess.ExitCode -ne 0) { throw 'Ordinary reader UI checks failed.' }
+      $ReviewReport = Get-Content -Raw (Join-Path $ReviewRoot 'installed-tests.json') | ConvertFrom-Json
+      if (-not $ReviewReport.passed) { throw 'Ordinary reader workflow reported failure.' }
+      $Key = if ($ReviewAction.name -eq 'review') { 'ordinary_reader_workflow_test' } else { 'ordinary_reader_resume_test' }
+      $receipt[$Key]=$ReviewReport
+    }
     # Optional regional draft workflow uses separate synthetic state, preserves
     # whole labels, and never treats protocol-pending regions as research labels.
     foreach ($Action in @('regions','regions-resume','regions-legacy')) {
@@ -217,6 +264,7 @@ if ($TestInstall) {
         @{name='draw-layout-100';entry='MeniscusAnnotatorDrawLayoutChecks.exe';scale='100';factor='1'},
         @{name='draw-layout-125';entry='MeniscusAnnotatorDrawLayoutChecks.exe';scale='125';factor='1.25'},
         @{name='draw-layout-150';entry='MeniscusAnnotatorDrawLayoutChecks.exe';scale='150';factor='1.5'},
+        @{name='draw-layout-175';entry='MeniscusAnnotatorDrawLayoutChecks.exe';scale='175';factor='1.75'},
         @{name='draw-layout-200';entry='MeniscusAnnotatorDrawLayoutChecks.exe';scale='200';factor='2'})) {
         [Environment]::SetEnvironmentVariable('QT_SCALE_FACTOR',$DrawAction.factor,'Process')
         [Environment]::SetEnvironmentVariable('MENISCUS_DRAW_SCALE_NAME',$DrawAction.scale,'Process')
@@ -302,6 +350,8 @@ if ($TestInstall) {
       $receipt['synthetic_regional_test']=$Blocked
       $receipt['synthetic_regional_resume_test']=$Blocked
       $receipt['synthetic_regional_legacy_test']=$Blocked
+      $receipt['ordinary_reader_workflow_test']=$Blocked
+      $receipt['ordinary_reader_resume_test']=$Blocked
       $receipt['installed_graphics_mode']=$null
       Checked $Python @((Join-Path $PSScriptRoot 'verify-installed.py'),$Installed)
       $receipt['graphics_probe_cleanup']='PASSED: all probe aliases removed; original installed payload hashes retained'
@@ -323,9 +373,22 @@ if ($TestInstall) {
   if ($uninstall.ExitCode -ne 0) { throw 'Uninstall failed.' }
   # NSIS uninstaller can use a temporary child; give it a bounded completion period.
   $limit = [DateTime]::UtcNow.AddSeconds(30)
-  while ((Test-Path (Join-Path $Installed 'MeniscusAnnotator.exe')) -and [DateTime]::UtcNow -lt $limit) { Start-Sleep -Milliseconds 250 }
-  if ((Test-Path (Join-Path $Installed 'MeniscusAnnotator.exe')) -or -not (Test-Path $Sentinel)) { throw 'Uninstall completion/preservation check failed.' }
+  $CurrentRegistration = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\MeniscusAnnotator-0.2.0'
+  while (((Test-Path (Join-Path $Installed 'MeniscusAnnotator.exe')) -or (Test-Path $CurrentRegistration)) -and [DateTime]::UtcNow -lt $limit) { Start-Sleep -Milliseconds 250 }
+  if ((Test-Path (Join-Path $Installed 'MeniscusAnnotator.exe')) -or (Test-Path $CurrentRegistration) -or -not (Test-Path $Sentinel)) { throw 'Uninstall completion/preservation check failed.' }
   $receipt['uninstall_test']='PASSED: known executable removed; unrelated synthetic sentinel preserved'
+  if ((Get-FileHash $WorkSentinel -Algorithm SHA256).Hash -ne $WorkSentinelHash) { throw 'External synthetic work was altered.' }
+  $Reinstalled = Join-Path $BuildRoot 'Reinstalled with spaces'
+  $Again = Start-Process -FilePath $Output -ArgumentList @('/S',"/D=$Reinstalled") -Wait -PassThru
+  if ($Again.ExitCode -ne 0) { throw 'Reinstallation failed.' }
+  Checked $Python @((Join-Path $PSScriptRoot 'verify-installed.py'),$Reinstalled)
+  if ((Get-FileHash $WorkSentinel -Algorithm SHA256).Hash -ne $WorkSentinelHash) { throw 'Reinstallation altered external work.' }
+  $RemoveAgain = Start-Process -FilePath (Join-Path $Reinstalled 'Uninstall.exe') -ArgumentList @('/S') -Wait -PassThru
+  if ($RemoveAgain.ExitCode -ne 0) { throw 'Reinstalled application uninstall failed.' }
+  $limit = [DateTime]::UtcNow.AddSeconds(30)
+  while (((Test-Path (Join-Path $Reinstalled 'MeniscusAnnotator.exe')) -or (Test-Path $CurrentRegistration)) -and [DateTime]::UtcNow -lt $limit) { Start-Sleep -Milliseconds 250 }
+  if ((Test-Path (Join-Path $Reinstalled 'MeniscusAnnotator.exe')) -or (Test-Path $CurrentRegistration)) { throw 'Reinstalled application removal did not complete.' }
+  $receipt['reinstall_work_preservation']='PASSED: fresh reinstall bytes verified; external synthetic work retained; application removed normally'
 }
 } catch {
   $receipt['failure'] = $_.Exception.Message

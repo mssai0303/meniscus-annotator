@@ -6,7 +6,7 @@ Set-StrictMode -Version Latest
 $DiagnosticStarted = Get-Date
 $Evidence = Join-Path $Root 'evidence'
 New-Item -ItemType Directory -Force $Evidence | Out-Null
-$Installer = Join-Path $Root 'download\MeniscusAnnotator-0.1.0-Windows-x64.exe'
+$Installer = Join-Path $Root 'download\MeniscusAnnotator-0.2.0-Windows-x64.exe'
 $Expected = '370b1a146633016b8196ef3c5ef3f9476073a24f0815f02443e5725a5447e5cc'
 if ((Get-FileHash -LiteralPath $Installer -Algorithm SHA256).Hash.ToLower() -ne $Expected) { throw 'Candidate checksum differs; nothing was installed.' }
 $Installed = Join-Path $Root 'Installed with spaces'

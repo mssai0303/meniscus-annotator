@@ -495,7 +495,20 @@ def legacy():
             if not slicer.util.saveNode(node,str(path)):
                 raise OSError('Synthetic legacy segmentation write failed')
         checkpoint=session.save(labels,uncertain,writer)
+    # Current saves add research eligibility. Construct the preserved 0.1
+    # six-file schema explicitly; no historical binary/reader is executed.
+    old_state=json.loads((checkpoint/'annotation.json').read_text())
+    old_state['app_version']='0.1.0'
+    for field in ('approval_purpose','research_eligible','accepted_research_annotation'):
+        old_state.pop(field,None)
+    (checkpoint/'annotation.json').write_text(json.dumps(old_state,indent=2)+'\n')
     manifest=json.loads((checkpoint/'manifest.json').read_text())
+    manifest.pop('research_eligibility',None)
+    if 'research_eligibility.nii.gz' in manifest['files_sha256']:
+        manifest['files_sha256'].pop('research_eligibility.nii.gz')
+        (checkpoint/'research_eligibility.nii.gz').unlink()
+    manifest['files_sha256']['annotation.json']=sha256(checkpoint/'annotation.json')
+    (checkpoint/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
     check('canonical legacy six-file checkpoint has no optional extension',
           len(manifest['files_sha256'])==6 and 'regional_extension' not in manifest)
     legacy_hashes={p.name:sha256(p) for p in checkpoint.iterdir() if p.is_file()}

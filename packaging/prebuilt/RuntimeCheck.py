@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 import traceback
 import slicer
+import qt
 receipt = {'passed': False, 'scope': 'Installed Windows runtime imports/identity only; no rendering or anatomical acceptance.'}
 exit_code = 1
 try:
@@ -22,7 +23,7 @@ try:
     assert source_identity['application_commit'] == distribution['application_commit']
     assert Path(MeniscusAnnotatorLib.__file__).resolve().is_relative_to(root)
     assert Path(regional.__file__).resolve().is_relative_to(root)
-    assert MeniscusAnnotatorLib.APP_VERSION == '0.1.0'
+    assert MeniscusAnnotatorLib.APP_VERSION == '0.2.0'
     assert nibabel.__version__ == '5.3.2'
     assert slicer.app.applicationVersion == '5.12.4'
     assert slicer.app.repositoryRevision in ('4e21c19', '4e21c19d8360242d88d6ca2490bf52400441b8e1')
@@ -30,7 +31,9 @@ try:
     assert regional.REGIONAL_PROTOCOL['status'] == 'pending_expert_protocol'
     phantom = numpy.array([[[0, 1, 2]]], dtype=numpy.uint8)
     assert numpy.array_equal(regional.initialize(phantom), numpy.array([[[0, 7, 8]]], dtype=numpy.uint8))
-    receipt.update(passed=True, application_version=MeniscusAnnotatorLib.APP_VERSION,
+    policy = int(qt.QGuiApplication.highDpiScaleFactorRoundingPolicy())
+    assert policy == 5, 'The launcher did not apply PassThrough before Qt initialization.'
+    receipt.update(passed=True, qt_version=qt.qVersion(), qt_scale_rounding_policy=os.environ.get('QT_SCALE_FACTOR_ROUNDING_POLICY'), qt_scale_rounding_policy_actual=policy, application_version=MeniscusAnnotatorLib.APP_VERSION,
                    runtime_version=slicer.app.applicationVersion,
                    runtime_revision=slicer.app.repositoryRevision,
                    runtime_name=slicer.app.applicationName,

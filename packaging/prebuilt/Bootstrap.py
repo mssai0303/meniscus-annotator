@@ -27,7 +27,7 @@ def start():
         slicer.util.selectModule('MeniscusAnnotator')
         focus_workflow_shell()
         window = slicer.util.mainWindow()
-        window.setWindowTitle('Meniscus Annotator 0.1.0 | 3D Slicer 5.12.4')
+        window.setWindowTitle('Meniscus Annotator 0.2.0 | 3D Slicer 5.12.4')
         qt.QTimer.singleShot(0, focus_workflow_shell)
     except Exception:
         if os.environ.get('MENISCUS_PACKAGE_CHECK'):

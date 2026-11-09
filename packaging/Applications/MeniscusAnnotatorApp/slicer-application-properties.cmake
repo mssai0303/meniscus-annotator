@@ -1,7 +1,7 @@
 set(APPLICATION_NAME MeniscusAnnotator)
 set(APPLICATION_DISPLAY_NAME "Meniscus Annotator")
 set(VERSION_MAJOR 0)
-set(VERSION_MINOR 1)
+set(VERSION_MINOR 2)
 set(VERSION_PATCH 0)
 set(DESCRIPTION_SUMMARY "Acquired-grid meniscus annotation and review")
 set(DESCRIPTION_FILE "${MeniscusAnnotator_SOURCE_DIR}/README.md")

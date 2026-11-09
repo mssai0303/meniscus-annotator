@@ -89,7 +89,7 @@ def prepare(runtime, installer, output, cache):
     config = config.replace('/bin/SlicerApp-real.exe', '/bin/MeniscusAnnotatorApp-real.exe')
     config = re.sub(r'^arguments=$', 'arguments=--no-splash --disable-cli-modules --modules-to-ignore Welcome', config, count=1, flags=re.M)
     config = re.sub(r'^name=Slicer$', 'name=MeniscusAnnotator', config, count=1, flags=re.M)
-    config = config.replace('[EnvironmentVariables]', '[EnvironmentVariables]\nPYTHONDONTWRITEBYTECODE=1\nSLICERRC=<APPLAUNCHER_DIR>/Bootstrap.py')
+    config = config.replace('[EnvironmentVariables]', '[EnvironmentVariables]\nPYTHONDONTWRITEBYTECODE=1\nQT_SCALE_FACTOR_ROUNDING_POLICY=PassThrough\nSLICERRC=<APPLAUNCHER_DIR>/Bootstrap.py')
     (output / 'bin' / 'MeniscusAnnotatorLauncherSettings.ini').write_text(config, encoding="utf-8")
     shutil.copy2(HERE / 'Bootstrap.py', output / 'Bootstrap.py')
     shutil.copy2(HERE / 'RuntimeCheck.py', output / 'RuntimeCheck.py')
@@ -101,14 +101,14 @@ def prepare(runtime, installer, output, cache):
     # source checkout/application copy is placed in TestKit.
     kit = output / 'TestKit'
     for relative in ('tests/slicer_workflow.py', 'tests/slicer_export_dialog.py',
-                     'tests/slicer_draw_workflow.py', 'tests/slicer_regions_workflow.py',
+                     'tests/slicer_draw_workflow.py', 'tests/slicer_regions_workflow.py', 'tests/slicer_review_repair.py',
                      'tests/draw_fixture.py', 'tools/make_synthetic.py'):
         destination = kit / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO / relative, destination)
     (kit / 'tools' / '__init__.py').write_text('"""Procedural synthetic fixtures only."""\n', encoding='utf-8')
     (kit / 'tests' / '__init__.py').write_text('"""Synthetic software tests only."""\n', encoding='utf-8')
-    for name in ('make_correction_synthetic.py', 'CorrectionWorkflow.py'):
+    for name in ('make_correction_synthetic.py', 'CorrectionWorkflow.py', 'CorePersistenceCheck.py'):
         shutil.copy2(HERE / name, kit / name)
     shutil.copy2(HERE / 'RunInstalledTests.py', kit / 'RunInstalledTests.py')
     shutil.copy2(HERE / 'SyntheticTestKit.txt', kit / 'README.txt')
@@ -117,7 +117,7 @@ def prepare(runtime, installer, output, cache):
     # The real application derives this canonical settings filename from
     # MeniscusAnnotatorTestApp-real.exe, even when an action alias launched it.
     # Both the canonical pair and action aliases must exist.
-    for stem, action in (('MeniscusAnnotatorTest', 'workflow'), ('MeniscusAnnotatorChecks', 'workflow'), ('MeniscusAnnotatorResumeCheck', 'resume'), ('MeniscusAnnotatorExamples', 'create'), ('MeniscusAnnotatorCorrectionChecks', 'correction'), ('MeniscusAnnotatorCorrectionResumeCheck', 'correction-resume'), ('MeniscusAnnotatorDrawChecks', 'draw'), ('MeniscusAnnotatorDrawResumeCheck', 'draw-resume'), ('MeniscusAnnotatorDrawLayoutChecks', 'draw-layout'), ('MeniscusAnnotatorRegionsChecks', 'regions'), ('MeniscusAnnotatorRegionsResumeCheck', 'regions-resume'), ('MeniscusAnnotatorRegionsLegacyCheck', 'regions-legacy')):
+    for stem, action in (('MeniscusAnnotatorTest', 'workflow'), ('MeniscusAnnotatorChecks', 'workflow'), ('MeniscusAnnotatorResumeCheck', 'resume'), ('MeniscusAnnotatorExamples', 'create'), ('MeniscusAnnotatorCorrectionChecks', 'correction'), ('MeniscusAnnotatorCorrectionResumeCheck', 'correction-resume'), ('MeniscusAnnotatorDrawChecks', 'draw'), ('MeniscusAnnotatorDrawResumeCheck', 'draw-resume'), ('MeniscusAnnotatorDrawLayoutChecks', 'draw-layout'), ('MeniscusAnnotatorRegionsChecks', 'regions'), ('MeniscusAnnotatorRegionsResumeCheck', 'regions-resume'), ('MeniscusAnnotatorRegionsLegacyCheck', 'regions-legacy'), ('MeniscusAnnotatorReviewChecks', 'review'), ('MeniscusAnnotatorReviewResumeCheck', 'review-resume')):
         shutil.copy2(output / 'Slicer.exe', output / (stem + '.exe'))
         test_config = config.replace('/bin/MeniscusAnnotatorApp-real.exe', '/bin/MeniscusAnnotatorTestApp-real.exe')
         test_config = test_config.replace('name=MeniscusAnnotator\n', 'name=MeniscusAnnotatorTest\n')
@@ -141,7 +141,7 @@ def prepare(runtime, installer, output, cache):
         shutil.copy2(source, license_dir / source.name)
     shutil.copy2(REPO / 'LICENSE', license_dir / 'MeniscusAnnotator-Apache-2.0.txt')
     shutil.copy2(REPO / 'packaging' / 'TEMPLATE_NOTICE.txt', license_dir / 'TEMPLATE_NOTICE.txt')
-    (output / 'README-FIRST.txt').write_text('Meniscus Annotator 0.1.0\nBased on official 3D Slicer 5.12.4 r34645.\nOpen Meniscus Annotator from the Start menu, then Open dataset.\nDo not edit files in this installation directory. Saved work and exports live in your chosen local work/results folders.\nThis wrapped distribution retains upstream Slicer branding and runtime version. It is not a custom-compiled Slicer application.\n', encoding="utf-8")
+    (output / 'README-FIRST.txt').write_text('Meniscus Annotator 0.2.0\nBased on official 3D Slicer 5.12.4 r34645.\nOpen Meniscus Annotator from the Start menu, then Open dataset.\nDo not edit files in this installation directory. Saved work and exports live in your chosen local work/results folders.\nThis wrapped distribution retains upstream Slicer branding and runtime version. It is not a custom-compiled Slicer application.\n', encoding="utf-8")
     guide = REPO / 'docs' / 'USER_GUIDE.md'
     if guide.exists():
         guide_text = guide.read_text(encoding='utf-8')
@@ -188,13 +188,13 @@ def prepare(runtime, installer, output, cache):
                     for p in sorted(module_dir.rglob('*'))
                     if p.is_file() and (p.name == 'MeniscusAnnotator.py' or 'MeniscusAnnotatorLib' in p.parts)}
     source_hash = hashlib.sha256(json.dumps(source_files, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-    identity = {'application_version': '0.1.0', 'application_commit': revision,
+    identity = {'application_version': '0.2.0', 'application_commit': revision,
                 'application_source_dirty': dirty, 'application_source_sha256': source_hash,
                 'application_files_sha256': source_files}
     (output / 'BUILD-IDENTITY.json').write_text(json.dumps(identity, indent=2) + '\n', encoding='utf-8')
     files = {str(f.relative_to(output)).replace('\\', '/'): digest(f)
              for f in sorted(output.rglob('*')) if f.is_file()}
-    manifest = {'schema_version': 'meniscus_distribution/1', 'application_version': '0.1.0',
+    manifest = {'schema_version': 'meniscus_distribution/1', 'application_version': '0.2.0',
                 **identity, 'route': LOCK['route'],
                 'slicer_installer_sha512': LOCK['slicer']['sha512'],
                 'original_runtime_files_unchanged': len(original_files),

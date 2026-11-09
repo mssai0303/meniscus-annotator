@@ -405,7 +405,15 @@ def verify_geometry(widget, key_value, item):
     up = affine[:3, 1] / np.linalg.norm(affine[:3, 1])
     if up[2] < 0:
         up = -up
-    horizontal = np.cross(up, normal)
+    displayed = matrix(red().mrmlSliceNode().GetSliceToRAS())[:3, :3]
+    horizontal = displayed[:, 0]
+    check(key_value + ' consistent anterior-left right-handed acquired-plane presentation',
+          np.allclose(displayed.T @ displayed, np.eye(3), atol=1e-5)
+          and np.linalg.det(displayed) > .999
+          and abs(np.dot(displayed[:, 2], normal)) > .999
+          and np.dot(displayed[:, 1], up) > .999
+          and -horizontal[1] > 0 and displayed[2, 1] > 0)
+    up = displayed[:, 1]
     annotation = red().sliceView().cornerAnnotation()
     for edge, vector in [(vtk.vtkCornerAnnotation.LeftEdge, -horizontal),
                          (vtk.vtkCornerAnnotation.RightEdge, horizontal),
@@ -594,6 +602,34 @@ def stable_contour_view_updates(widget, key_value):
     check(key_value + ' view-adjusted contour Undo exact', same(arrays(widget), before))
 
 
+def keep_drawing_on_close(callback):
+    state={'seen':False,'error':None}
+    timer=qt.QTimer()
+    timer.setInterval(20)
+    def tick():
+        modal=qt.QApplication.activeModalWidget()
+        if modal is None:
+            return
+        try:
+            if str(modal.objectName)!='MeniscusContourGuardDialog':
+                raise AssertionError('Unexpected close dialog '+str(modal.windowTitle))
+            keep=[b for b in modal.buttons() if str(b.text).replace('&','')=='Keep drawing']
+            check('close contour guard has safe Keep drawing default',len(keep)==1
+                  and modal.defaultButton()==keep[0])
+            state['seen']=True
+            keep[0].click()
+        except Exception:
+            state['error']=traceback.format_exc()
+            modal.reject()
+    timer.connect('timeout()',tick)
+    timer.start()
+    try:
+        callback()
+    finally:
+        timer.stop()
+    check('close action visibly explains unfinished contour',state['seen'] and not state['error'],state['error'])
+
+
 def contour_guards(widget, key_value, other_key, check_exit=False):
     k = widget.session.case.n_slices // 2
     widget.goSlice(k)
@@ -648,21 +684,21 @@ def contour_guards(widget, key_value, other_key, check_exit=False):
           widget.activeLabel == 'medial' and widget.editor.activeEffect().name == 'Draw'
           and pending_points(widget) == 3 and same(arrays(widget), before)
           and widget.session.current_checkpoint == checkpoint)
-    slicer.util.mainWindow().close()
+    keep_drawing_on_close(lambda: slicer.util.mainWindow().close())
     events()
     check(key_value + ' normal window close preserves unfinished contour and work',
           slicer.util.mainWindow().isVisible() and widget.session is not None
           and widget.session.case.key == key_value and pending_points(widget) == 3
           and same(arrays(widget), before))
     if check_exit:
-        qt.QApplication.sendEvent(slicer.app, qt.QEvent(qt.QEvent.Quit))
+        keep_drawing_on_close(lambda: qt.QApplication.sendEvent(slicer.app, qt.QEvent(qt.QEvent.Quit)))
         events()
         check('application Quit event is safely blocked by unfinished contour',
               slicer.util.mainWindow().isVisible() and widget.session is not None
               and pending_points(widget) == 3 and same(arrays(widget), before))
         exit_action = slicer.util.mainWindow().findChild(qt.QAction, 'FileExitAction')
         check('native application File Exit action remains available internally', exit_action is not None)
-        exit_action.trigger()
+        keep_drawing_on_close(exit_action.trigger)
         events()
         check('native File Exit action is safely blocked by unfinished contour',
               slicer.util.mainWindow().isVisible() and widget.session is not None
@@ -940,10 +976,13 @@ def resume():
         up = affine[:3, 1] / np.linalg.norm(affine[:3, 1])
         if up[2] < 0:
             up = -up
-        expected_frame = np.column_stack([np.cross(up, normal), up, normal])
-        check(key_value + ' cold displayed basis matches verified physical frame',
-              np.allclose(matrix(red().mrmlSliceNode().GetSliceToRAS())[:3, :3],
-                          expected_frame, atol=1e-5, rtol=0))
+        displayed = matrix(red().mrmlSliceNode().GetSliceToRAS())[:3, :3]
+        check(key_value + ' cold display remains anterior-left on original acquired plane',
+              np.allclose(displayed.T @ displayed, np.eye(3), atol=1e-5)
+              and np.linalg.det(displayed) > .999
+              and abs(np.dot(displayed[:, 2], normal)) > .999
+              and np.dot(displayed[:, 1], up) > .999
+              and -displayed[1, 0] > 0 and displayed[2, 1] > 0)
         expected = np.load(OUTPUT / 'Expected' / (key_value + '.npz'))
         value = (expected['labels'], expected['uncertainty'])
         check(key_value + ' cold process restores exact arrays', same(arrays(widget), value))

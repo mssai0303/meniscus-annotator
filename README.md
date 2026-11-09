@@ -1,4 +1,4 @@
-# Meniscus Annotator 0.1.0
+# Meniscus Annotator 0.2.0
 
 A focused research annotation module and Windows custom-application build for
 3D Slicer **5.12.4, revision 34645**. The MRI remains on its complete acquired
@@ -8,13 +8,13 @@ grid, including tilted sagittal planes. No model is trained or downloaded.
 workflow has been exercised on synthetic scans and two explicitly permitted
 software-practice MRI scans using Intel Slicer 5.12.4 under Rosetta on macOS.
 This is not a native ARM runtime; practice outputs are not accepted research
-annotations and their validity images are entirely zero. A wrapped Windows installer passed hosted installation/import/lifecycle checks;
+annotations. Explicit software-practice validity is zero; ordinary draft-protocol practice may have reviewed-voxel validity but always has separate zero research eligibility. A wrapped Windows installer passed hosted installation/import/lifecycle checks;
 the redesigned interface has not yet completed Windows acceptance. The flat-folder
 input package has passed two-case Mac software-practice checks; the complete
 250-case production batch has not been accepted. A released anatomical protocol has not been supplied. Do not
 use this version as an accepted production release for 250 cases.
 
-The current review tag is **v0.1.0-visual-regions-review.1** (`b575000`). Its
+The repaired review candidate is **v0.2.0-review-repair.1**; its installer and saved-work diagnostics record the exact source commit. Its
 compact clinical workspace preserves native Draw/Erase/Paint and adds a separate
 regional task for anterior horn, body and posterior horn within each whole
 meniscus. The complete medial/lateral masks remain primary. Regional work starts
@@ -25,7 +25,7 @@ and regional validity is zero everywhere.
 The prepared dataset, predictions, existing job/protocol and old checkpoints are
 preserved. New regional saves add a versioned optional extension without rewriting
 historical files or attribution. Actual Mac and Windows automation scopes are
-recorded separately in [VALIDATION.md](docs/VALIDATION.md).
+recorded separately in [VALIDATION.md](docs/VALIDATION.md). The independent-review repairs add durable review journals, explicit practice/version export, historical work migration, physical direction cues and clearer task/approval controls; see [CHANGELOG.md](CHANGELOG.md).
 
 - [Open the checked Mac preview](docs/MAC_PREVIEW.md)
 - [Reader quick start](docs/QUICK_START.html) and [detailed annotation guide](docs/USER_GUIDE.md)

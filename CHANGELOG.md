@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.2.0 repaired review candidate — 8 November 2026
+
+- Make ordinary draft-protocol practice approval/export explicit, with a visible
+  version/exclusion preflight and deliberate selection of an earlier approval
+  when newer unapproved work exists. Unchanged review preserves approval.
+- Migrate historical reader bindings before validating regional state, without
+  changing old checkpoint bytes or relaxing source/job/reader identity checks.
+- Persist review-only changes in atomic, checkpoint-bound recovery journals;
+  preserve full explicit saves and immutable approval versions.
+- Separate reviewed-voxel validity from research eligibility. Mark ordinary
+  protocol practice and software practice in metadata and new NIfTI headers;
+  pending regional targets remain ineligible for research/training.
+- Add compact readable task/region/assessment selectors, clear reader/dataset
+  context, safe contour-close choices, reliable text-aware workspace shortcuts
+  and a visible route from completed review to approval.
+- Present acquired sagittal planes consistently with anterior toward the left
+  using a view transform. Derive physical slice-direction cues and advisory label
+  plausibility without relabeling, resampling or changing source/mask arrays.
+- Use a local per-user work default, explicit restart identity confirmation,
+  accurate save states, configurable native outlines and smaller logical layouts.
+- Prepare a distinct Windows x64 installer and isolated Mac review preview.
+  Platform checks and remaining native Windows graphics/DPI/offline gaps are
+  recorded separately; this candidate is not a production acceptance claim.
+
 ## Visual and regional review 1 — 8 November 2026
 
 - Replace the large tool tiles and three-row footer with a compact clinical

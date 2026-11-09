@@ -13,6 +13,7 @@ int SlicerAppMain(int argc, char* argv[])
 {
   QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
   QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+  QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
   qSlicerApplicationHelper::preInitializeApplication(argv[0], new qSlicerStyle);
   qSlicerApplication app(argc, argv);
   if (app.returnCode() != -1) { return app.returnCode(); }

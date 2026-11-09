@@ -50,14 +50,17 @@ function Exit-InstalledGraphicsMode {
 
 function Test-InstalledGraphics {
   param([Parameter(Mandatory)][string]$Installed, [Parameter(Mandatory)][string]$Evidence,
-        [int]$TimeoutSeconds=45)
+        [int]$TimeoutSeconds=45, [string[]]$Modes=@('system'))
   New-Item -ItemType Directory -Force $Evidence | Out-Null
   $Results = @()
   $Selected = $null
   $OriginalProbeOutput = $env:MENISCUS_GRAPHICS_PROBE_OUTPUT
   $OriginalProbeMode = $env:MENISCUS_GRAPHICS_PROBE_MODE
   try {
-    foreach ($Mode in @('system','qt-software','bundled-mesa-alias')) {
+    # The pinned hosted runner has repeatedly failed the real OpenGL gate.
+    # One bounded fresh system probe suffices; maintainers may explicitly
+    # supply other modes on a different graphics host, without spoofing GL.
+    foreach ($Mode in $Modes) {
       $Context = Enter-InstalledGraphicsMode -Installed $Installed -Mode $Mode
       $Result = [ordered]@{ mode=$Mode; passed=$false; ephemeral_alias=$Context.alias_path; alias_sha256=$Context.alias_sha256 }
       try {

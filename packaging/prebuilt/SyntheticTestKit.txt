@@ -13,6 +13,16 @@ Start menu. Open that folder in File Explorer and run the named executable:
   on the middle acquired slice. The actor is an unverified practice user, never
   a research reader. The shapes are not anatomical teaching examples.
 
+  MeniscusAnnotatorReviewChecks.exe - tests the ordinary reader route with a
+  draft protocol and no software-practice override. It interacts with visible
+  dataset, reader, work-folder and Export dialogs, then verifies the chosen
+  approved checkpoint inside the ZIP. It checks review journaling, repeated
+  review, assessment changes, and explicit earlier-version export choices.
+  Qt/VTK events are injected; this is not human or OS-input acceptance.
+
+  MeniscusAnnotatorReviewResumeCheck.exe - after successful ordinary reader
+  checks, reopens the saved whole and regional draft state in a new process.
+
   MeniscusAnnotatorDrawChecks.exe - tests the focused Draw/Erase workflow using
   eight known grids: left/right knees, both physical slice directions, and
   regular/oblique acquisition planes. It checks native contour filling,
@@ -57,8 +67,9 @@ reports stay there, outside the installation and ordinary annotation work.
 Reports are installed-tests.json, correction-workflow.json (correction routes),
 draw-workflow.json/draw-resume.json/draw-layout-SCALE.json (Draw routes), and
 regions-workflow.json/regions-resume.json (regional routes), and
+repair-workflow.json/repair-resume.json (ordinary reader routes), and
 slicer-workflow.json (general workflow/resume). Reports include the installed
-source commit and source fingerprint; the 0.1.0 label alone is not build identity.
+source commit and source fingerprint; the 0.2.0 label alone is not build identity.
 Uncertainty and practice results remain explicitly marked. Technical acceptance
 is not anatomical correctness, independent review or training-loader acceptance.
 
@@ -73,6 +84,8 @@ Python installation (set $install to the chosen installation folder):
   & (Join-Path $install 'MeniscusAnnotatorDrawResumeCheck.exe')
   & (Join-Path $install 'MeniscusAnnotatorRegionsChecks.exe')
   & (Join-Path $install 'MeniscusAnnotatorRegionsResumeCheck.exe')
+  & (Join-Path $install 'MeniscusAnnotatorReviewChecks.exe')
+  & (Join-Path $install 'MeniscusAnnotatorReviewResumeCheck.exe')
 
 RunSyntheticChecks.ps1 is an optional convenience for maintainers. Do not bypass
 institutional script restrictions; the native executables above are available.

@@ -5,7 +5,7 @@ with this application module and offline dependencies in a real NSIS installer.
 It avoids rebuilding Qt/VTK/ITK. This is a **wrapped Slicer distribution**, not the
 custom-compiled application shell in the alternative full-source build. Upstream
 Slicer branding/About information and runtime version 5.12.4 remain visible;
-the focused workflow identifies itself as Meniscus Annotator 0.1.0.
+the focused workflow identifies itself as Meniscus Annotator 0.2.0.
 
 The [official Slicer Slicelets documentation](https://www.slicer.org/w/index.php/Documentation/Nightly/Developers/Slicelets)
 describes cloning the launcher, settings and App-real executable for a focused
@@ -15,7 +15,41 @@ retains original executable bytes, adds its module and nibabel, and supplies an
 installer, Start-menu application and Reader guide shortcuts, and uninstaller. Jeff needs no terminal, Python,
 Slicer installation, SCC account or runtime download.
 
-## Current visual and regional review candidate
+## Repaired review candidate — 0.2.0
+
+The current repair source is a distinct 0.2.0 candidate. Build it from its recorded
+clean source commit; the final build receipt supplies the exact commit, installer
+hash and CI run. Do not substitute a previous 0.1.0 installer or its Windows
+results. The candidate remains a review build until the current native Windows
+GUI, physical-DPI and offline annotation checks have actually passed.
+
+The launcher sets `QT_SCALE_FACTOR_ROUNDING_POLICY=PassThrough` before Qt starts;
+it does not force a reader scale factor. The installed runtime check records the
+actual Qt version and policy. The interface supports smaller logical work areas
+with scrolling and adaptive controls. Qt scale-factor simulation is separate
+from native Windows display scaling at 125%, 150%, 175% and 200%.
+
+New installation checks reject a registered 0.1.0 installation with instructions
+to save, close and uninstall the old application first. Existing work and source
+folders stay outside the application folder. Do not reopen migrated work in the
+older application. The guard is tested using an isolated synthetic registration;
+that does not establish a full historical-binary upgrade test. Reinstall and
+uninstall checks verify preservation of external synthetic work.
+
+A bounded installed headless check now exercises correction, native Slicer
+segmentation storage, immutable checkpoints, review-journal restoration,
+practice approval, exact-version export and an independent SimpleITK geometry
+read. This technical persistence test can run without hosted graphics. It does
+not establish GUI drawing, visible Export-dialog operation or anatomical review.
+The ordinary reader GUI route has its own installed test aliases and receipts.
+
+Only one fresh 45-second system-renderer probe runs by default on hosted CI.
+Previously reproduced hosted OpenGL limitations are not retried for hours. A
+failed graphics gate leaves GUI Draw/review/export/restart/scaling fields
+**BLOCKED** while installation, headless persistence and uninstall checks still
+run. It does not establish Windows desktop incompatibility.
+
+## Previous visual and regional review candidate (preserved history)
 
 Tag `v0.1.0-visual-regions-review.1`, source `b575000`, produces the separate
 `MeniscusAnnotator-0.1.0-Windows-x64-b575000.exe` review candidate. SHA-256:
@@ -89,15 +123,18 @@ any response that fails the same pinned hash (including download HTML pages).
 `download-receipts.jsonl` records each result for diagnosing mirror failures. It extracts the runtime, assembles the payload, compiles the NSIS
 installer, then optionally installs it, checks every installed hash and launches
 its actual installed runtime without a main window to check imports/identity.
-It also checks duplicate-install rejection, safe refusal while a runtime file is
-locked, and uninstall preservation using an unrelated synthetic text file. The
+It also checks the legacy-registration guard, duplicate-install rejection, safe
+refusal while a runtime file is locked, uninstall preservation, and a fresh
+reinstall using external and unrelated synthetic work sentinels. The
 headless runtime import check has a bounded two-minute timeout.
 On hosted CI, the maintainer also attempts temporary outbound-deny firewall rules
 for the normal/test native runtimes only. A successful import under those rules
 has its own offline-import receipt. Rules are removed afterward; if host policy
 prevents creating them, offline verification is explicitly not claimed. Reader
 installation never requires firewall changes or administrator access for tests.
-`-RunIntegration` additionally attempts the installed correction route and its
+`-RunIntegration` additionally attempts the ordinary reader/draft-protocol GUI
+route (including the visible Export selection/version dialog), its fresh-process
+restoration, the installed correction route and its
 fresh-process restoration, followed by the general native Slicer synthetic
 workflow. Correction checks drive the actual Export/Cancel dialog buttons; the
 native destination picker is redirected to the generated test folder. This is
@@ -109,13 +146,13 @@ compression/size, not the payload or acceptance checks; the build receipt record
 `compression_mode`. The optional mode follows the
 [NSIS SetCompressor syntax](https://nsis.sourceforge.io/Docs/Chapter4.html#varconstantsetcompressor).
 
-Outputs: `MeniscusAnnotator-0.1.0-Windows-x64.exe`, `installer-build.json` and
+Outputs: `MeniscusAnnotator-0.2.0-Windows-x64.exe`, `installer-build.json` and
 `installed-runtime-check.json` in the build folder. The receipt records the
 installer SHA256, source commit, application-source fingerprint, host and checks
 actually completed. Dirty or unrecorded source checkouts are rejected before
 building the installer. `BUILD-IDENTITY.json` in the installation records the
 source commit and exact application file hashes without changing the checkpoint
-format's application version. The filename/version 0.1.0 alone must never be
+format's application version. The filename/version 0.2.0 alone must never be
 used to identify an accepted build. Assembly checks on Mac
 establish content/byte integrity only; they do not verify Windows execution.
 This process is reproducible from pinned inputs and a recorded source commit;
@@ -124,7 +161,8 @@ installer timestamps may differ, so bit-identical output is not promised.
 ## Installed synthetic test kit
 
 The payload whitelists `tests/slicer_workflow.py`, `tests/slicer_export_dialog.py`,
-`tests/slicer_draw_workflow.py`, `tests/slicer_regions_workflow.py`, `tests/draw_fixture.py`, `tools/make_synthetic.py`, and the procedural correction fixture/workflow from
+`tests/slicer_draw_workflow.py`, `tests/slicer_regions_workflow.py`,
+`tests/slicer_review_repair.py`, `tests/draw_fixture.py`, `tools/make_synthetic.py`, and the procedural correction fixture/workflow from
 `packaging/prebuilt/` under `TestKit/`, with a small installed runner. It contains no second copy of
 the application/core implementation: imports must resolve from the installed
 `qt-scripted-modules` directory. Native test launchers use a separate
@@ -134,7 +172,7 @@ source checkout is used. Generation explicitly uses the flat layout.
 
 The Draw route runs eight known synthetic geometries (left/right × both physical
 slice directions × regular/oblique), then a separate-process restore. Its layout
-route can simulate Qt scale factors 1, 1.25, 1.5 and 2 in separate processes and
+route can simulate Qt scale factors 1, 1.25, 1.5, 1.75 and 2 in separate processes and
 records the actual available window/screen geometry. Simulated Qt scaling is not
 human or physical Windows display-setting acceptance. These tools load the
 installed application implementation; TestKit does not contain a second copy.
@@ -378,7 +416,8 @@ The earlier user-reported Windows success is historical evidence for that earlie
 build. The new hosted graphics limitation and remaining rows in
 `packaging/WINDOWS_ACCEPTANCE.md` stay explicit until a suitable environment is
 available. Windows 11 is untested, not declared incompatible. No manual Horizon
-request or shared-installer replacement is part of this revision.
+request is part of this revision. The repaired review delivery records shared-folder
+replacement separately from Windows GUI acceptance and recipient access.
 
 
 The installed regional routes are `MeniscusAnnotatorRegionsChecks.exe`,

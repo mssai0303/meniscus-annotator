@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import runpy
 import sys
+import time
 import traceback
 import uuid
 
@@ -19,7 +20,9 @@ STATE = ROOT / 'last-workflow.json'
 CORRECTION_STATE = ROOT / 'last-correction-workflow.json'
 DRAW_STATE = ROOT / 'last-draw-workflow.json'
 REGIONS_STATE = ROOT / 'last-regions-workflow.json'
-ACTIONS = {'workflow', 'resume', 'create', 'correction', 'correction-resume', 'draw', 'draw-resume', 'draw-layout', 'regions', 'regions-resume', 'regions-legacy'}
+REVIEW_STATE = ROOT / 'last-review-workflow.json'
+ACTIONS = {'workflow', 'resume', 'create', 'correction', 'correction-resume', 'draw', 'draw-resume', 'draw-layout', 'regions', 'regions-resume', 'regions-legacy', 'review', 'review-resume'}
+STARTUP_NOTICE = None
 
 
 def text_file(path, value):
@@ -79,7 +82,8 @@ def finish(message, output, passed):
 def start():
     output = None
     receipt = {'schema_version': 'meniscus_installed_synthetic_checks/1', 'passed': False,
-               'scope': 'Installed application, procedural synthetic inputs only; no participant MRI is located or loaded.'}
+               'scope': 'Installed application, procedural synthetic inputs only; no participant MRI is located or loaded.',
+               'startup_notice_acknowledged_in_isolated_test_profile': STARTUP_NOTICE is not None}
     try:
         action = os.environ.get('MENISCUS_TEST_ACTION', 'workflow')
         if action not in ACTIONS:
@@ -88,6 +92,8 @@ def start():
         ROOT.mkdir(parents=True, exist_ok=True)
         output = ROOT / run_id
         output.mkdir(exist_ok=False)
+        if STARTUP_NOTICE is not None:
+            STARTUP_NOTICE.save(str(output / 'slicer-startup-notice.png'))
         receipt.update(action=action, run_id=run_id, created_utc=dt.datetime.now(dt.timezone.utc).isoformat(), **installed_modules())
         # Test executables use a separate Qt application name/profile. The suite
         # further redirects its widget settings into these generated directories.
@@ -96,6 +102,34 @@ def start():
         for key in ('MENISCUS_TEST_OUTPUT', 'MENISCUS_RESUME_FROM', 'MENISCUS_TEST_KEEP_OPEN', 'MENISCUS_TEST_CLOSE_WINDOW', 'MENISCUS_TEST_LAYOUT'):
             os.environ.pop(key, None)
         make_synthetic = source_helpers()
+        if action in ('review', 'review-resume'):
+            original = output
+            if action == 'review-resume':
+                previous = json.loads(REVIEW_STATE.read_text(encoding='utf-8'))
+                previous_id = checked_run_id(previous['run_id'])
+                original = ROOT / previous_id
+                marker = json.loads((original / 'installed-tests.json').read_text(encoding='utf-8'))
+                if not marker.get('passed') or marker.get('application_source_sha256') != receipt['application_source_sha256']:
+                    raise ValueError('Review restart requires the same successful installed build.')
+            phase = 'resume' if action == 'review-resume' else 'workflow'
+            review_root = original / 'Reader workflow'
+            os.environ['MENISCUS_REPAIR_OUTPUT'] = str(review_root)
+            os.environ['MENISCUS_REPAIR_PHASE'] = phase
+            qt.QApplication.setQuitOnLastWindowClosed(False)
+            runpy.run_path(str(INSTALL / 'WorkflowShell.py'))['focus_workflow_shell']()
+            namespace = runpy.run_path(str(KIT / 'tests' / 'slicer_review_repair.py'))
+            report = namespace['run_phase'](exit_application=False)
+            report_name = 'repair-' + phase + '.json'
+            if original != output:
+                import shutil
+                shutil.copy2(review_root / report_name, output / report_name)
+            receipt.update(passed=bool(report.get('passed')), checks=len(report.get('checks', [])),
+                           report=str((review_root / report_name).relative_to(output)) if original == output else report_name)
+            text_file(output / 'installed-tests.json', receipt)
+            if receipt['passed'] and action == 'review':
+                text_file(REVIEW_STATE, {'run_id': run_id})
+            finish('Ordinary reader workflow checks completed.', output, receipt['passed'])
+            return
         if action in ('regions', 'regions-resume', 'regions-legacy'):
             original = output
             if action == 'regions-resume':
@@ -147,7 +181,7 @@ def start():
             os.environ['MENISCUS_DRAW_OUTPUT'] = str(draw_root)
             os.environ['MENISCUS_DRAW_PHASE'] = phase
             scale = os.environ.get('MENISCUS_DRAW_SCALE_NAME', '100')
-            if action == 'draw-layout' and scale not in ('100', '125', '150', '200'):
+            if action == 'draw-layout' and scale not in ('100', '125', '150', '175', '200'):
                 raise ValueError('Unknown simulated Draw layout scaling.')
             report_name = 'draw-layout-' + scale + '.json' if phase == 'layout' else 'draw-' + phase + '.json'
             qt.QApplication.setQuitOnLastWindowClosed(False)
@@ -232,4 +266,50 @@ def start():
             output = ROOT
         finish('Synthetic checks could not complete. Open the result report for the affected check.', output, False)
 
-qt.QTimer.singleShot(0, start)
+def start_when_ready():
+    """Defer modal GUI tests until the native startup event loop has settled.
+
+    SLICERRC can run after startupCompleted was emitted, so the visible-window
+    polling fallback is required. The synthetic generator has no main window.
+    """
+    if os.environ.get('MENISCUS_TEST_ACTION') == 'create':
+        qt.QTimer.singleShot(0, start)
+        return
+    state = {'started': False, 'started_at': time.monotonic()}
+    poll = qt.QTimer()
+    poll.setInterval(100)
+    def ready():
+        global STARTUP_NOTICE
+        if state['started']:
+            return
+        modal = qt.QApplication.activeModalWidget()
+        if modal is not None:
+            text = ' '.join(str(label.text) for label in modal.findChildren(qt.QLabel)).lower()
+            if 'not intended for clinical use' in text:
+                buttons = [button for button in modal.findChildren(qt.QAbstractButton)
+                           if str(button.text).replace('&', '') == 'OK']
+                if len(buttons) == 1:
+                    # Test-only acknowledgement, recorded in the receipt and
+                    # screenshot; do not select Don't show again or alter the
+                    # ordinary reader profile/required Slicer attribution.
+                    STARTUP_NOTICE = modal.grab()
+                    print('Synthetic QA acknowledges the Slicer research-use notice in its isolated test profile.', flush=True)
+                    buttons[0].click()
+            return
+        window = slicer.util.mainWindow()
+        if window is not None and window.isVisible():
+            state['started'] = True
+            poll.stop()
+            qt.QTimer.singleShot(100, start)
+        elif time.monotonic() - state['started_at'] > 60:
+            state['started'] = True
+            poll.stop()
+            ROOT.mkdir(parents=True, exist_ok=True)
+            text_file(ROOT / 'startup-failure.json', {'passed': False, 'error': 'Native test window did not become visible within 60 seconds.'})
+            slicer.app.exit(1)
+    slicer.app.connect('startupCompleted()', ready)
+    poll.connect('timeout()', ready)
+    poll.start()
+    slicer.modules._meniscusInstalledTestStartupPoll = poll
+
+start_when_ready()

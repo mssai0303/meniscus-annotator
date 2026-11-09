@@ -1,11 +1,29 @@
 # Meniscus annotation guide
 
-This guide is for the doctor named in an assigned annotation package. The current
-Windows build is a test candidate; complete Windows correction acceptance is
-still pending. Use the supplied practice package while testing. A released drawing
-protocol must be provided before research approval is enabled.
+This guide covers Meniscus Annotator 0.2.0 for the reader named in an assigned
+annotation package. Use the supplied practice package while testing. Research
+approval requires a released drawing protocol. This application and its 3D Slicer
+runtime are for research annotation, not clinical diagnosis or treatment. Slicer’s
+first-use research notice is consistent with that restriction.
 
 ![Actual Meniscus Annotator with a synthetic practice volume](images/annotation-workflow.png)
+
+## Install and update
+
+Run the supplied **0.2.0 Windows x64 installer** and open Meniscus Annotator from
+the Start menu. It includes the pinned runtime; no separate Python or Slicer
+installation is required. The installer is unsigned, so Windows may show
+**Unknown publisher** or a SmartScreen warning. Confirm the authorized download
+source and the coordinator's SHA256 checksum; ask institutional IT to verify or
+approve installation if needed. Do not disable Windows or institutional protections.
+
+To replace 0.1.0, save your work and close the old application normally. Preserve
+the separate work folder, original dataset and return ZIPs. Uninstall the earlier
+application through Windows Settings, then install 0.2.0. Open the original dataset
+and confirm the same reader. If needed, choose **Open existing work** and select
+the work folder containing `dataset.json` and `cases`, not the input dataset.
+Do not rename or manually merge checkpoint files. Existing saved versions stay
+intact. Keep one application version throughout an annotation batch.
 
 ## Open and resume
 
@@ -21,9 +39,11 @@ verified starting masks load as unreviewed predictions to correct, not completed
 annotations. Missing or unresolved masks are blocked instead of replaced with
 blank labels. MRI-only packages without a job require an explicit confirmation
 before drawing from blank; the default is No. If you expected predictions,
-cancel and obtain the correction package. In **Reader identity**, enter your
-**Reader name or study ID** and choose **Continue**. Use the same spelling each
-time. If the assignment already names a reader, confirm it only if it is yours.
+cancel and obtain the correction package. In **Confirm reader identity**, enter
+your **Reader name or study ID**, check **I confirm this is my reader identity**
+and choose **Continue**. Use the same spelling each time. On a shared account,
+check the displayed **Last used** name rather than accepting another reader’s
+identity. An assignment that names a reader must be confirmed only by that reader.
 
 The header shows the case, visit, knee side and save state. The selected compartment
 appears in the annotation panel. **Case details and approval** shows the reader,
@@ -42,11 +62,20 @@ Rows marked **Blocked** cannot be edited and Next case skips them. **Saved work
 needs attention** means an existing checkpoint is incompatible or unavailable;
 preserve the work folder and contact the coordinator instead of starting over.
 
-The first connection proposes a work folder under your operating system's
-Documents folder. Each explicitly selected reader receives a separate subfolder
+The first connection proposes a local application-data work folder, separate
+from Documents folders that may be redirected to OneDrive. Each reader receives a separate subfolder
 so different readers do not share checkpoints. You can choose another
 **local** work folder then. It must be separate from the source dataset and
-outside Dropbox/OneDrive. The remembered work location is shown by **Dataset → Show saved work**. Source images and metadata are never edited by this application.
+outside Dropbox/OneDrive. The application checks common synced paths, but cannot
+identify every institutional synchronization policy. Confirm a persistent local
+location with your coordinator. **Dataset → Reader and dataset** shows the reader,
+dataset and exact work path; **Dataset → Show saved work** opens it. Source images,
+starting masks and metadata remain unchanged.
+
+The normal Windows root is `%LOCALAPPDATA%\MeniscusAnnotator\work\`; macOS uses
+`~/Library/Application Support/MeniscusAnnotator/work/`. Dataset and reader
+subfolders are managed automatically. Previously connected valid work locations
+remain in use; the menu shows the actual path for your assignment.
 
 Double-click a case or select it and choose **Open selected case**. Search by
 OAI ID, visit or side; use the progress filter as needed. **Resume work** opens
@@ -74,11 +103,13 @@ and selected controls. Brush diameter appears only for Paint and Erase. Medial i
 (label 1); lateral is orange (label 2). Painting one replaces overlapping voxels
 of the other. **Uncertain area** is purple and may overlap either meniscus; it
 is saved separately and never converted silently to background or a third
-training class. Erase uncertainty using that label's Erase tool.
+training class. Erase uncertainty using that label’s Erase tool. Drawing one
+anatomical label over the other can transfer tissue between compartments; a
+notice reports the transfer and offers **Undo**. Inspect that correction deliberately.
 
 The compact instruction beneath the slice slider follows the active tool.
 For **Draw**: **Click around the boundary. Right-click to close and fill.**
-Place at least three boundary points. The light yellow line and points are an
+Place at least three boundary points. The visible line and points in the active target color are an
 unfinished contour, distinct from the committed mask. Right-click without
 dragging, or choose **Finish contour**, to add the filled region to the selected
 label on this acquired slice. Use Erase to remove excess pixels; Paint adds small
@@ -90,14 +121,17 @@ blocked until you finish or discard it. **Discard** asks for confirmation;
 **Keep drawing** is the default. **X** removes the last contour point. Escape
 opens the discard choice while drawing; without a contour it selects Navigate.
 Unfinished contours are not saved checkpoints and are not restored after a crash.
+On normal window close, choose **Finish contour**, **Discard contour** or
+**Keep drawing** in the prompt. Keep drawing is the default. Finish requires at
+least three valid points. No unfinished contour is silently applied to another slice.
 
 ![Actual unfinished contour with native points and Finish/Discard controls](images/draw-unfinished.png)
 On reopening, recover work from saved checkpoints; the previous session's
 in-memory undo history is not restored.
 
 Use **Show annotation** beside the editing tools to inspect the underlying MRI.
-Thin outlines are the default. **Image and annotation display** provides adjustable
-transparent fill, window/level, Reset view and orientation reformats. These are
+Outlines default to 2 px. **Image and annotation display** provides **Outline width**,
+adjustable transparent fill, window/level, Reset view and orientation reformats. These are
 display settings; they do not move, smooth or change the saved boundary.
 Use the slice slider, Previous/Next, mouse wheel or Go to for acquired-slice
 navigation. **Ctrl+wheel zooms; middle-button dragging pans.** Draw reserves the
@@ -110,13 +144,26 @@ header collapse and reopen the side panels. Their visibility and widths are
 remembered. Close Cases while drawing to give the MRI more space. Brush diameter
 is also remembered.
 
+New correction cases open on the first slice containing a starting mask when
+available. Previously saved cases restore their last slice. Every slice remains
+accessible. The acquired view presents anterior toward the left using verified
+physical geometry; oblique edge letters may contain more than one direction.
+**Next: toward medial/lateral** describes increasing slice number. When the scan’s
+direction is mixed, the app says **Next: oblique direction** instead. These are
+navigation cues, not compartment assignments. A **Check medial/lateral labels**
+note is an advisory to inspect the MRI; it never swaps labels or validates anatomy.
+
 ## Whole menisci and regions
 
 Whole-meniscus labels remain the complete medial meniscus (1) and lateral
 meniscus (2), including the body. Knee side, mirroring and slice order never swap
 these identities. Correct the whole masks first under the supplied protocol.
 
-**Task → Regions** assigns **Anterior horn**, **Body** or **Posterior horn** within
+In the annotation panel, choose **Whole meniscus** for the complete mask or
+**Regions (draft)** for regional assignments. **Body** is one region inside the
+whole meniscus, not an alternative name for the complete meniscus.
+
+**Regions (draft)** assigns **AH** (anterior horn), **Body** or **PH** (posterior horn) within
 the selected Medial or Lateral mask. The same Draw, Erase and Paint tools apply
 only inside that parent meniscus. To add missing tissue, return to **Whole
 meniscus**. Erasing a regional assignment makes that tissue unassigned; it does
@@ -124,15 +171,18 @@ not erase the whole mask. Turn off **Show regions** to inspect the MRI.
 
 Existing whole-only masks start **Not assigned**. Regions are never initialized
 from image halves, bounding-box thirds, screen position or slice number. Use
-**Regional assessment** to record Present, Absent or Uncertain for the selected
-region and add a note; leave **Not assessed** until it has been considered. An
+the named **assessment** panel to record Present, Absent or Uncertain for the selected
+region and add a note; leave **Unassessed** until it has been considered. An
 absent region need not contain voxels, and a region with assigned voxels cannot
 be recorded as absent. **Boundary
 uncertain** records separate regional uncertainty; it never creates another
 training class. **Flag regional review** records attention. In
 Regions, **Mark reviewed and next** reviews the selected compartment on the
 acquired slice. Repeat regional review for both compartments; this is tracked
-separately from whole-meniscus review.
+separately from whole-meniscus review. The assessment heading names its
+compartment and region. Its note applies to that selected region across the case.
+Changing an assessment does not erase slice-review marks; edits to assigned
+tissue still require re-review.
 
 ![Actual regional practice controls with a synthetic volume](images/regional-workflow.png)
 
@@ -156,22 +206,31 @@ including an empty one, use **Mark reviewed and next**. **Jump → Next unreview
 **Next flagged slice** help finish review. A flag records attention separately from
 review. **Reviewed** or **Not reviewed** appears in the bottom strip. Any
 anatomical or uncertainty edit marks affected slices for rechecking. Expand
-**Slice notes and flags** for notes or attention flags; keyboard drawing shortcuts
-do not act while typing.
+**Case notes and slice flag** for a case-level note and **Flag this slice** for
+the current acquired slice. The case note is shared across the case; it is not a
+separate note for each slice. Regional notes and flags are separate in the
+target-named assessment panel. Shortcuts do not act while typing text.
 
 Use **Save draft** whenever needed. The application also saves every minute
-when committed work changes, after explicit slice review, before switching cases
-and on normal window close. Autosave waits while a contour is unfinished. The save indicator only reports success after saved files
+when committed work changes, before switching cases and on normal window close.
+Slice review is recorded separately. Autosave waits while a contour is unfinished.
+The save indicator only reports success after saved files
 have been reopened and checked. A failure keeps previous checkpoints intact;
 check free space and permissions and retry before leaving the case. Do not run
 two instances on the same case. If the application crashes, reopen the dataset
 and case to restore the newest intact saved checkpoint. Unsaved changes since
 the last checkpoint may be lost.
 
-For whole-meniscus approval, choose **Task → Whole meniscus**, review all slices,
+After all whole-mask slices are reviewed, the next-step instruction offers
+**Go to approval**. It opens and scrolls to the compartment confirmations. Saving
+and marking a slice reviewed remain separate from approval. Re-marking an already
+reviewed slice without changing tissue does not remove its existing approval.
+
+For whole-meniscus approval, choose **Whole meniscus**, review all slices,
 resolve whole-mask uncertainty and flags, and expand
 **Case details and approval**. Confirm both compartment checkboxes there, then choose
-**Approve case**. Approval requires your deliberate
+**Approve practice case** for a draft protocol, or **Approve case** under a released
+protocol. Approval requires your deliberate
 confirmation. In the ordinary assigned-annotation workflow, the named reader is recorded as
 both annotator and approver; this is not an independent second-reader review. Technical checks do not establish anatomical
 correctness. Without a released protocol, approval is clearly marked **practice**.
@@ -187,17 +246,35 @@ when ready.
 
 ## Export and hand off
 
-Choose **Export results**, then all approved cases or the selected case. Practice
-exports require the explicit practice option and have `PRACTICE_ONLY` in the ZIP
-name. Choose a destination; the application creates a versioned results ZIP in
-a `Meniscus_annotation_results` subfolder. **Show exported file** opens the
-containing folder. No MRI image is duplicated in the ZIP.
+Choose **Dataset → Export results**. Review the table's case, result, checkpoint
+version and action/reason before confirming. Use **Selected cases only** for the
+rows selected in Cases, or return all eligible cases with exclusions listed.
+Cases with unresolved uncertainty, flags or incomplete review cannot be approved;
+the export summary identifies excluded cases and what to complete.
+
+When newer unapproved work exists, Export requires a deliberate decision. Approve
+the newest work, choose **Explicitly use the earlier approved versions listed
+below**, or choose **Exclude cases with newer unapproved work**. Earlier-version
+export omits those newer edits. The application does not silently substitute an
+older approval. Check the included and excluded counts before sending results.
+
+For a draft anatomical protocol, **Practice results only — draft anatomical
+protocol** is selected automatically and cannot be turned off. Explicit software
+practice uses **Software-practice results only — not research annotations**.
+Practice ZIPs are clearly named and marked as ineligible for research/training;
+draft completion never creates research approval.
+
+Choose **Export**, then a destination. The application creates a versioned ZIP in
+the destination's `Meniscus_annotation_results` subfolder and checks it before
+reporting success. **Show exported file** opens that folder. No MRI image is
+duplicated. Return the ZIP through the coordinator's authorized route and keep
+the local work folder until receipt is confirmed.
 
 The export contains editable Slicer segmentations, full-grid medial/lateral
 labels, separate uncertainty/validity images, slice-review tables, hashes and
-annotation/approval metadata. It uses the latest preserved eligible approval,
-even when a later unfinished draft exists. Never substitute a draft for an
-approved export. Training code must respect validity and uncertainty records.
+annotation/approval metadata. The confirmed checkpoint versions and exclusions
+are recorded in `results.json`. Training code must respect the recorded research
+eligibility, validity and uncertainty; review coverage alone is not research approval.
 When regional work is included, its labels, separate uncertainty, review records
 and protocol provenance remain draft regional files. Whole-meniscus approval
 does not approve them. Their regional validity image is zero everywhere while
@@ -226,7 +303,8 @@ protocol for existing work requires a separately coordinated work folder/batch.
 | Ctrl+S | Save draft |
 | Ctrl+Z / Ctrl+Y | Undo / Redo |
 
-These shortcuts are scoped to the MRI view. **Help → Controls and shortcuts** also
+Shortcuts work across the application but stay inactive while entering text or
+editing a field. **Help → Controls and shortcuts** also
 provides local diagnostic details for an error. Keep diagnostics private; do
 not send participant data or screenshots containing real identities to public
 issue trackers.

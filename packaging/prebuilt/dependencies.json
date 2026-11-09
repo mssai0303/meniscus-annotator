@@ -1,5 +1,5 @@
 {
-  "application_version": "0.1.0",
+  "application_version": "0.2.0",
   "route": "Wrapped official Slicer distribution; not a custom-compiled Slicer application",
   "slicer": {
     "url": "https://download.slicer.org/bitstream/6aa1db04ce9de556d30112bb",

@@ -55,21 +55,29 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: MeniscusAnnotator-0.1.0-Windows-x64-${{ github.sha }}
+          name: MeniscusAnnotator-0.2.0-Windows-x64-${{ github.sha }}
           retention-days: 1
           compression-level: 0
           if-no-files-found: warn
           path: |
-            C:\D\MP\MeniscusAnnotator-0.1.0-Windows-x64.exe
+            C:\D\MP\MeniscusAnnotator-0.2.0-Windows-x64.exe
             C:\D\MP\installer-build.json
             C:\D\MP\download-receipts.jsonl
             C:\D\MP\installed-runtime-check.json
+            C:\D\MP\headless-persistence\*.json
+            C:\D\MP\headless-persistence\*.txt
             C:\D\MP\regional-reader-check\*.txt
             C:\D\MP\graphics-probe\*.json
             C:\D\MP\graphics-probe\*.txt
             C:\D\MP\graphics-probe\*.png
             C:\D\MP\synthetic-generation\*.json
             C:\D\MP\synthetic-generation\*.txt
+            C:\D\MP\review\*.json
+            C:\D\MP\review\*.png
+            C:\D\MP\review\*.txt
+            C:\D\MP\review-resume\*.json
+            C:\D\MP\review-resume\*.png
+            C:\D\MP\review-resume\*.txt
             C:\D\MP\synthetic-integration\*.json
             C:\D\MP\synthetic-integration\*.png
             C:\D\MP\synthetic-resume\*.json
