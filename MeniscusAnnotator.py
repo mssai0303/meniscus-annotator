@@ -117,6 +117,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self._closingContourDialog = False
         self._reviewOnlyDirty = False
         self._saveError = False
+        self._tearingDown = False
         config_path = os.environ.get('MENISCUS_SOFTWARE_PRACTICE_CONFIG') or os.environ.get('MENISCUS_REAL_PRACTICE_CONFIG')
         self._practiceConfig = json.loads(Path(config_path).read_text(encoding='utf-8')) if config_path else None
         settings_file = os.environ.get('MENISCUS_SETTINGS_FILE')
@@ -402,12 +403,12 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             b.setIcon(self._icon(name.lower()))
             b.setIconSize(qt.QSize(16,16))
             b.setToolButtonStyle(qt.Qt.ToolButtonTextBesideIcon)
-            b.setSizePolicy(qt.QSizePolicy.Ignored,qt.QSizePolicy.Fixed)
+            b.setSizePolicy(qt.QSizePolicy.Minimum,qt.QSizePolicy.Fixed)
             b.objectName = 'drawingTool'
             b.setMinimumHeight(30)
             b.setCheckable(True)
             b.connect('clicked()',lambda n=name:self.setTool(n))
-            tools.addWidget(b, 3 if name=='Draw' else 2)
+            tools.addWidget(b,1)
             if name=='Draw':
                 b.setProperty('preferredTool',True)
                 b.setToolTip('Main boundary tool: click points, then right-click to close and fill.')
@@ -616,7 +617,7 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self.topBar.setStyleSheet(self.style)
         self.appTitle = qt.QLabel('Meniscus Annotator')
         self.appTitle.objectName = 'appTitle'
-        self.topBar.addWidget(self.appTitle)
+        self.appTitleAction = self.topBar.addWidget(self.appTitle)
         self.casesToggle = self._headerButton('Cases','cases')
         self.casesToggle.setCheckable(True)
         self.casesToggle.setChecked(True)
@@ -765,9 +766,12 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self._updateGuidance()
 
     def _adaptWorkspace(self):
-        if not hasattr(self,'goToLabel'):
+        if self._tearingDown or not hasattr(self,'goToLabel'):
             return
         width = slicer.util.mainWindow().width
+        # QToolBar owns visibility through its QWidgetAction; hiding only the
+        # label can be undone by the toolbar's next layout pass.
+        self.appTitleAction.setVisible(width >= 1180)
         self.appTitle.setVisible(width >= 1180)
         self.goToLabel.setVisible(width >= 1100)
         self.sliceSpin.setVisible(width >= 940)
@@ -782,13 +786,15 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
         self._queueNavigationFit()
 
     def _queueNavigationFit(self):
-        if not hasattr(self,'navigationPanel') or getattr(self,'_navigationFitQueued',False):
+        if self._tearingDown or not hasattr(self,'navigationPanel') or getattr(self,'_navigationFitQueued',False):
             return
         self._navigationFitQueued = True
         qt.QTimer.singleShot(0,self._fitNavigation)
 
     def _fitNavigation(self):
         self._navigationFitQueued = False
+        if self._tearingDown:
+            return
         if hasattr(self,'stepPanel'):
             step_height = max(34,self.stepPanel.layout().heightForWidth(self.stepPanel.width))
             if self.stepPanel.minimumHeight!=step_height or self.stepPanel.maximumHeight!=step_height:
@@ -1332,12 +1338,21 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             else:
                 per_slice = np.count_nonzero(labels,axis=(1,2))
                 self.currentSlice = int(per_slice.argmax()) if per_slice.any() else 0
+            self.currentSlice = max(0,min(case.n_slices-1,self.currentSlice))
+            # A shorter stack can clamp the previous case's control value.
+            # Configure both controls without emitting navigation into the new
+            # case, then use its chosen or remembered acquired-slice index.
+            for control in (self.sliceSpin,self.sliceSlider):
+                was_blocked = control.blockSignals(True)
+                try:
+                    control.setRange(1,case.n_slices)
+                    control.setValue(self.currentSlice+1)
+                finally:
+                    control.blockSignals(was_blocked)
             self._nativePlane(self.currentSlice, reset=True)
             sliceNode = slicer.app.layoutManager().sliceWidget('Red').mrmlSliceNode()
             self._observers.append((sliceNode, sliceNode.AddObserver(vtk.vtkCommand.ModifiedEvent, self._sliceMoved, 2.0)))
             self._installDrawGuards()
-            self.sliceSpin.setMaximum(case.n_slices)
-            self.sliceSlider.setMaximum(case.n_slices)
             self.notes.setPlainText(self.session.state.get('notes', ''))
             self.medialConsidered.setChecked(self.session.state['compartments']['medial'])
             self.lateralConsidered.setChecked(self.session.state['compartments']['lateral'])
@@ -2752,11 +2767,15 @@ class MeniscusAnnotatorWidget(ScriptedLoadableModuleWidget):
             except Exception:
                 # Periodic verified checkpoints remain recoverable; never pretend exit saved.
                 self._diagnostic = traceback.format_exc()
+        self._tearingDown = True
         self.settings.setValue('Meniscus/casesWidth',self.caseListDock.width)
         self.settings.setValue('Meniscus/toolsWidth', self.rightDock.width)
         self.settings.sync()
 
     def cleanup(self):
+        self._tearingDown = True  # Queued resize callbacks must not access deleted Qt children.
+        if hasattr(self,'layoutObserver'):
+            slicer.util.mainWindow().removeEventFilter(self.layoutObserver)
         self._loading = True  # Native editing libraries may already be unloading; close guards saved beforehand.
         self.dirty = False  # aboutToQuit/close guard saves while native modules are still alive.
         if hasattr(self, 'autosave'):

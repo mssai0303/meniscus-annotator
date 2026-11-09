@@ -20,6 +20,9 @@
   plausibility without relabeling, resampling or changing source/mask arrays.
 - Use a local per-user work default, explicit restart identity confirmation,
   accurate save states, configurable native outlines and smaller logical layouts.
+- Prevent previous-stack range signals from overriding a new case’s useful or
+  remembered slice. Keep case identity and full tool names readable in narrow
+  windows, and stop queued layout callbacks before Qt teardown.
 - Prepare a distinct Windows x64 installer and isolated Mac review preview.
   Platform checks and remaining native Windows graphics/DPI/offline gaps are
   recorded separately; this candidate is not a production acceptance claim.

@@ -14,7 +14,7 @@ input package has passed two-case Mac software-practice checks; the complete
 250-case production batch has not been accepted. A released anatomical protocol has not been supplied. Do not
 use this version as an accepted production release for 250 cases.
 
-The repaired review candidate is **v0.2.0-review-repair.2**; its installer and saved-work diagnostics record the exact source commit. Its
+The repaired review candidate is **v0.2.0-review-repair.3**; its installer and saved-work diagnostics record the exact source commit. Its
 compact clinical workspace preserves native Draw/Erase/Paint and adds a separate
 regional task for anterior horn, body and posterior horn within each whole
 meniscus. The complete medial/lateral masks remain primary. Regional work starts

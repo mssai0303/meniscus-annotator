@@ -28,7 +28,7 @@ sys.path.insert(0,str(TEST_DIR))
 if (TEST_DIR.parent/'MeniscusAnnotatorLib').is_dir():
     sys.path.insert(0,str(TEST_DIR.parent))
 from draw_fixture import make_draw_matrix
-from MeniscusAnnotatorLib.core import Dataset,WorkStore,load_job_config,sha256
+from MeniscusAnnotatorLib.core import Dataset,WorkStore,load_job_config,sha256,write_native
 from MeniscusAnnotatorLib.regions import REGIONS
 
 OUTPUT=Path(os.environ['MENISCUS_REPAIR_OUTPUT']).resolve()
@@ -67,6 +67,8 @@ def click(control):
         ancestor=ancestor.parentWidget()
     check('clicked control fully visible '+str(getattr(control,'objectName','')),
           control.visibleRegion().boundingRect().contains(control.rect))
+    if qt.QApplication.activeModalWidget() is None:
+        qt.QApplication.setActiveWindow(control.window()) # Qt SendEvent does not perform OS window activation
     control.setFocus(qt.Qt.MouseFocusReason)
     dialog_parent=control.parentWidget()
     while dialog_parent is not None and not dialog_parent.inherits('QDialog'):
@@ -86,6 +88,9 @@ def click(control):
 
 
 def key(control,code,text='',modifiers=qt.Qt.NoModifier):
+    check('key target exists in this isolated active Qt window',control is not None)
+    if qt.QApplication.activeModalWidget() is None:
+        qt.QApplication.setActiveWindow(control.window())
     control.setFocus()
     for kind in (qt.QEvent.KeyPress,qt.QEvent.KeyRelease):
         qt.QApplication.sendEvent(control,qt.QKeyEvent(kind,code,modifiers,text))
@@ -174,14 +179,25 @@ def same(a,b):
     return all(np.array_equal(x,y) for x,y in zip(a,b))
 
 
-def prepare():
+def prepare(tiny_last=False):
     source=OUTPUT/'Synthetic ordinary reader inputs'
-    _,truth=make_draw_matrix(source)
+    dataset,truth=make_draw_matrix(source)
     # Ordinary draft protocol deliberately has no software-practice shortcut.
     job=json.loads((source/'correction_job.json').read_text(encoding='utf-8'))
     job.pop('practice_context',None)
     job.pop('annotator',None)
     job['protocol']={'version':'SYNTHETIC-ORDINARY-DRAFT-REPAIR-1','status':'draft'}
+    if tiny_last:
+        key_value=list(truth)[-1]
+        case=dataset.by_key[key_value]
+        tiny=np.zeros(tuple(reversed(case.shape_xyz)),dtype=np.uint8)
+        for role,value in [('medial',1),('lateral',2)]:
+            tiny[tuple(reversed(truth[key_value][role+'_seed_ijk']))]=value
+        mask=case.folder/'starting_mask.nii.gz'
+        write_native(mask,tiny,case)
+        job['cases'][key_value]['starting_mask']['sha256']=sha256(mask)
+        truth[key_value]['tiny_labels']=True
+
     (source/'correction_job.json').write_text(json.dumps(job,indent=2)+'\n',encoding='utf-8')
     (OUTPUT/'source-hashes.json').write_text(json.dumps({p.relative_to(source).as_posix():sha256(p)
         for p in source.rglob('*') if p.is_file()},indent=2)+'\n',encoding='utf-8')
@@ -531,6 +547,7 @@ def workflow():
     # Window-wide shortcuts must work after a panel click, without a view click.
     click(widget.toolButtons['Erase'])
     focused=qt.QApplication.focusWidget()
+    check('panel tool owns keyboard focus before testing window shortcut',focused==widget.toolButtons['Erase'])
     old_k=widget.currentSlice
     if old_k==widget.session.case.n_slices-1:
         key(focused,qt.Qt.Key_Left)
@@ -721,7 +738,7 @@ def _matrix(value):
 
 
 def orientation():
-    source,truth=prepare()
+    source,truth=prepare(tiny_last=True)
     widget=attach()
     open_dataset(widget,source)
     for case_key,item in truth.items():
@@ -750,10 +767,17 @@ def orientation():
             check(case_key+' fixed '+role+' identity at original physical point',
                   masks[0][tuple(reversed(point))]==value
                   and np.allclose((case.affine_ras@[*point,1])[:3],item[role+'_seed_ras_mm'],atol=1e-4))
-        if item['side']=='R':
-            check(case_key+' unexpected relative label position is advisory, never relabeled or blocked',
+        if item.get('tiny_labels'):
+            check(case_key+' tiny labels yield inconclusive advisory without blocking or relabeling',
+                  widget._plausibility['status']=='indeterminate' and widget.saveButton.enabled
+                  and np.count_nonzero(masks[0])==2)
+        elif item['side']=='R' and not item['oblique']:
+            check(case_key+' clear swapped relative label position is advisory, never relabeled or blocked',
                   widget._plausibility['status']=='check' and widget.plausibilityButton.isVisible()
                   and widget.saveButton.enabled)
+        elif item['side']=='R':
+            check(case_key+' close oblique labels remain advisory without inventing certainty',
+                  widget._plausibility['status'] in ('check','indeterminate') and widget.saveButton.enabled)
         for index in (0,case.n_slices-1):
             widget.sliceSlider.setValue(index+1)
             events()

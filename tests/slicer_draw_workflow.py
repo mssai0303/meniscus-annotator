@@ -821,7 +821,7 @@ def workflow(exit_application):
             widget._resetView()
             before = arrays(widget)
             check(key_value + ' empty starting slice uses neutral wording ' + str(endpoint),
-                  'No starting mask on this slice.' in instruction(widget))
+                  'No starting mask on this slice' in instruction(widget))
             vertices = [(43, 33, endpoint), (53, 33, endpoint), (53, 43, endpoint), (43, 43, endpoint)]
             points(widget, vertices)
             check(key_value + ' contour preview does not modify endpoint ' + str(endpoint),
