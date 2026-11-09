@@ -214,7 +214,7 @@ def test_native_save_reload_hashes_and_full_geometry(setup, case_index):
         state['review'][2].update(medial_reviewed=True, lateral_reviewed=True, note='Synthetic empty-slice review')
         checkpoint = session.save(whole, uncertain, writer, regions=region, regional_uncertainty=regional_uncertain, regional_state=state)
         manifest = json.loads((checkpoint/'manifest.json').read_text())
-        assert len(manifest['files_sha256']) == 11
+        assert len(manifest['files_sha256']) == 12
         assert set(manifest['files_sha256']) >= regional.REGIONAL_FILES
         assert manifest['regional_extension']['research_approved'] is False
         for filename, expected in [('regions.nii.gz', region), ('regional_uncertainty.nii.gz', regional_uncertain), ('regional_validity.nii.gz', np.zeros_like(whole))]:
@@ -245,17 +245,17 @@ def test_old_checkpoint_open_does_not_rewrite_or_change_job_state(setup):
         assert metadata['annotator'] == primary['annotator']
     assert file_hashes(checkpoint) == historical
     assert 'regional_extension' not in json.loads((checkpoint/'manifest.json').read_text())
-    assert len(historical) == 7
+    assert len(historical) == 8
 
 
-def test_legacy_save_remains_exact_six_payload_schema_when_no_extension(setup):
+def test_whole_only_save_has_eligibility_but_no_regional_extension(setup):
     _, ds, store = setup
     with store.open_case(ds.cases[0]) as session:
         whole, uncertain = labelled(session)
         session.load_regions() # merely requesting defaults does not change legacy save API
         checkpoint = session.save(whole, uncertain, writer)
         manifest = json.loads((checkpoint/'manifest.json').read_text())
-        assert 'regional_extension' not in manifest and len(manifest['files_sha256']) == 6
+        assert 'regional_extension' not in manifest and len(manifest['files_sha256']) == 7
 
 
 def test_legacy_caller_carries_existing_regions_and_invalidates_on_parent_edit(setup):
@@ -347,9 +347,9 @@ def test_region_partial_save_failure_leaves_prior_version(setup, monkeypatch):
         region, regional_uncertain, state = region_state(session, whole)
         first = session.save(whole, uncertain, writer, regions=region, regional_uncertainty=regional_uncertain, regional_state=state)
         original_write = core.write_native
-        def fault(path, array, case):
+        def fault(path, array, case, marker=None):
             if path.name == 'regional_uncertainty.nii.gz': raise OSError(errno.ENOSPC, 'Simulated disk full')
-            return original_write(path, array, case)
+            return original_write(path, array, case, marker)
         monkeypatch.setattr(core, 'write_native', fault)
         with pytest.raises(ValidationError, match='previous saved version is intact'):
             session.save(whole, uncertain, writer, regions=region, regional_uncertainty=regional_uncertain, regional_state=state)

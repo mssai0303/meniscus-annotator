@@ -72,7 +72,7 @@ def test_software_practice_save_reopen_export_is_honestly_attributed(data, tmp_p
         actual, uncertain, _ = reopened.load()
         assert np.array_equal(actual, labels) and np.array_equal(uncertain, uncertainty)
         assert reopened.state['approver'] == ACTORS[actor_type]
-    with pytest.raises(ValidationError, match='No eligible'):
+    with pytest.raises(ValidationError, match='practice approvals'):
         export_approved(store, tmp_path / 'Research output')
     archive_path = export_approved(store, tmp_path / 'Separate practice results', include_practice=True)
     assert archive_path.name.startswith('SOFTWARE_PRACTICE_ONLY-')
@@ -180,6 +180,7 @@ def test_explicit_reader_preserves_legacy_missing_context_and_assignment(data, t
     legacy.pop('practice_context')
     legacy.pop('annotation_purpose')
     legacy.pop('reader_assignment')
+    legacy['app_version'] = '0.1.0' # old serializer predates required 0.2 purpose/eligibility metadata
     state_path.write_text(json.dumps(legacy), encoding='utf-8')
     manifest_path = checkpoint / 'manifest.json'
     manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
@@ -194,6 +195,11 @@ def test_explicit_reader_preserves_legacy_missing_context_and_assignment(data, t
         assert reopened.load()[0].shape == labels.shape
     assert all(sha256(location / name) == digest for name, digest in original_files.items())
     assert json.loads((location / 'reader_assignment.json').read_text(encoding='utf-8'))['reader'] == 'Historical Reader'
+    with pytest.raises(ValidationError, match='No eligible'):
+        export_approved(store, tmp_path / 'Legacy export blocked', include_practice=True)
+    with store.open_case(case) as verified:
+        lab, unc, _ = verified.load()
+        verified.save(lab, unc, writer) # new checkpoint only; historical files remain intact
     result = export_approved(store, tmp_path / 'Ordinary practice results', include_practice=True)
     assert result.name.startswith('PRACTICE_ONLY-')
     with zipfile.ZipFile(result) as archive:

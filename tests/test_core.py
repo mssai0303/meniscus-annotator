@@ -84,7 +84,7 @@ def test_full_grid_save_reopen_export(setup, tmp_path, case_index):
         assert actual[4].sum() == actual[6].sum() == 0
         assert actual[5, 13, 17] == 1 and actual[5, 15, 22] == 2
         assert resumed.state['last_slice'] == 5 and seg == checkpoint/'segmentation.seg.nrrd'
-    with pytest.raises(ValidationError, match='No eligible'):
+    with pytest.raises(ValidationError, match='practice approvals'):
         export_approved(store, tmp_path / 'Results')
     output = export_approved(store, tmp_path/'Results', [case.key], include_practice=True)
     assert output.name.startswith('PRACTICE_ONLY-')

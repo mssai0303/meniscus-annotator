@@ -1,6 +1,6 @@
 # Input/output contract v1
 
-Application 0.1.0. The preparation project defines the input schema. This application verifies it without changing the source files. Folder-layout revision 2 adds the flat naming below while keeping the earlier nested layout readable. Synthetic checks do not establish anatomical validity or Windows acceptance.
+Application 0.2.0 reads historical 0.1.0 work without rewriting immutable checkpoints. The preparation project defines the input schema. This application verifies it without changing the source files. Folder-layout revision 2 adds the flat naming below while keeping the earlier nested layout readable. Synthetic checks do not establish anatomical validity or Windows acceptance.
 
 ## Input adapter: `meniscus_case/1`
 
@@ -62,6 +62,37 @@ Medial/lateral are mutually exclusive. Uncertainty is a separate binary overlay 
 
 Current conservative uncertainty policy: resolve every uncertainty voxel and attention flag before either practice or research approval. No automatic anatomical rule resolves uncertainty. Empty slices require explicit review. Editing any affected slice invalidates that slice's review; the Slicer integration observes voxel changes, including undo/redo.
 
+### Practice and eligibility extension in 0.2.0
+
+`validity.nii.gz` describes reviewed voxels, not permission to train. Ordinary
+draft-protocol work has `annotation_purpose = protocol_practice`; an explicitly
+configured software-test session has `annotation_purpose = software_practice`.
+Both retain `research_eligible = false` and
+`accepted_research_annotation = false`, even after **Practice approved**.
+Software-practice validity stays zero. Ordinary practice reviewed-voxel validity
+may be nonzero, but its separate `research_eligibility.nii.gz` is entirely zero.
+New checkpoint manifests hash that additional image and record eligibility
+provenance. New generated practice NIfTI outputs carry a `PRACTICE` marker in
+supported header fields; preserved original predictions are never rewritten.
+
+Only a released whole-meniscus protocol and an actual research approval can
+produce eligible whole-meniscus voxels. Pending regional definitions always
+produce zero regional validity. Consumers must check approval, protocol,
+purpose, uncertainty, review and eligibility together. Nonzero image values alone
+never establish accepted training targets. The regional example loader returns
+only excluded (`-1`) targets under the current pending protocol.
+
+Historical checkpoint bytes, manifests and reader attribution remain unchanged.
+Authorized legacy bindings are migrated in memory and written only into a new
+version after identity checks. An unmarked historical approval needs a verified
+new save before export; the exporter does not patch old headers/manifests.
+
+The visible Export dialog lists each included checkpoint and every excluded or
+unapproved case. A newer draft or review journal prevents silent fallback to an
+older approval. Exporting an earlier approval requires explicit opt-in, recorded
+with the exact checkpoint and manifest hash in the ZIP receipt. A stale preflight
+is rejected if work changes before ZIP creation.
+
 ## Optional explicit job configuration: `meniscus_job/1`
 
 Legacy MRI-only packages contain no prediction permission or released drawing protocol. They retain their former blank/practice behavior. A prepared correction package instead contains an explicit `correction_job.json`, with every case listed as `correction`; it must never rely on the unlisted-case blank default. The core accepts an explicit job dictionary, never an arbitrary nearby prediction discovered on disk:
@@ -105,7 +136,18 @@ The protocol status is `draft|released`; version is required. Draft protocol per
 
 ## Local work: `meniscus_work/1`
 
-The UI resolves Documents through Qt/OS. Suggested root is `Documents/Meniscus_annotation_work/<dataset_version>/`; the selected local location is remembered. It must be separate from the source and outside recognized live Dropbox/CloudStorage/OneDrive locations. Work is never written into source `annotations/`. Other sync providers cannot all be detected by path text; use a genuinely local folder.
+Review-only changes use immutable small JSON records under
+`cases/<hash>/review_journal/<base-checkpoint>/`, bound to the base manifest,
+source/job/reader identities and unchanged mask hashes. Each record is atomically
+written and flushed before the UI reports Saved. Restart replays valid records;
+a corrupt record is reported and the last valid state remains recoverable.
+Explicit saves and approvals fold the current review into a full new checkpoint.
+Unsaved voxel changes require a full checkpoint before review-only journaling.
+Old versions/journals are retained. A repeated unchanged review action performs
+no new save and preserves an existing approval. In-memory Undo is not restored
+across a process restart.
+
+The UI resolves per-user application data through Qt/OS. New work defaults under `%LOCALAPPDATA%/MeniscusAnnotator/work` on Windows and the corresponding local Application Support location on Mac, with dataset/reader-specific subfolders. Existing remembered locations remain unchanged. The selected root must be writable, separate from source/results, and outside recognized cloud/network-managed locations. Checks combine known environment locations, path components and a write probe; they cannot comprehensively detect institutional redirection or every sync provider. Work is never written into source `annotations/`.
 
 ```text
 <work root>/

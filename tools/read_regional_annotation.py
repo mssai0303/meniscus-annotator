@@ -25,7 +25,7 @@ module_root = (application_root if (application_root / 'MeniscusAnnotatorLib').i
                else application_root / 'lib' / 'Slicer-5.12' / 'qt-scripted-modules')
 sys.path.insert(0, str(module_root))
 from MeniscusAnnotatorLib.core import (ValidationError, need, sha256, canonical, read_json,
-                                     check_nifti, validity_array)
+                                     check_nifti, validity_array, research_eligibility_array, eligibility_metadata, APP_VERSION, check_output_marker, validate_research_metadata)
 from MeniscusAnnotatorLib import regions as regional
 
 BASE_FILES = {'annotation.json', 'slice_review.csv', 'labels.nii.gz', 'uncertainty.nii.gz', 'validity.nii.gz', 'segmentation.seg.nrrd'}
@@ -38,7 +38,10 @@ def _read_directory(folder, source_image=None):
     need(manifest.get('schema_version') == 'meniscus_checkpoint/1', 'Unsupported checkpoint schema.')
     need(manifest.get('regional_extension') == {'schema_version': regional.EXTENSION_SCHEMA, 'protocol_status': 'pending_expert_protocol', 'research_approved': False},
          'An intact optional regional extension is required; whole-only files cannot be treated as regional labels.')
-    need(set(manifest.get('files_sha256', {})) == BASE_FILES | regional.REGIONAL_FILES,
+    expected_files = BASE_FILES | regional.REGIONAL_FILES
+    if 'research_eligibility' in manifest:
+        expected_files |= {'research_eligibility.nii.gz'}
+    need(set(manifest.get('files_sha256', {})) == expected_files,
          'Regional checkpoint payload is incomplete or has unsupported files.')
     for name, digest in manifest['files_sha256'].items():
         need((folder/name).is_file() and not (folder/name).is_symlink() and sha256(folder/name) == digest,
@@ -46,6 +49,7 @@ def _read_directory(folder, source_image=None):
     primary = read_json(folder/'annotation.json')
     need(primary.get('schema_version') == 'meniscus_annotation/1' and primary.get('label_mapping') == {'0': 'background', '1': 'medial meniscus', '2': 'lateral meniscus'},
          'Unsupported whole-meniscus metadata or label mapping.')
+    validate_research_metadata(primary)
     source = primary.get('source')
     need(isinstance(source, dict) and canonical(source) == primary.get('source_identity') == manifest.get('source_identity')
          and source.get('image_sha256') == primary.get('source_image_sha256') == manifest.get('source_image_sha256'),
@@ -67,7 +71,14 @@ def _read_directory(folder, source_image=None):
         check_nifti(source_image, shape, affine_ras)
     arrays = {name: np.asarray(check_nifti(folder/name, shape, affine_ras, True).dataobj).transpose(2, 1, 0).copy()
               for name in ('labels.nii.gz', 'uncertainty.nii.gz', 'validity.nii.gz', 'regions.nii.gz', 'regional_uncertainty.nii.gz', 'regional_validity.nii.gz')}
+    for name in arrays:
+        check_output_marker(check_nifti(folder/name, shape, affine_ras, True), primary, regional=name.startswith('region'))
     whole, whole_uncertainty = arrays['labels.nii.gz'], arrays['uncertainty.nii.gz']
+    if primary.get('app_version') == APP_VERSION:
+        need(manifest.get('research_eligibility') == eligibility_metadata(primary), 'Missing or inconsistent research eligibility metadata.')
+        eligibility_image = check_nifti(folder/'research_eligibility.nii.gz', shape, affine_ras, True)
+        check_output_marker(eligibility_image, primary)
+        need(np.array_equal(np.asarray(eligibility_image.dataobj).transpose(2, 1, 0), research_eligibility_array(primary, whole_uncertainty)), 'Research eligibility disagrees with protocol, approval or practice context.')
     need(np.isin(whole, [0, 1, 2]).all() and np.isin(whole_uncertainty, [0, 1]).all(), 'Whole labels or uncertainty have invalid values.')
     review = primary.get('review')
     need(isinstance(review, list) and len(review) == shape[2]
@@ -120,12 +131,15 @@ def read_regional_annotation(path, case_key=None, source_image=None):
         need(hashlib.sha256(manifest_bytes).hexdigest() == receipt.get('manifest_sha256'), 'Exported manifest checksum differs from results metadata.')
         checkpoint_manifest = json.loads(manifest_bytes)
         need(checkpoint_manifest.get('regional_extension') == {'schema_version': regional.EXTENSION_SCHEMA, 'protocol_status': 'pending_expert_protocol', 'research_approved': False}, 'The selected exported checkpoint has no supported regional extension.')
-        need(set(checkpoint_manifest.get('files_sha256', {})) == BASE_FILES | regional.REGIONAL_FILES, 'The selected regional export is incomplete.')
+        expected_files = BASE_FILES | regional.REGIONAL_FILES
+        if 'research_eligibility' in checkpoint_manifest:
+            expected_files |= {'research_eligibility.nii.gz'}
+        need(set(checkpoint_manifest.get('files_sha256', {})) == expected_files, 'The selected regional export is incomplete.')
         with tempfile.TemporaryDirectory(prefix='meniscus-regional-reader-') as temporary:
             destination = Path(temporary)
             (destination/'manifest.json').write_bytes(manifest_bytes)
             # Fixed names only: never extract paths supplied by an untrusted ZIP.
-            for name in BASE_FILES | regional.REGIONAL_FILES:
+            for name in expected_files:
                 (destination/name).write_bytes(archive.read(base+name))
             result = _read_directory(destination, source_image)
             need(result['primary_state']['case_key'] == receipt['case_key']
