@@ -6,6 +6,10 @@ native ARM runtime. Technical checks establish file integrity, native geometry
 and software behaviour; they do not establish anatomical correctness, accepted
 research annotations or readiness for the full annotation batch.
 
+## Reader guide editorial review 9 November 2026
+
+The six-page Word guide was edited for plain English and all pages were rendered and visually checked. It retains Arial 11 pt body/table text and black headings. The current guide hash is recorded in [the dated delivery record](evidence/guide-editorial-review-20261109.json); it supersedes earlier guide hashes for delivery only. Application and installer bytes are unchanged. Dropbox, review-package and preview guide copies match.
+
 ## Current repaired review candidate
 
 Application source `60e5a33`, tag `v0.2.0-review-repair.3`, fingerprint

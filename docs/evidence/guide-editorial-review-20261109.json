@@ -1,0 +1,18 @@
+{
+  "recorded_utc": "2026-11-09T14:06:24.516379+00:00",
+  "application_version": "0.2.0",
+  "application_commit": "60e5a33fb1b3a5cdd3076af78a86ab6ad71aafba",
+  "scope": "Reader Word guide editorial update only; application, installer, dataset and annotations unchanged.",
+  "previous_guide_sha256": "cc5c80ae0d11026917bcb6f970a1da0e875d6ddab58377e8d6ce2e9f38615f2a",
+  "guide": {
+    "bytes": 43909,
+    "sha256": "086eda35c85fe61d4ff7afbfcecfe0a7fefaf42c72aa25091eda114c352a93a7"
+  },
+  "pages_visually_inspected": 6,
+  "font": "Arial 11 pt body and tables; 24 pt title; 16 and 12 pt headings",
+  "shared_folder_contains_only_installer_and_guide": true,
+  "all_delivery_guide_copies_match": true,
+  "dropbox_provider_reports_uploaded": true,
+  "recipient_access_checked": false,
+  "historical_build_records": "Previous guide hashes in BUILD_AND_TESTS and build receipts describe the earlier document; this dated delivery record supersedes them for the current guide."
+}
